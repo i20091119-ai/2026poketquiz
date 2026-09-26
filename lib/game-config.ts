@@ -1,12 +1,12 @@
 // 게임 규칙의 숫자는 모두 이 파일에서 조정합니다.
 
 export const TYPE_KEYS = [
-  'normal', 'flying', 'fairy',
-  'electric', 'steel', 'psychic',
-  'fighting', 'rock', 'dragon',
-  'ghost', 'ground', 'dark',
-  'grass', 'water', 'fire',
-  'bug', 'poison', 'ice',
+  'normal', 'psychic', 'fairy', // 마음과 빛
+  'electric', 'steel', 'rock', // 광물과 기계
+  'water', 'ice', 'flying', // 물과 하늘
+  'fire', 'fighting', 'dragon', // 힘과 불
+  'ghost', 'dark', 'poison', // 어둠과 옛것
+  'grass', 'bug', 'ground', // 자연
 ] as const;
 export type TypeKey = typeof TYPE_KEYS[number];
 
@@ -34,14 +34,17 @@ export const TYPE_INFO: Record<TypeKey, { label: string; color: string }> = {
 export const SUBJECTS = ['국어', '수학', '영어', '한자', '역사', '상식'] as const;
 export type Subject = typeof SUBJECTS[number];
 
-/** 과목별로 스탯이 오르는 속성 (과목마다 3개씩, 18속성 모두 사용). 문제마다 이 중 하나가 붙습니다. */
+/**
+ * 과목별로 스탯이 오르는 속성. 비슷한 계열 3개씩 묶어 18속성을 모두 한 번씩 씁니다.
+ * 문제마다 이 중 하나가 붙습니다.
+ */
 export const SUBJECT_TYPES: Record<Subject, TypeKey[]> = {
-  국어: ['normal', 'flying', 'fairy'],
-  수학: ['electric', 'steel', 'psychic'],
-  영어: ['bug', 'poison', 'ice'],
-  한자: ['fighting', 'rock', 'dragon'],
-  역사: ['ghost', 'ground', 'dark'],
-  상식: ['grass', 'water', 'fire'],
+  국어: ['normal', 'psychic', 'fairy'], // 마음과 빛
+  수학: ['electric', 'steel', 'rock'], // 광물과 기계
+  영어: ['water', 'ice', 'flying'], // 물과 하늘
+  한자: ['fire', 'fighting', 'dragon'], // 힘과 불
+  역사: ['ghost', 'dark', 'poison'], // 어둠과 옛것
+  상식: ['grass', 'bug', 'ground'], // 자연
 };
 
 export const SUBJECT_INFO: Record<Subject, { description: string; color: string }> = {
