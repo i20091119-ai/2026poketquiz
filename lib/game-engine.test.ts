@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAILY_ATTEMPTS, EXP_EXCHANGE, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { DAILY_ATTEMPTS, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
 import { applyAction, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
@@ -366,4 +366,32 @@ test('경험치를 스탯으로 바꾸기: 경험치 50 → 고른 속성 +5, �
   const view = childView(state, bank, '2026-09-26');
   assert.equal(view.exp, 120 - EXP_EXCHANGE.cost * 2);
   assert.equal(view.expTotal, 120);
+});
+
+test('경험치 선물: 모은 경험치 500마다 볼 하나, 스탯으로 바꿔 써도 줄지 않는다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  state.exp = EXP_GIFT.every - 10;
+  assert.throws(() => applyAction(state, { type: 'expGift', pick: 0 }, ctx(bank)), GameError);
+  applyAction(state, { type: 'exchangeExp', statType: 'fire' }, ctx(bank));
+  state.exp += 10 + EXP_GIFT.every; // 모은 경험치 1000: 선물 2개
+  assert.equal(childView(state, bank, '2026-09-26').expGifts.ready, 2);
+  const balls = state.balls.length;
+  applyAction(state, { type: 'expGift', pick: 1 }, ctx(bank));
+  applyAction(state, { type: 'expGift', pick: 2 }, ctx(bank));
+  assert.equal(state.balls.length, balls + 2);
+  assert.equal(state.balls.at(-1)!.kind, EXP_GIFT.ball);
+  assert.throws(() => applyAction(state, { type: 'expGift', pick: 0 }, ctx(bank)), GameError);
+  assert.equal(childView(state, bank, '2026-09-26').expGifts.left, EXP_GIFT.every);
+});
+
+test('예전 기록(새 항목 없음)도 그대로 읽힌다', () => {
+  const bank = makeBank();
+  const old = started(bank) as GameState & { expSpent?: number; expGifts?: number };
+  old.exp = 730; old.stats.grass = 12;
+  delete old.expSpent; delete old.expGifts;
+  const view = childView(old, bank, '2026-09-26');
+  assert.equal(view.exp, 730);
+  assert.equal(view.stats.grass, 12);
+  assert.equal(view.expGifts.ready, 1);
 });

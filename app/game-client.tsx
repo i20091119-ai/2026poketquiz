@@ -125,6 +125,7 @@ export default function Game() {
           <StarterPicker busy={busy} onPick={async id => { const r = await act<{ message: string }>({ type: 'starter', species: id }); if (r) setNotice(r.message); }} />
         ) : <>
           <HomePanel view={view} busy={busy} onChoosePartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
+            onExpGift={() => setReward({ kind: 'exp' })}
             onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
@@ -186,6 +187,7 @@ export default function Game() {
           if (!reward) return Promise.resolve(null);
           if (reward.kind === 'daily') return act<RewardResult>({ type: 'dailyBox', pick });
           if (reward.kind === 'explore') return act<RewardResult>({ type: 'exploreReward', subject: reward.subject!, pick });
+          if (reward.kind === 'exp') return act<RewardResult>({ type: 'expGift', pick });
           return act<RewardResult>({ type: 'masterReward', pick });
         }}
         onClose={() => setReward(null)}

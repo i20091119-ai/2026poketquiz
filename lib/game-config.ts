@@ -85,6 +85,11 @@ export const REWARD_PER_ANSWER = { daily: 5, explore: 1, exp: 10 };
  */
 /** 모은 경험치를 원하는 속성 스탯으로 바꾸기: 경험치 cost → 고른 속성 +amount */
 export const EXP_EXCHANGE = { cost: 50, amount: 5 };
+/**
+ * 경험치 선물: 지금까지 모은 경험치(스탯으로 바꿔 쓴 것 포함)가 every만큼 쌓일 때마다
+ * 볼 3개 중 하나를 고릅니다. 스탯으로 바꿔 써도 선물은 줄지 않습니다.
+ */
+export const EXP_GIFT = { every: 500, ball: 'poke' as const };
 export const statReward = (subject: Subject, mode: 'daily' | 'explore') =>
   Math.round(REWARD_PER_ANSWER[mode] * SUBJECT_TYPES[subject].length / 3);
 

@@ -7,13 +7,14 @@ import type { Ball, BoxItem } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 
-export type RewardKind = 'daily' | 'explore' | 'master';
+export type RewardKind = 'daily' | 'explore' | 'master' | 'exp';
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
 export type CatchResult = { caught: number; tier: number; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
   daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
   explore: { title: '아이템 3개 중 하나를 골라!', description: '열매나 상처약이 들어 있어. 가방에 넣었다가 포켓몬에게 먹여 줘.', closed: ASSETS.boxClosed, label: '선물' },
+  exp: { title: '경험치 선물! 볼 3개 중 하나를 골라!', description: '볼 안에 어떤 포켓몬이 있을까?', closed: ASSETS.ball.poke, label: '볼' },
   master: { title: '탐험 마스터! 볼 3개 중 하나를 골라!', description: '절반의 확률로 전설이나 희귀한 포켓몬이 나와.', closed: ASSETS.ball.master, label: '볼' },
 };
 

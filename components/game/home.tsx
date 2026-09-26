@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
 import { EXP_EXCHANGE, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INFO, type TypeKey } from '@/lib/game-config';
@@ -10,9 +11,10 @@ import { dexNo, PokemonImage, TypeBadge } from './common';
 /* eslint-disable @next/next/no-img-element */
 
 /** 첫 화면: 파트너 포켓몬과 경험치, 속성 스탯 */
-export function HomePanel({ view, busy, onChoosePartner, onExchange }: {
-  view: ChildView; busy: boolean; onChoosePartner: (uid: string) => void; onExchange: (type: TypeKey) => Promise<boolean>;
+export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }: {
+  view: ChildView; busy: boolean; onChoosePartner: (uid: string) => void; onExchange: (type: TypeKey) => Promise<boolean>; onExpGift: () => void;
 }) {
+  const gift = view.expGifts;
   const partner = view.owned.find(p => p.uid === view.partner);
   const [picking, setPicking] = useState(false);
   const [exchanging, setExchanging] = useState(false);
@@ -29,6 +31,14 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange }: {
               <img src={ASSETS.exp} alt="" /> 경험치 <strong>{view.exp.toLocaleString()}</strong>
               <button className="exp-exchange" disabled={busy} onClick={() => setExchanging(true)}>스탯으로 바꾸기</button>
             </div>
+            {gift.ready > 0
+              ? <button className="primary glow exp-gift-ready" disabled={busy} onClick={onExpGift}>
+                  <img className="btn-icon" src={ASSETS.ball.poke} alt="" /> 경험치 선물 받기{gift.ready > 1 ? ` (${gift.ready}개)` : ''}
+                </button>
+              : <div className="exp-gift">
+                  <div className="exp-gift-label"><img src={ASSETS.ball.poke} alt="" /> 다음 선물까지 경험치 <b>{gift.left}</b></div>
+                  <Progress value={(gift.now / gift.every) * 100} />
+                </div>}
             <button className="text-button" onClick={() => setPicking(true)}>파트너 바꾸기 →</button>
           </div>
         </>}

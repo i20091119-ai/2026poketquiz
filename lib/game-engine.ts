@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXPLORE_ITEM_WEIGHTS,
+  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -39,6 +39,8 @@ export type GameState = {
   exp: number;
   /** 스탯으로 바꾸는 데 쓴 경험치 */
   expSpent?: number;
+  /** 받은 경험치 선물 수 (EXP_GIFT.every마다 하나) */
+  expGifts?: number;
   stats: Record<TypeKey, number>;
   partner: string | null;
   owned: OwnedPokemon[];
@@ -244,7 +246,8 @@ export type Action =
   | { type: 'openBall'; ballId: string }
   | { type: 'usePotion'; potionId: string; uid: string }
   | { type: 'evolve'; uid: string; target: number }
-  | { type: 'exchangeExp'; statType: TypeKey };
+  | { type: 'exchangeExp'; statType: TypeKey }
+  | { type: 'expGift'; pick: number };
 
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
 
@@ -450,6 +453,16 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return { type: action.statType, amount, message: `경험치 ${cost}로 ${typeLabel(action.statType)} 스탯 +${amount}!` };
     }
 
+    case 'expGift': {
+      needStarter();
+      const choice = needPick(action.pick);
+      if (expGiftsReady(state) < 1) fail(`경험치를 ${expGiftProgress(state).left} 더 모으면 선물을 받을 수 있어요.`);
+      const items: BoxItem[] = [0, 1, 2].map(() => ({ kind: 'ball', ball: EXP_GIFT.ball }));
+      const ballId = grant(state, items[choice]);
+      state.expGifts = (state.expGifts ?? 0) + 1;
+      return { items, picks: [choice], done: true, ballIds: [ballId!], message: `경험치 선물! ${BALLS[EXP_GIFT.ball].label}을 얻었어!` };
+    }
+
     default:
       fail('지원하지 않는 요청이에요.');
   }
@@ -457,6 +470,14 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
 
 /** 스탯으로 바꿀 수 있는 남은 경험치 */
 export const expAvailable = (state: GameState) => state.exp - (state.expSpent ?? 0);
+
+/** 아직 받지 않은 경험치 선물 수 */
+export const expGiftsReady = (state: GameState) => Math.floor(state.exp / EXP_GIFT.every) - (state.expGifts ?? 0);
+/** 다음 경험치 선물까지: 지금 모은 양, 남은 양 */
+export function expGiftProgress(state: GameState) {
+  const now = state.exp % EXP_GIFT.every;
+  return { now, left: EXP_GIFT.every - now, every: EXP_GIFT.every };
+}
 
 // ---------- 아이 화면에 보낼 정보 ----------
 export function childView(state: GameState, bank: ActiveBank | null, today: string) {
@@ -501,6 +522,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     exp: expAvailable(state),
     /** 지금까지 모은 경험치 */
     expTotal: state.exp,
+    /** 받을 수 있는 경험치 선물 수, 다음 선물까지 진행 */
+    expGifts: { ready: Math.max(0, expGiftsReady(state)), ...expGiftProgress(state) },
     stats: state.stats,
     partner: state.partner,
     owned: state.owned,
