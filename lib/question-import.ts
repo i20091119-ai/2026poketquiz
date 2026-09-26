@@ -8,7 +8,7 @@ export type ImportIssue = { row: number; message: string };
 export const SHEET_COLUMNS = ['과목', '문제', ...Array.from({ length: CHOICE_COUNT }, (_, i) => `보기${i + 1}`), '정답', '해설', '속성'];
 
 const SUBJECT_ALIASES: Record<string, Subject> = {
-  국어: '국어', 수학: '수학', 산수: '수학', 한자: '한자', 역사: '역사',
+  국어: '국어', 수학: '수학', 산수: '수학', 영어: '영어', English: '영어', english: '영어', 한자: '한자', 역사: '역사',
   상식: '상식', 사회: '상식', 과학: '상식', '사회/과학': '상식', '사회·과학': '상식',
 };
 

@@ -157,14 +157,19 @@ export function ensureDaily(state: GameState, bank: ActiveBank | null, today: st
       ...shuffle(rest.filter(q => solved.has(q.id)), random),
     ];
     // 전에 틀린 문제는 먼저 넣고, 남은 자리는 속성이 고르게 돌아가도록 날짜마다 속성 순서를 바꿔 채웁니다.
-    // (예: 상식은 속성이 6개라 하루 4문제씩이면 일주일 동안 속성마다 4~5문제)
+    // (예: 과목마다 속성 3개, 하루 3문제씩이면 매일 속성마다 1문제)
     const picked = ordered.filter(q => isDue(prog, q.id, today)).slice(0, DAILY_PER_SUBJECT);
     const types = SUBJECT_TYPES[subject];
     const offset = (dayNumber(today) * DAILY_PER_SUBJECT) % types.length;
-    for (let slot = 0; picked.length < DAILY_PER_SUBJECT && slot < DAILY_PER_SUBJECT * 2; slot++) {
-      const type = types[(offset + slot) % types.length];
-      const next = ordered.find(q => !picked.includes(q) && q.type === type) ?? (slot >= DAILY_PER_SUBJECT ? ordered.find(q => !picked.includes(q)) : undefined);
-      if (next) picked.push(next);
+    const rotation = types.map((_, i) => types[(offset + i) % types.length]);
+    while (picked.length < DAILY_PER_SUBJECT) {
+      // 오늘 아직 적게 나온 속성부터 (같으면 날짜별 순서대로) 채웁니다.
+      const count = (t: TypeKey) => picked.filter(q => q.type === t).length;
+      const byNeed = [...rotation].sort((a, b) => count(a) - count(b));
+      const next = byNeed.map(t => ordered.find(q => !picked.includes(q) && q.type === t)).find(Boolean)
+        ?? ordered.find(q => !picked.includes(q));
+      if (!next) break;
+      picked.push(next);
     }
     ids.push(...picked.map(q => q.id));
   }

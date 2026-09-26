@@ -5,7 +5,8 @@ export const TYPE_KEYS = [
   'electric', 'steel', 'psychic',
   'fighting', 'rock', 'dragon',
   'ghost', 'ground', 'dark',
-  'grass', 'water', 'fire', 'bug', 'poison', 'ice',
+  'grass', 'water', 'fire',
+  'bug', 'poison', 'ice',
 ] as const;
 export type TypeKey = typeof TYPE_KEYS[number];
 
@@ -30,21 +31,23 @@ export const TYPE_INFO: Record<TypeKey, { label: string; color: string }> = {
   ice: { label: '얼음', color: '#3dcef3' },
 };
 
-export const SUBJECTS = ['국어', '수학', '한자', '역사', '상식'] as const;
+export const SUBJECTS = ['국어', '수학', '영어', '한자', '역사', '상식'] as const;
 export type Subject = typeof SUBJECTS[number];
 
-/** 과목별로 스탯이 오르는 속성. 문제마다 이 중 하나가 붙습니다. */
+/** 과목별로 스탯이 오르는 속성 (과목마다 3개씩, 18속성 모두 사용). 문제마다 이 중 하나가 붙습니다. */
 export const SUBJECT_TYPES: Record<Subject, TypeKey[]> = {
   국어: ['normal', 'flying', 'fairy'],
   수학: ['electric', 'steel', 'psychic'],
+  영어: ['bug', 'poison', 'ice'],
   한자: ['fighting', 'rock', 'dragon'],
   역사: ['ghost', 'ground', 'dark'],
-  상식: ['grass', 'water', 'fire', 'bug', 'poison', 'ice'],
+  상식: ['grass', 'water', 'fire'],
 };
 
 export const SUBJECT_INFO: Record<Subject, { description: string; color: string }> = {
   국어: { description: '낱말, 맞춤법, 읽기', color: '#e46b8a' },
   수학: { description: '수와 연산, 도형', color: '#e3a008' },
+  영어: { description: '낱말, 파닉스, 표현', color: '#2f7fd6' },
   한자: { description: '뜻과 소리', color: '#d9602c' },
   역사: { description: '옛날 사람들의 생활', color: '#7b5ea7' },
   상식: { description: '사회와 과학', color: '#2f9e6a' },
@@ -59,19 +62,19 @@ export const STARTERS = [906, 909, 912]; // 나오하, 뜨아거, 꾸왁스
 
 /**
  * 정답 한 번에 오르는 값. 스탯은 문제에 붙은 속성에 들어갑니다.
- * 일일미션(하루 20문제)만 꾸준히 풀어도 일주일에 한 번 이상 진화할 수 있게 맞춘 값입니다.
- * 일일미션은 과목마다 속성을 돌아가며 내므로, 속성 하나당 일주일에 약 9문제(상식은 약 4~5문제)가 나옵니다.
- *   → 정답률 80%면 속성 하나당 일주일에 약 30점 (첫 진화 15점, 두 번째 진화 25점+12점)
+ * 일일미션(하루 18문제)만 꾸준히 풀어도 일주일에 한 번 이상 진화할 수 있게 맞춘 값입니다.
+ * 일일미션은 과목마다 속성을 돌아가며 내므로, 속성 하나당 일주일에 7문제(하루 3문제 × 7일 ÷ 3속성)가 나옵니다.
+ *   → 정답률 80%면 속성 하나당 일주일에 약 28점 (첫 진화 15점, 두 번째 진화 25점+12점)
  */
-export const REWARD_PER_ANSWER = { daily: 4, explore: 1, exp: 10 };
+export const REWARD_PER_ANSWER = { daily: 5, explore: 1, exp: 10 };
 /**
  * 속성이 많은 과목은 한 속성에 문제가 덜 돌아가므로 스탯에 배수를 줍니다 (속성 수 ÷ 3).
- * 상식은 속성이 6개라서 2배 → 일일미션 정답 1문제에 +8.
+ * 지금은 모든 과목이 속성 3개라 배수는 1입니다. 과목별 속성 수를 바꾸면 자동으로 맞춰집니다.
  */
 export const statReward = (subject: Subject, mode: 'daily' | 'explore') =>
   Math.round(REWARD_PER_ANSWER[mode] * SUBJECT_TYPES[subject].length / 3);
 
-export const DAILY_PER_SUBJECT = 4;
+export const DAILY_PER_SUBJECT = 3;
 /** 일일미션 문제 하나에 주는 기회 (처음 1번 + 다시 풀기 2번). 탐험은 1번입니다. */
 export const DAILY_ATTEMPTS = 3;
 /**

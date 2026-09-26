@@ -25,7 +25,7 @@ test('시트 행 → 문제 (제목 줄, 과목 별칭, 정답 번호, 속성 �
     '과학,해가 뜨는 방향은?,동쪽,서쪽,남쪽,북쪽,위쪽,1,해는 동쪽에서 떠요.,불꽃',
     '수학,2+2=?,1,2,3,4,5,4,,',
     '국어,빈칸,가,가,다,라,마,1,,',
-    '영어,apple?,a,b,c,d,e,1,,',
+    '체육,달리기?,a,b,c,d,e,1,,',
   ].join('\n');
   const { questions, issues } = rowsToQuestions(parseCsv(csv));
   assert.equal(questions.length, 2);

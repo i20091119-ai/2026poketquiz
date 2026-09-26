@@ -126,7 +126,7 @@ test('부모가 지운 문제는 오늘의 미션에서 빠진다', () => {
 });
 
 test('샘플 문제은행은 모두 형식이 맞다', () => {
-  assert.equal(sampleQuestions.length, 35);
+  assert.equal(sampleQuestions.length, 42);
   for (const q of sampleQuestions) {
     assert.equal(q.choices.length, 5);
     assert.equal(new Set(q.choices).size, 5);
@@ -167,14 +167,14 @@ test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다
 });
 
 test('오늘의 미션 문제는 탐험에서 빠진다 (하루에 두 번 풀지 않기)', () => {
-  const bank = makeBank(4);
+  const bank = makeBank(3);
   const state = started(bank);
   ensureDaily(state, bank, '2026-09-26', seeded());
-  // 과목당 4문제가 모두 미션에 들어가므로 탐험에는 문제가 없다
+  // 과목당 3문제가 모두 미션에 들어가므로 탐험에는 문제가 없다
   assert.equal(nextExploreQuestion(state, bank, '수학', '2026-09-26', seeded()), null);
   const id = state.daily!.questionIds[0];
   assert.throws(() => applyAction(state, { type: 'answer', mode: 'explore', questionId: id, choice: 0 }, ctx(bank)), /오늘의 미션/);
-  assert.equal(childView(state, bank, '2026-09-26').explore.find(e => e.subject === '국어')!.inDaily, 4);
+  assert.equal(childView(state, bank, '2026-09-26').explore.find(e => e.subject === '국어')!.inDaily, 3);
 });
 
 test('이미 맞힌 문제를 틀리면 다시 안 푼 문제가 된다', () => {
@@ -198,15 +198,18 @@ function playDaily(state: GameState, bank: ActiveBank, c: Context, correct: (id:
   });
 }
 
-test('일일미션: 과목별 4문제, 정답 1개마다 그 속성 +4 (상식 +8)', () => {
+test('일일미션: 과목별 3문제, 정답 1개마다 그 속성 +5', () => {
   const bank = makeBank();
   const state = started(bank);
   ensureDaily(state, bank, '2026-09-26', seeded());
   const ids = state.daily!.questionIds;
   assert.equal(ids.length, SUBJECTS.length * DAILY_PER_SUBJECT);
   for (const s of SUBJECTS) assert.equal(ids.filter(id => bank.questions.find(q => q.id === id)!.subject === s).length, DAILY_PER_SUBJECT);
-  assert.equal(statReward('국어', 'daily'), 4);
-  assert.equal(statReward('상식', 'daily'), 8);
+  for (const s of SUBJECTS) {
+    assert.equal(SUBJECT_TYPES[s].length, 3, s);
+    assert.equal(statReward(s, 'daily'), 5);
+  }
+  assert.equal(new Set(SUBJECTS.flatMap(s => SUBJECT_TYPES[s])).size, 18); // 18속성 모두 한 번씩
   assert.equal(statReward('국어', 'explore'), 1);
 
   const q = bank.questions.find(q => q.id === ids[0])!;
@@ -243,9 +246,9 @@ test('일일미션: 틀려도 기회가 3번, 다 틀리면 정답을 알려주�
   }
 });
 
-test('랜덤상자: 모두 맞히면 2개, 15개 이상이면 1개, 그 아래는 없음', () => {
+test('랜덤상자: 18개 모두 맞히면 2개, 15개 이상이면 1개, 그 아래는 없음', () => {
   const bank = makeBank(8);
-  const cases: [number, number][] = [[20, 2], [19, 1], [15, 1], [14, 0]];
+  const cases: [number, number][] = [[18, 2], [17, 1], [15, 1], [14, 0]];
   for (const [correctCount, picks] of cases) {
     const state = started(bank);
     playDaily(state, bank, ctx(bank), (_, i) => i < correctCount);
@@ -287,9 +290,8 @@ test('일일미션은 과목 속성을 고르게 낸다', () => {
     ensureDaily(state, bank, `2026-10-0${day}`, seeded(day));
     for (const qid of state.daily!.questionIds) { const t = questions[qid - 1].type; count[t] = (count[t] ?? 0) + 1; }
   }
-  // 6일 × 상식 4문제 = 24문제 → 6속성에 4문제씩
-  for (const t of SUBJECT_TYPES['상식']) assert.equal(count[t], 4, t);
-  for (const t of SUBJECT_TYPES['국어']) assert.equal(count[t], 8, t);
+  // 6일 × 과목당 3문제 = 18문제 → 속성마다 6문제씩
+  for (const s of SUBJECTS) for (const t of SUBJECT_TYPES[s]) assert.equal(count[t], 6, t);
 });
 
 test('일일미션만 일주일(정답률 80%, 상자 보상 제외) 풀어도 시작 포켓몬 첫 진화 가능', () => {
