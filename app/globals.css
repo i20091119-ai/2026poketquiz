@@ -195,7 +195,7 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 /* 속성 뱃지 */
 .type-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .type-badge { display: inline-flex; align-items: center; gap: 5px; color: #fff; border-radius: 999px; padding: 3px 12px 3px 4px; font-size: 14px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
-.type-badge img { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.25); }
+.type-badge img { width: 22px; height: 22px; border-radius: 6px; }
 .type-badge b { margin-left: 3px; }
 .type-badge.small { font-size: 12px; padding: 2px 9px 2px 3px; }
 .type-badge.small img { width: 17px; height: 17px; }
@@ -218,7 +218,7 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .stat-subject { position: absolute; top: -12px; left: 12px; color: #fff; font-size: 12px; font-weight: 800; padding: 1px 10px; border-radius: 999px; }
 .stat-list { display: flex; flex-direction: column; gap: 4px; }
 .stat { display: flex; align-items: center; gap: 6px; font-size: 14px; }
-.stat img { width: 22px; height: 22px; }
+.stat img { width: 22px; height: 22px; border-radius: 6px; }
 .stat span { flex: 1; }
 .stat b { font-size: 17px; }
 

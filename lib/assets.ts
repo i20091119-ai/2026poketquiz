@@ -8,8 +8,7 @@ export const ASSETS = {
   exp: '/assets/ui/exp.svg',
   homeBackground: '/assets/ui/home-background.svg',
   pokemonPlaceholder: '/assets/ui/pokemon-placeholder.svg',
-  boxClosed: '/assets/boxes/box-closed.svg',
-  boxOpen: '/assets/boxes/box-open.svg',
+  boxClosed: '/assets/boxes/box-closed.png',
   potion: {
     apple: '/assets/items/apple-berry.png',
     blue: '/assets/items/ice-berry.png',
@@ -26,5 +25,5 @@ export const ASSETS = {
     master: '/assets/balls/master.png',
     luxury: '/assets/balls/luxury.png',
   } satisfies Record<BallKind, string>,
-  type: (t: TypeKey) => `/assets/types/${t}.svg`,
+  type: (t: TypeKey) => `/assets/types/${t}.png`,
 };

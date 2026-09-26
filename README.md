@@ -161,6 +161,7 @@ npm run online
 ## 자료 출처
 - 포켓몬 이미지: [포켓몬코리아 공식 도감](https://pokemonkorea.co.kr/pokedex)
 - 포켓몬 이름·속성·진화 데이터: [PokeAPI](https://github.com/PokeAPI/pokeapi) 공개 데이터
+- 속성 아이콘: 포켓몬 스칼렛·바이올렛 공식 아이콘 ([PokeAPI sprites](https://github.com/PokeAPI/sprites)의 types)
 - 볼 그림: 포켓몬 공식 일러스트 ([PokeAPI sprites](https://github.com/PokeAPI/sprites)의 dream-world 아이템 그림)
 
 포켓몬 이미지와 이름은 각 권리자의 저작물이며, 이 프로젝트는 가정 내 학습용입니다.
