@@ -1,38 +1,337 @@
-import { catchable, dayIndex, pokemon, starters, subjects, todayKorea, type GameState, type Question } from './learning';
-export class GameError extends Error{}
-function fail(message:string):never{throw new GameError(message)}
-export function applyAction(state:GameState,action:Record<string,unknown>,today=todayKorea(),random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296){
- const day=dayIndex(state.start,today);
- switch(action.type){
- case 'starter': {const id=Number(action.id);if(state.partner!==null)fail('첫 파트너는 이미 선택했어요.');if(!starters.includes(id))fail('파트너를 다시 골라 주세요.');state.collection.push(id);state.partner=id;return {message:`${pokemon[id].name}와 친구가 되었어요!`};}
- case 'partner': {const id=Number(action.id);if(!state.collection.includes(id))fail('아직 만나지 못한 포켓몬이에요.');state.partner=id;return {message:`${pokemon[id].name}와 함께 모험해요.`};}
- case 'answer': {
-  if(!state.approved||day<0||day>6)fail('오늘 풀 수 있는 미션이 없어요. 보호자에게 알려 주세요.');
-  if(state.partner===null)fail('첫 파트너를 먼저 골라 주세요.');
-  const q=state.questions.find(q=>q.id===action.id&&q.day===day);if(!q)fail('오늘의 문제를 다시 불러와 주세요.');
-  if(!Number.isInteger(action.choice)||Number(action.choice)<0||Number(action.choice)>=q.choices.length)fail('답을 하나 골라 주세요.');
-  if(state.solved.includes(q.id))return {correct:true,already:true,explanation:q.explanation,message:'이미 에너지를 받은 문제예요.'};
-  if(action.choice!==q.answer)return {correct:false,message:'괜찮아! 다시 생각해 보자.',hint:q.explanation};
-  state.solved.push(q.id);state.energy+=10;state.stats[q.subject]+=1;return {correct:true,explanation:q.explanation,message:'정답이야! 에너지 10을 모았어!'};
- }
- case 'catch': {
-  if(!state.approved||day<0||day>6)fail('오늘의 미션을 먼저 풀어 주세요.');
-  const qs=state.questions.filter(q=>q.day===day);if(qs.length===0||!qs.every(q=>state.solved.includes(q.id)))fail('오늘의 문제를 모두 맞혀야 해요.');
-  if(state.caughtDays.includes(day))fail('오늘은 이미 포켓몬을 만났어요. 내일 다시 만나요!');
-  if(!Number.isInteger(action.ball)||Number(action.ball)<0||Number(action.ball)>2)fail('포켓볼 3개 중 하나를 골라 주세요.');
-  const id=catchable[Math.floor(random()*catchable.length)];const duplicate=state.collection.includes(id);
-  state.caughtDays.push(day);if(duplicate)state.energy+=20;else state.collection.push(id);
-  return {caught:id,duplicate,message:duplicate?`${pokemon[id].name}를 다시 만났어! 우정 에너지 +20!`:`${pokemon[id].name}를 잡았어!`};
- }
- case 'evolve': {const id=Number(action.id);const p=pokemon[id];if(!p||!state.collection.includes(id)||!p.next||!p.cost)fail('이 포켓몬은 지금 진화할 수 없어요.');if(state.energy<p.cost)fail(`에너지가 ${p.cost-state.energy} 더 필요해요.`);state.energy-=p.cost;state.collection=state.collection.filter(n=>n!==id);if(!state.collection.includes(p.next))state.collection.push(p.next);if(state.partner===id)state.partner=p.next;return {evolved:p.next,message:`축하해! ${p.name}가 ${pokemon[p.next].name}로 진화했어!`};}
- case 'approve': {if(state.approved)fail('이번 주 문제는 이미 공개했어요.');validateQuestions(state.questions);state.approved=true;state.start=today;return {message:'오늘부터 7일간의 모험을 시작해요!'};}
- case 'edit': {if(state.approved)fail('공개한 문제는 학습 기록을 위해 바꿀 수 없어요.');const edited=action.question as Question;const index=state.questions.findIndex(q=>q.id===edited?.id);if(index<0)fail('수정할 문제를 찾을 수 없어요.');const original=state.questions[index];const replacement={...edited,id:original.id,day:original.day,subject:original.subject};const candidate=state.questions.map((q,i)=>i===index?replacement:q);validateQuestions(candidate);state.questions=candidate;return {message:'문제를 저장했어요.'};}
- case 'scopes': {const scopes=action.scopes as Record<string,unknown>;if(!scopes||typeof scopes!=='object')fail('범위를 입력해 주세요.');for(const s of subjects){if(typeof scopes[s]!=='string'||String(scopes[s]).length>500)fail('과목별 범위는 500자 이내로 적어 주세요.');state.scopes[s]=String(scopes[s]).trim()}return {message:'다음 문제를 요청할 학습 범위를 저장했어요.'};}
- default:fail('지원하지 않는 요청이에요.');
- }
-}
-export function validateQuestions(qs:Question[]){if(qs.length!==35)fail('7일간 하루 5문제가 필요해요.');for(let d=0;d<7;d++)if(qs.filter(q=>q.day===d).length!==5)fail('매일 5문제가 있어야 해요.');if(new Set(qs.map(q=>q.id)).size!==35)fail('문제 번호가 겹쳤어요.');for(const q of qs){if(!subjects.includes(q.subject)||typeof q.prompt!=='string'||!q.prompt.trim()||q.prompt.length>500||!Array.isArray(q.choices)||q.choices.length!==3||new Set(q.choices).size!==3||q.choices.some(c=>typeof c!=='string'||!c.trim()||c.length>150)||!Number.isInteger(q.answer)||q.answer<0||q.answer>2||typeof q.explanation!=='string'||!q.explanation.trim()||q.explanation.length>600)fail('문제, 서로 다른 보기 3개, 정답과 설명을 확인해 주세요.')}}
-export function publicState(state:GameState,parent=false,today=todayKorea()){
- const day=dayIndex(state.start,today);return {...state,questions:parent?state.questions:state.questions.filter(q=>state.approved&&q.day===day).map(q=>({id:q.id,day:q.day,subject:q.subject,prompt:q.prompt,choices:q.choices})),today,day};
+// 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
+import {
+  BALLS, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_POTION_TABLE, HINT_AFTER_WRONG,
+  POTIONS, REWARD_PER_ANSWER, STARTERS, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
+  type BallKind, type PotionKind, type Subject, type TypeKey,
+} from './game-config.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, typeLabel } from './pokedex.ts';
+
+export type Question = {
+  id: number;
+  subject: Subject;
+  type: TypeKey;
+  prompt: string;
+  choices: string[];
+  answer: number;
+  explanation: string;
+};
+export type PublicQuestion = Omit<Question, 'answer' | 'explanation'>;
+export type ActiveBank = { id: number; title: string; questions: Question[] };
+
+export type BoxItem =
+  | { kind: 'potion'; potion: PotionKind; type: TypeKey; amount: number }
+  | { kind: 'ball'; ball: BallKind };
+export type Ball = { id: string; kind: BallKind };
+export type OwnedPokemon = { uid: string; species: number; obtainedAt: string };
+export type BankProgress = { solved: number[]; wrong: Record<string, number>; subjectRewards: Subject[]; masterClaimed: boolean };
+
+export type GameState = {
+  version: 1;
+  exp: number;
+  stats: Record<TypeKey, number>;
+  partner: string | null;
+  owned: OwnedPokemon[];
+  dex: number[];
+  balls: Ball[];
+  seq: number;
+  daily: { date: string; bankId: number; questionIds: number[]; correct: number[]; claimed: boolean } | null;
+  banks: Record<string, BankProgress>;
+};
+
+export class GameError extends Error {}
+function fail(message: string): never { throw new GameError(message); }
+
+export type Random = () => number;
+export const secureRandom: Random = () => crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+
+export const todayKorea = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+}).format(new Date());
+
+export function initialState(): GameState {
+  return {
+    version: 1, exp: 0,
+    stats: Object.fromEntries(TYPE_KEYS.map(t => [t, 0])) as Record<TypeKey, number>,
+    partner: null, owned: [], dex: [], balls: [], seq: 0, daily: null, banks: {},
+  };
 }
 
+// ---------- 작은 도우미 ----------
+const pick = <T,>(list: readonly T[], random: Random): T => list[Math.floor(random() * list.length)];
+function weighted<T>(table: readonly { weight: number }[], random: Random): T {
+  const total = table.reduce((sum, row) => sum + row.weight, 0);
+  let roll = random() * total;
+  for (const row of table) { roll -= row.weight; if (roll < 0) return row as T; }
+  return table[table.length - 1] as T;
+}
+function shuffle<T>(list: T[], random: Random): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+const nextId = (state: GameState, prefix: string) => `${prefix}${++state.seq}`;
+
+function progress(state: GameState, bankId: number): BankProgress {
+  return state.banks[bankId] ??= { solved: [], wrong: {}, subjectRewards: [], masterClaimed: false };
+}
+export const publicQuestion = ({ id, subject, type, prompt, choices }: Question): PublicQuestion =>
+  ({ id, subject, type, prompt, choices });
+
+function addPokemon(state: GameState, id: number, now: string) {
+  const duplicate = state.owned.some(p => p.species === id);
+  if (!state.dex.includes(id)) state.dex.push(id);
+  if (duplicate) {
+    const type = species(id).types[0];
+    state.stats[type] += DUPLICATE_BONUS;
+    return { duplicate: true, bonus: { type, amount: DUPLICATE_BONUS } };
+  }
+  const uid = nextId(state, 'p');
+  state.owned.push({ uid, species: id, obtainedAt: now });
+  return { duplicate: false, uid };
+}
+
+function rollPotion(potion: PotionKind, types: readonly TypeKey[], random: Random): BoxItem {
+  return { kind: 'potion', potion, type: pick(types, random), amount: POTIONS[potion].amount };
+}
+function grant(state: GameState, item: BoxItem) {
+  if (item.kind === 'potion') state.stats[item.type] += item.amount;
+  else state.balls.push({ id: nextId(state, 'b'), kind: item.ball });
+}
+
+// ---------- 일일미션 ----------
+/** 오늘의 미션이 없거나 문제은행이 바뀌었으면 과목별로 새로 뽑습니다. 바뀌었으면 true. */
+export function ensureDaily(state: GameState, bank: ActiveBank | null, today: string, random: Random): boolean {
+  if (!bank) return false;
+  const d = state.daily;
+  if (d && d.date === today && d.claimed) return false;
+  if (d && d.date === today && d.bankId === bank.id) {
+    // 부모가 문제를 지웠으면 오늘의 미션에서도 빼서 완료할 수 있게 합니다.
+    const exists = new Set(bank.questions.map(q => q.id));
+    const kept = d.questionIds.filter(id => exists.has(id));
+    if (kept.length === d.questionIds.length) return false;
+    d.questionIds = kept;
+    return true;
+  }
+  const solved = new Set(progress(state, bank.id).solved);
+  const ids: number[] = [];
+  for (const subject of SUBJECTS) {
+    const pool = bank.questions.filter(q => q.subject === subject);
+    const ordered = [...shuffle(pool.filter(q => !solved.has(q.id)), random), ...shuffle(pool.filter(q => solved.has(q.id)), random)];
+    ids.push(...ordered.slice(0, DAILY_PER_SUBJECT).map(q => q.id));
+  }
+  state.daily = { date: today, bankId: bank.id, questionIds: ids, correct: [], claimed: false };
+  return true;
+}
+
+const dailyComplete = (state: GameState) =>
+  !!state.daily && state.daily.questionIds.length > 0 && state.daily.questionIds.every(id => state.daily!.correct.includes(id));
+
+// ---------- 탐험 ----------
+const subjectQuestions = (bank: ActiveBank, subject: Subject) => bank.questions.filter(q => q.subject === subject);
+function subjectMastered(state: GameState, bank: ActiveBank, subject: Subject) {
+  const qs = subjectQuestions(bank, subject);
+  const solved = new Set(progress(state, bank.id).solved);
+  return qs.length > 0 && qs.every(q => solved.has(q.id));
+}
+/** 문제가 하나라도 있는 과목을 모두 풀었는지 */
+function allMastered(state: GameState, bank: ActiveBank) {
+  const withQuestions = SUBJECTS.filter(s => subjectQuestions(bank, s).length > 0);
+  return withQuestions.length > 0 && withQuestions.every(s => subjectMastered(state, bank, s));
+}
+
+export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, subject: Subject, random: Random, skip?: number) {
+  if (!bank) return null;
+  const solved = new Set(progress(state, bank.id).solved);
+  const left = subjectQuestions(bank, subject).filter(q => !solved.has(q.id));
+  const choices = left.length > 1 ? left.filter(q => q.id !== skip) : left;
+  return choices.length ? publicQuestion(pick(choices, random)) : null;
+}
+
+// ---------- 행동 ----------
+export type Action =
+  | { type: 'starter'; species: number }
+  | { type: 'partner'; uid: string }
+  | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
+  | { type: 'dailyBox'; pick: number }
+  | { type: 'exploreReward'; subject: Subject; pick: number }
+  | { type: 'masterReward'; pick: number }
+  | { type: 'openBall'; ballId: string }
+  | { type: 'evolve'; uid: string; target: number };
+
+export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
+
+function needPick(value: unknown) {
+  if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 2) fail('3개 중 하나를 골라 주세요.');
+  return value as number;
+}
+function needBank(bank: ActiveBank | null) {
+  if (!bank) fail('아직 이번 주 문제은행이 없어요. 보호자에게 알려 주세요.');
+  return bank;
+}
+
+export function applyAction(state: GameState, action: Action, ctx: Context) {
+  const { random } = ctx;
+  const needStarter = () => { if (!state.partner) fail('먼저 첫 파트너를 골라 주세요.'); };
+
+  switch (action.type) {
+    case 'starter': {
+      if (state.partner || state.owned.length) fail('첫 파트너는 이미 골랐어요.');
+      if (!STARTERS.includes(action.species)) fail('파트너를 다시 골라 주세요.');
+      const added = addPokemon(state, action.species, ctx.now);
+      state.partner = added.uid!;
+      return { message: `${species(action.species).name}와 친구가 되었어요!` };
+    }
+
+    case 'partner': {
+      const p = state.owned.find(p => p.uid === action.uid);
+      if (!p) fail('아직 만나지 못한 포켓몬이에요.');
+      state.partner = p.uid;
+      return { message: `이제 ${species(p.species).name}와 함께 모험해요!` };
+    }
+
+    case 'answer': {
+      needStarter();
+      const bank = needBank(ctx.bank);
+      const q = bank.questions.find(q => q.id === action.questionId);
+      if (!q) fail('문제를 다시 불러와 주세요.');
+      if (!Number.isInteger(action.choice) || action.choice < 0 || action.choice >= q.choices.length) fail('답을 하나 골라 주세요.');
+      const prog = progress(state, bank.id);
+      if (action.mode === 'daily') {
+        ensureDaily(state, bank, ctx.today, random);
+        if (!state.daily!.questionIds.includes(q.id)) fail('오늘의 미션 문제가 아니에요. 새로고침해 주세요.');
+      } else if (action.mode === 'explore') {
+        if (prog.solved.includes(q.id)) return { correct: true, already: true, explanation: q.explanation, message: '이미 맞힌 문제예요.' };
+      } else fail('지원하지 않는 요청이에요.');
+
+      if (action.choice !== q.answer) {
+        const count = (prog.wrong[q.id] ?? 0) + 1;
+        prog.wrong[q.id] = count;
+        return { correct: false, message: '괜찮아! 다시 생각해 보자.', hint: count >= HINT_AFTER_WRONG ? q.explanation : undefined };
+      }
+      const newlySolved = !prog.solved.includes(q.id);
+      if (newlySolved) prog.solved.push(q.id);
+      let rewarded = newlySolved;
+      if (action.mode === 'daily') {
+        rewarded = !state.daily!.correct.includes(q.id);
+        if (rewarded) state.daily!.correct.push(q.id);
+      }
+      if (rewarded) {
+        state.stats[q.type] += REWARD_PER_ANSWER.stat;
+        state.exp += REWARD_PER_ANSWER.exp;
+      }
+      return {
+        correct: true, explanation: q.explanation, gained: rewarded ? { type: q.type, amount: REWARD_PER_ANSWER.stat, exp: REWARD_PER_ANSWER.exp } : undefined,
+        message: rewarded ? '정답이야!' : '정답이야! (이미 보상을 받은 문제)',
+      };
+    }
+
+    case 'dailyBox': {
+      needStarter();
+      const choice = needPick(action.pick);
+      ensureDaily(state, ctx.bank, ctx.today, random);
+      if (!dailyComplete(state)) fail('오늘의 미션을 모두 맞혀야 상자를 열 수 있어요.');
+      if (state.daily!.claimed) fail('오늘의 상자는 이미 열었어요. 내일 또 만나요!');
+      const items = [0, 1, 2].map(() => {
+        const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
+        return row.item.kind === 'potion' ? rollPotion(row.item.potion, TYPE_KEYS, random) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
+      });
+      grant(state, items[choice]);
+      state.daily!.claimed = true;
+      return { items, pick: choice, message: '상자를 열었어!' };
+    }
+
+    case 'exploreReward': {
+      needStarter();
+      const bank = needBank(ctx.bank);
+      const choice = needPick(action.pick);
+      if (!SUBJECTS.includes(action.subject)) fail('과목을 다시 골라 주세요.');
+      const prog = progress(state, bank.id);
+      if (!subjectMastered(state, bank, action.subject)) fail(`${action.subject} 문제를 모두 맞혀야 해요.`);
+      if (prog.subjectRewards.includes(action.subject)) fail('이 과목의 물약은 이미 받았어요.');
+      const items = [0, 1, 2].map(() => rollPotion(weighted<(typeof EXPLORE_POTION_TABLE)[number]>(EXPLORE_POTION_TABLE, random).potion, SUBJECT_TYPES[action.subject], random));
+      grant(state, items[choice]);
+      prog.subjectRewards.push(action.subject);
+      return { items, pick: choice, message: `${action.subject} 탐험 완료!` };
+    }
+
+    case 'masterReward': {
+      needStarter();
+      const bank = needBank(ctx.bank);
+      const choice = needPick(action.pick);
+      const prog = progress(state, bank.id);
+      if (!allMastered(state, bank)) fail('모든 과목의 탐험을 마쳐야 해요.');
+      if (prog.masterClaimed) fail('마스터 보상은 이미 받았어요.');
+      const items: BoxItem[] = [0, 1, 2].map(() => ({ kind: 'ball', ball: 'luxury' }));
+      grant(state, items[choice]);
+      prog.masterClaimed = true;
+      return { items, pick: choice, message: '탐험 마스터! 특별한 볼을 얻었어!' };
+    }
+
+    case 'openBall': {
+      const index = state.balls.findIndex(b => b.id === action.ballId);
+      if (index < 0) fail('볼을 찾을 수 없어요.');
+      const [ball] = state.balls.splice(index, 1);
+      const odds = BALLS[ball.kind].odds;
+      const tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
+      const id = pick(CATCH_POOLS[tier], random);
+      const result = addPokemon(state, id, ctx.now);
+      const name = species(id).name;
+      return {
+        caught: id, tier, ...result,
+        message: result.duplicate ? `${name}를 또 만났어! 우정 보너스를 받았어.` : `${name}를 잡았어!`,
+      };
+    }
+
+    case 'evolve': {
+      const p = state.owned.find(p => p.uid === action.uid);
+      if (!p) fail('포켓몬을 찾을 수 없어요.');
+      if (!evolutionsOf(p.species).includes(action.target)) fail('이 모습으로는 진화할 수 없어요.');
+      const req = evolutionRequirement(action.target);
+      const missing = req.filter(r => state.stats[r.type] < r.amount);
+      if (missing.length) fail('스탯이 부족해요: ' + missing.map(r => `${typeLabel(r.type)} ${r.amount - state.stats[r.type]}`).join(', '));
+      for (const r of req) state.stats[r.type] -= r.amount;
+      const before = species(p.species).name;
+      p.species = action.target;
+      if (!state.dex.includes(action.target)) state.dex.push(action.target);
+      return { evolved: action.target, message: `축하해! ${before}가 ${species(action.target).name}로 진화했어!` };
+    }
+
+    default:
+      fail('지원하지 않는 요청이에요.');
+  }
+}
+
+// ---------- 아이 화면에 보낼 정보 ----------
+export function childView(state: GameState, bank: ActiveBank | null, today: string) {
+  const prog = bank ? progress(state, bank.id) : null;
+  const byId = new Map(bank?.questions.map(q => [q.id, q]) ?? []);
+  const daily = state.daily && bank && state.daily.date === today
+    ? {
+        date: state.daily.date,
+        questions: state.daily.questionIds.map(id => byId.get(id)).filter((q): q is Question => !!q).map(publicQuestion),
+        correct: state.daily.correct,
+        claimed: state.daily.claimed,
+        complete: dailyComplete(state),
+      }
+    : null;
+  const solved = new Set(prog?.solved ?? []);
+  const explore = bank ? SUBJECTS.map(subject => {
+    const qs = subjectQuestions(bank, subject);
+    return { subject, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length, rewardClaimed: prog!.subjectRewards.includes(subject) };
+  }) : [];
+  return {
+    today,
+    exp: state.exp,
+    stats: state.stats,
+    partner: state.partner,
+    owned: state.owned,
+    dex: state.dex,
+    balls: state.balls,
+    bank: bank ? { id: bank.id, title: bank.title } : null,
+    daily,
+    explore,
+    allMastered: bank ? allMastered(state, bank) : false,
+    masterClaimed: prog?.masterClaimed ?? false,
+  };
+}
+export type ChildView = ReturnType<typeof childView>;

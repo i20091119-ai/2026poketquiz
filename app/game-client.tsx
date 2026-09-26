@@ -1,48 +1,207 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { BookOpen, Sparkles, Zap, Settings, ArrowRight, Compass, Star, Volume2, Check, ArrowLeft, LockKeyhole, Copy, Pencil } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Checkbox } from '@/components/ui/checkbox';
-import { pokemon, starters, subjects, initialScopes, type GameState, type Question } from '@/lib/learning';
-type PublicQuestion=Omit<Question,'answer'|'explanation'> & Partial<Pick<Question,'answer'|'explanation'>>;
-type View=Omit<GameState,'questions'> & {questions:PublicQuestion[];day:number;today:string};
-type Result={message:string;correct?:boolean;hint?:string;explanation?:string;caught?:number;evolved?:number;duplicate?:boolean};
-export default function Home(){
- const [tab,setTab]=useState('mission'),[game,setGame]=useState<View|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [quiz,setQuiz]=useState<PublicQuestion|null>(null),[choice,setChoice]=useState(''),[feedback,setFeedback]=useState<Result|null>(null),[reward,setReward]=useState<Result|null>(null),[showBalls,setShowBalls]=useState(false);
- const [editor,setEditor]=useState<Question|null>(null),[reviewed,setReviewed]=useState(false),[scopes,setScopes]=useState(initialScopes),[prompt,setPrompt]=useState('');
- const refresh=useCallback(async(signal?:AbortSignal)=>{try{const r=await fetch('/api/game'+(tab==='parent'?'?parent=1':''),{signal});const data=await r.json() as {state:View;result:Result;error:string};if(!r.ok)throw Error(data.error);setGame(data.state);setError('');if(tab==='parent')setScopes(data.state.scopes)}catch(e){if((e as Error).name!=='AbortError')setError((e as Error).message)}},[tab]);
- useEffect(()=>{const controller=new AbortController();void refresh(controller.signal);return()=>controller.abort()},[refresh]);
- useEffect(()=>{const onFocus=()=>{void refresh()};window.addEventListener('focus',onFocus);return()=>window.removeEventListener('focus',onFocus)},[refresh]);
- useEffect(()=>{const ctx=(document as Document & {modelContext?:{registerTool:(tool:unknown,options:unknown)=>Promise<void>}}).modelContext;if(!ctx?.registerTool)return;const lifecycle=new AbortController();void Promise.resolve(ctx.registerTool({name:'read_learning_progress',description:'Read the current learning day, energy, collection and subject progress without changing them.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true,untrustedContentHint:false},execute:async(input:unknown)=>{if(!input||typeof input!=='object'||Object.keys(input).length)throw Error('No arguments expected');const r=await fetch('/api/game');if(!r.ok)throw Error('Learning progress unavailable');const {state}=await r.json() as {state:View};return {day:state.day,energy:state.energy,collection:state.collection,stats:state.stats,solved:state.solved.length,approved:state.approved}}},{signal:lifecycle.signal})).catch(()=>{});return()=>lifecycle.abort()},[]);
- async function act(action:Record<string,unknown>){if(busy)return null;setBusy(true);setError('');try{const r=await fetch('/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...action,parent:tab==='parent'})});const data=await r.json() as {state:View;result:Result;error:string};if(!r.ok)throw Error(data.error);setGame(data.state);setNotice(data.result.message);return data.result as Result}catch(e){setError((e as Error).message);return null}finally{setBusy(false)}}
- const activeDay=game?.day??-1,qs=game?.questions.filter(q=>q.day===activeDay)??[],done=qs.filter(q=>game?.solved.includes(q.id)).length,completed=qs.length>0&&done===qs.length,claimed=game?.caughtDays.includes(activeDay)??false;
- const partner=game?.partner?pokemon[game.partner]:null;
- function nextQuestion(){const q=qs.find(q=>!game?.solved.includes(q.id));setQuiz(q??null);setChoice('');setFeedback(null);if(!q&&!claimed)setShowBalls(true)}
- async function answer(){if(!quiz||choice==='')return;const result=await act({type:'answer',id:quiz.id,choice:Number(choice)});if(result)setFeedback(result)}
- function readAloud(){if(!quiz||!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(quiz.prompt+' '+quiz.choices.map((c,i)=>`${i+1}번 ${c}`).join('. '));utterance.lang='ko-KR';utterance.rate=.85;window.speechSynthesis.speak(utterance)}
- async function makePrompt(){const saved=await act({type:'scopes',scopes});if(!saved)return;const request=`초등학교 1학년을 위한 7일치 학습 문제를 만들어 주세요. 하루 5문제, 각 문제에 서로 다른 보기 3개, 정답 1개, 짧고 정확한 해설을 넣어 주세요. 아래 범위 밖의 문제는 만들지 말고, 추가 정보가 필요하면 먼저 물어봐 주세요.\n${subjects.filter(s=>scopes[s].trim()).map(s=>`${s}: ${scopes[s]}`).join('\n')}\n짧은 한국어 문장으로 작성하고, 보호자가 검토한 후 사용할 수 있게 날짜별로 정리해 주세요.`;setPrompt(request);try{await navigator.clipboard.writeText(request);setNotice('문제 요청문을 복사했어요. AI 대화에 붙여 넣어 주세요.')}catch{setNotice('아래 요청문을 선택해서 복사해 주세요.')}}
- return <main><header className="topbar"><a className="brand" href="/"><span className="brand-icon">✦</span><span>포켓몬 <b>배움 탐험대</b></span></a><span className="trainer">새싹 트레이너 <Star size={18}/></span></header><div className="workspace"><div className="greeting"><div><p className="eyebrow">작은 배움, 멋진 진화</p><h1>오늘도 함께 모험하자!</h1><p>문제를 풀고, 나만의 포켓몬을 키워 봐.</p></div><div className="energy"><Zap fill="currentColor"/> 나의 에너지 <strong>{game?.energy??0}</strong></div></div>
- {error&&<div className="error" role="alert">{error}<button onClick={()=>void refresh()}>다시 불러오기</button></div>}{notice&&<div className="notice" role="status">{notice}<button aria-label="알림 닫기" onClick={()=>setNotice('')}>×</button></div>}
- <Tabs value={tab} onValueChange={v=>{if(!busy){setTab(v);setNotice('')}}}><TabsList className="nav"><TabsTrigger value="mission"><Compass/>오늘의 모험</TabsTrigger><TabsTrigger value="collection"><BookOpen/>나의 포켓몬</TabsTrigger><TabsTrigger value="parent"><Settings/>보호자 공간</TabsTrigger></TabsList>
- <TabsContent value="mission"><div className="main-grid"><section className="mission panel"><div className="section-heading"><span className="pill">TODAY'S MISSION</span><span>{activeDay>=0&&activeDay<7?`DAY ${activeDay+1}`:'하루 5문제'}</span></div><h2>{claimed?'오늘의 모험, 멋지게 성공!':completed?'새 친구를 만날 시간이야!':activeDay>6?'일주일의 모험을 마쳤어!':'배움의 숲을 탐험해 볼까?'}</h2><p>{claimed?'내일도 새로운 배움이 기다리고 있어.':activeDay>6?'모은 에너지로 포켓몬을 진화시켜 봐.':<>다섯 가지 배움을 만나면<br/>새로운 포켓몬이 기다리고 있어!</>}</p><div className="subjects">{subjects.slice(0,5).map((s,i)=><span key={s} className={'subject s'+i}>{s}</span>)}</div><div className="mission-footer"><span><b>{done}</b> / {qs.length||5} 문제 완료</span><span><Zap size={16}/> 정답마다 +10 에너지</span></div><Progress value={qs.length?done/qs.length*100:0} aria-label="오늘의 미션 진행률"/>
- <button className="primary" disabled={busy||!game||claimed} onClick={()=>{if(!game?.approved)setTab('parent');else if(game.partner===null)setTab('collection');else if(activeDay>6)setTab('collection');else if(completed)setShowBalls(true);else nextQuestion()}}>{!game?'기록 불러오는 중…':!game.approved?'첫 번째 모험 준비하기':game.partner===null?'첫 파트너 선택하기':claimed?'오늘의 미션 완료!':activeDay>6?'포켓몬 만나러 가기':completed?'포켓볼 선택하기':done?'이어서 모험하기':'오늘의 모험 시작!'} <ArrowRight size={20}/></button><p className="helper">{!game?.approved?'보호자가 이번 주 문제를 확인하면 시작할 수 있어요.':'틀려도 괜찮아. 다시 도전하면 돼!'}</p></section>
- <section className="partner panel"><span className="pill">MY PARTNER</span><h2>{partner?'함께 자라는 우리':'첫 파트너를 만나자!'}</h2><img className="partner-img" src={(partner??pokemon[1]).image} alt={(partner??pokemon[1]).name}/><div className="partner-bottom"><div><small>No.{String(game?.partner??1).padStart(3,'0')}</small><h3>{partner?.name??'이상해씨'}</h3></div><span className="type">{partner?.type??'풀 · 독'}</span></div>{partner?<><p>{partner.next?`${pokemon[partner.next].name}까지 ${Math.max(0,partner.cost!-game!.energy)} 에너지 더!`:'마지막 진화까지 함께했어!'}</p><button className="text-button" onClick={()=>setTab('collection')}>나의 포켓몬 보러 가기 →</button></>:<button className="text-button" onClick={()=>setTab('collection')}>이상해씨 · 파이리 · 꼬부기 중 고르기 →</button>}</section></div>
- <section className="week panel"><h2>일주일의 작은 모험</h2><p>{game?.start?`${game.start} 시작 · 한국 시간 기준으로 매일 새 미션이 열려요.`:'준비가 끝난 날부터 7일간 모험해요.'}</p><div className="days">{Array.from({length:7},(_,i)=>{const caught=game?.caughtDays.includes(i),today=i===activeDay;return <div className={'day '+(today?'active ':'')+(caught?'complete':'')} key={i}><span>DAY {i+1}</span>{caught?<Check/>:i>activeDay&&activeDay>=0?<LockKeyhole/>:<Star/>}<small>{caught?'포획 완료':today?'오늘의 모험':activeDay>i&&activeDay>=0?'지난 모험':'기다리는 모험'}</small></div>})}</div></section><div className="reward-note"><Sparkles/><span>오늘의 미션을 모두 맞히면 <b>포켓볼 3개 중 하나</b>를 골라 포켓몬을 만날 수 있어!</span></div></TabsContent>
- <TabsContent value="collection">{!game?<section className="panel">포켓몬을 불러오고 있어요.</section>:<><div className="heading-row"><div><h2>{game.partner===null?'첫 파트너를 골라 줘!':'나의 포켓몬 친구들'}</h2><p>{game.partner===null?'한 마리를 골라 함께 모험을 시작해 봐.':'함께할 친구를 고르고, 에너지를 모아 진화시켜 봐.'}</p></div><span className="type">{game.collection.length}마리와 함께</span></div><div className="pokemon-grid">{(game.partner===null?starters:game.collection).map(id=>{const p=pokemon[id];return <section className="panel pokemon-card" key={id}><small>No.{String(id).padStart(3,'0')}</small>{game.partner===id&&<span className="partner-tag">함께 모험 중</span>}<img src={p.image} alt={p.name}/><h3>{p.name}</h3><span className="type">{p.type}</span><div className="chain">{p.chain.map((n,i)=><span key={n} className={n===id?'current':''}>{i>0?' → ':''}{pokemon[n].name}</span>)}</div>{game.partner===null?<button className="primary" disabled={busy} onClick={async()=>{if(await act({type:'starter',id}))setTab('mission')}}>이 친구와 함께!</button>:<><button className="secondary" disabled={busy||game.partner===id} onClick={()=>void act({type:'partner',id})}>{game.partner===id?'나의 파트너':'파트너로 선택'}</button>{p.next?<button className="primary" disabled={busy||game.energy<p.cost!} onClick={async()=>{const r=await act({type:'evolve',id});if(r)setReward(r)}}><Sparkles size={18}/> 진화하기 · {p.cost} 에너지</button>:<p className="final-evolution">멋진 마지막 진화 모습!</p>}</>}<details className="evolution-info"><summary>진화 정보</summary><p>{p.original}</p><p>이 학습 게임에서는 순서를 유지하고, 1차 진화에 60, 2차 진화에 120 에너지를 사용해요.</p></details></section>})}</div><section className="panel stats"><h2>배움으로 쌓은 능력</h2><div>{subjects.map((s,i)=><article key={s}><span className={'subject s'+i}>{s}</span><strong>{game.stats[s]}</strong><small>정답 {game.stats[s]}개</small></article>)}</div></section></>}</TabsContent>
- <TabsContent value="parent"><section className="panel parent-intro"><span className="pill">FOR PARENTS</span><h2>아이에게 꼭 맞는 일주일</h2><p>범위를 정하고, 문제와 정답을 검토한 뒤 아이에게 공개해 주세요.</p><div className="parent-summary"><span>초등학교 1학년</span><span>하루 5문제 · 7일</span><span>총 35문제</span><span>{game?.approved?'공개 완료':'검토 대기'}</span></div><p className="helper-left">국어 7문제와 한자 7문제를 따로 구성했습니다. 사회는 범위를 입력한 뒤 다음 문제 요청에 포함할 수 있어요.</p></section>
- <section className="panel parent-section"><div className="heading-row"><div><h2>첫 주 문제 검토</h2><p>AI가 작성한 문제와 설명을 확인해 주세요. 공개 전에는 수정할 수 있어요.</p></div></div>{game&&tab==='parent'&&game.questions.length===35?<>{Array.from({length:7},(_,d)=><details className="review-day" key={d} open={d===0?true:undefined}><summary>DAY {d+1}<span>수학 · 국어 · 한자 · 과학 · 역사</span></summary>{game.questions.filter(q=>q.day===d).map((q,i)=><article className="review-question" key={q.id}><div className="heading-row"><b>{i+1}. [{q.subject}] {q.prompt}</b>{!game.approved&&<button className="text-button" disabled={busy} onClick={()=>setEditor(q as Question)}><Pencil size={14}/> 수정</button>}</div><p>{q.choices.map((c,n)=><span className={n===q.answer?'correct-option':''} key={n}>{n+1}. {c}{n===q.answer?' ✓':''}　</span>)}</p><p className="explanation">{q.explanation}</p></article>)}</details>)}{!game.approved?<div className="approval"><label><Checkbox checked={reviewed} onCheckedChange={v=>setReviewed(v===true)} id="reviewed"/> 35문제의 내용·정답·난이도를 확인했어요.</label><button className="primary" disabled={!reviewed||busy} onClick={async()=>{if(await act({type:'approve'})){setTab('mission');setReviewed(false)}}}>검토한 문제로 오늘부터 시작</button><p>시작한 뒤에는 문제를 수정할 수 없습니다. 공개일을 1일 차로 계산합니다.</p></div>:<p className="notice">{game.start}에 공개했어요. 학습 기록과 보상은 저장됩니다.</p>}</>:<p>문제를 불러오는 중입니다.</p>}</section>
- <section className="panel parent-section"><h2>다음 주 학습 범위</h2><p>범위와 수준을 매번 확인한 뒤 문제를 만듭니다.</p><div className="scope-grid">{subjects.map(s=><label key={s}>{s}<textarea rows={2} value={scopes[s]} placeholder={s==='사회'?'예: 우리 가족과 이웃. 비워 두면 제외해요.':''} onChange={e=>setScopes({...scopes,[s]:e.target.value})} maxLength={500}/></label>)}</div><button className="secondary" disabled={busy} onClick={()=>void makePrompt()}><Copy size={17}/> 범위 저장하고 문제 요청문 복사</button><p className="helper-left">현재는 첫 주 문제를 사용합니다. 다음 주 문제는 복사한 요청문으로 AI 대화에서 만들 수 있어요. 앱 내 자동 생성·새 주차 등록은 아직 연결하지 않았습니다.</p>{prompt&&<textarea className="prompt-copy" aria-label="AI에게 보낼 문제 요청문" readOnly rows={8} value={prompt}/>}</section><section className="source-note"><h3>자료와 게임 규칙</h3><p>포켓몬의 진화 순서와 이미지는 <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감</a>을 참고했습니다. 학습 에너지 진화는 이 앱의 별도 규칙입니다.</p><p>선사시대 문제 참고: <a href="https://daegu.museum.go.kr/kor/sub03_01_01_01.do" target="_blank" rel="noreferrer">국립대구박물관</a>. 한자는 한국어문회 8급의 기초 글자를 사용합니다.</p><p>미션 완료 후 하루 한 번 포획할 수 있습니다. 이미 가진 포켓몬이 나오면 우정 에너지 20을 받습니다. 오답 감점은 없고 같은 문제의 에너지는 한 번만 받습니다.</p></section></TabsContent></Tabs>
- <footer><span>포켓몬 배움 탐험대 · 하루 한 번, 즐거운 배움</span><a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a></footer></div>
- <Dialog open={!!quiz} onOpenChange={open=>{if(!open&&!busy){setQuiz(null);if('speechSynthesis' in window)window.speechSynthesis.cancel()}}}><DialogContent className="quiz-dialog"><DialogTitle>{quiz?.subject} 탐험 <span className="quiz-count">{Math.max(1,qs.findIndex(q=>q.id===quiz?.id)+1)} / 5</span></DialogTitle><DialogDescription>천천히 읽고 답을 하나 골라 줘.</DialogDescription>{quiz&&<><div className="quiz-heading"><h2>{quiz.prompt}</h2><button className="read-button" onClick={readAloud} aria-label="문제 읽어 주기"><Volume2/></button></div><RadioGroup value={choice} onValueChange={v=>{setChoice(v);setFeedback(null)}} disabled={busy||feedback?.correct} className="answer-options">{quiz.choices.map((c,i)=><label key={i} className={'answer-option '+(choice===String(i)?'selected':'')}><RadioGroupItem value={String(i)} id={`choice-${i}`}/><span>{c}</span></label>)}</RadioGroup>{feedback&&<div className={feedback.correct?'feedback correct':'feedback retry'} role="status"><b>{feedback.message}</b><p>{feedback.explanation??feedback.hint}</p></div>}{feedback?.correct?<button className="primary" onClick={nextQuestion}>{done===5?'오늘의 보상 만나기':'다음 문제로'} <ArrowRight size={18}/></button>:<button className="primary" disabled={choice===''||busy} onClick={()=>void answer()}>{busy?'확인하는 중…':'정답 확인!'}</button>}</>}</DialogContent></Dialog>
- <Dialog open={showBalls} onOpenChange={open=>{if(!busy)setShowBalls(open)}}><DialogContent className="reward-dialog"><DialogTitle>어떤 친구가 기다릴까?</DialogTitle><DialogDescription>포켓볼 3개 중 딱 하나를 골라 줘. 오늘의 포켓몬을 만날 수 있어!</DialogDescription><div className="ball-choices">{[0,1,2].map(i=><button className="ball-button" key={i} disabled={busy||claimed} onClick={async()=>{const r=await act({type:'catch',ball:i});if(r){setShowBalls(false);setReward(r)}}}><img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png" alt="포켓볼"/><b>{i+1}번 포켓볼</b></button>)}</div><p className="helper">이미 가진 친구를 만나면 우정 에너지 +20!</p></DialogContent></Dialog>
- <Dialog open={!!reward} onOpenChange={open=>{if(!open)setReward(null)}}><DialogContent className="reward-dialog"><DialogTitle>{reward?.evolved?'우와, 진화에 성공했어!':'새로운 만남, 반가워!'}</DialogTitle><DialogDescription>{reward?.message}</DialogDescription>{(reward?.caught||reward?.evolved)&&<img className="celebration-img" src={pokemon[(reward.caught??reward.evolved)!].image} alt={pokemon[(reward.caught??reward.evolved)!].name}/>}<button className="primary" onClick={()=>{setReward(null);setTab('collection')}}>나의 포켓몬 보러 가기</button></DialogContent></Dialog>
- <Dialog open={!!editor} onOpenChange={open=>{if(!open&&!busy)setEditor(null)}}><DialogContent className="edit-dialog"><DialogTitle>문제 수정</DialogTitle><DialogDescription>아이에게 맞게 문제와 설명을 다듬어 주세요.</DialogDescription>{editor&&<><label>문제<textarea rows={2} value={editor.prompt} onChange={e=>setEditor({...editor,prompt:e.target.value})}/></label><RadioGroup value={String(editor.answer)} onValueChange={v=>setEditor({...editor,answer:Number(v)})}>{editor.choices.map((c,i)=><div className="edit-choice" key={i}><RadioGroupItem value={String(i)} aria-label={`${i+1}번을 정답으로 선택`}/><input aria-label={`${i+1}번 보기`} value={c} onChange={e=>setEditor({...editor,choices:editor.choices.map((v,n)=>n===i?e.target.value:v)})}/></div>)}</RadioGroup><label>해설<textarea rows={3} value={editor.explanation} onChange={e=>setEditor({...editor,explanation:e.target.value})}/></label><p className="helper-left">동그라미로 정답을 선택하세요.</p><button className="primary" disabled={busy} onClick={async()=>{if(await act({type:'edit',question:editor}))setEditor(null)}}>문제 저장</button></>}</DialogContent></Dialog>
- </main>
+import Link from 'next/link';
+import { BookOpen, Compass, Settings, Sun } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getJson, PokemonImage, postJson } from '@/components/game/common';
+import { HomePanel, StarterPicker } from '@/components/game/home';
+import { DailyTab, ExploreTab } from '@/components/game/missions';
+import { PokedexTab } from '@/components/game/pokedex-tab';
+import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
+import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
+import { ASSETS } from '@/lib/assets';
+import type { Subject } from '@/lib/game-config';
+import type { Action, Ball, ChildView, PublicQuestion } from '@/lib/game-engine';
+import { species } from '@/lib/pokedex';
+
+type Quiz = { mode: 'daily' | 'explore'; subject?: Subject; question: PublicQuestion };
+
+export default function Game() {
+  const [view, setView] = useState<ChildView | null>(null);
+  const [tab, setTab] = useState('daily');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [reward, setReward] = useState<{ kind: RewardKind; subject?: Subject } | null>(null);
+  const [ball, setBall] = useState<Ball | null>(null);
+  const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
+
+  const refresh = useCallback((signal?: AbortSignal) =>
+    getJson<{ view: ChildView }>('/api/game', signal).then(
+      data => { setView(data.view); setError(''); },
+      e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); },
+    ), []);
+  useEffect(() => {
+    const controller = new AbortController();
+    getJson<{ view: ChildView }>('/api/game', controller.signal).then(
+      data => setView(data.view),
+      e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); },
+    );
+    const onFocus = () => { void refresh(); };
+    window.addEventListener('focus', onFocus);
+    return () => { controller.abort(); window.removeEventListener('focus', onFocus); };
+  }, [refresh]);
+
+  async function act<T>(action: Action): Promise<T | null> {
+    if (busy) return null;
+    setBusy(true);
+    setError('');
+    try {
+      const data = await postJson<{ view: ChildView; result: T }>('/api/game', action);
+      setView(data.view);
+      return data.result;
+    } catch (e) {
+      setError((e as Error).message);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------- 일일미션 ----------
+  const nextDaily = (v: ChildView | null) => v?.daily?.questions.find(q => !v.daily!.correct.includes(q.id)) ?? null;
+  function startDaily() {
+    const q = nextDaily(view);
+    if (q) setQuiz({ mode: 'daily', question: q });
+  }
+
+  // ---------- 탐험 ----------
+  async function loadExplore(subject: Subject, skip?: number) {
+    try {
+      const data = await getJson<{ question: PublicQuestion | null }>(`/api/game/explore?subject=${encodeURIComponent(subject)}${skip ? `&skip=${skip}` : ''}`);
+      if (data.question) setQuiz({ mode: 'explore', subject, question: data.question });
+      else {
+        setQuiz(null);
+        await refresh();
+        setNotice(`${subject} 탐험을 모두 마쳤어! 물약을 골라 봐.`);
+        setReward({ kind: 'explore', subject });
+      }
+    } catch (e) { setError((e as Error).message); }
+  }
+
+  function afterCorrect() {
+    if (!quiz) return;
+    if (quiz.mode === 'daily') {
+      const q = nextDaily(view);
+      if (q) setQuiz({ mode: 'daily', question: q });
+      else {
+        setQuiz(null);
+        if (view?.daily?.complete && !view.daily.claimed) setReward({ kind: 'daily' });
+      }
+    } else void loadExplore(quiz.subject!, quiz.question.id);
+  }
+
+  const dailyProgress = () => {
+    const d = view?.daily;
+    if (!d || !quiz) return undefined;
+    return `${d.correct.length + 1 > d.questions.length ? d.questions.length : d.correct.length + 1} / ${d.questions.length}`;
+  };
+  const exploreProgress = () => {
+    const e = view?.explore.find(e => e.subject === quiz?.subject);
+    return e ? `${e.solved} / ${e.total}` : undefined;
+  };
+
+  if (!view) {
+    return <main><Header /><div className="workspace">{error ? <ErrorBar message={error} onRetry={() => void refresh()} /> : <section className="panel empty">불러오는 중…</section>}</div></main>;
+  }
+
+  return (
+    <main>
+      <Header />
+      <div className="workspace">
+        {error && <ErrorBar message={error} onRetry={() => void refresh()} />}
+        {notice && <div className="notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}>×</button></div>}
+
+        {!view.partner ? (
+          <StarterPicker busy={busy} onPick={async id => { const r = await act<{ message: string }>({ type: 'starter', species: id }); if (r) setNotice(r.message); }} />
+        ) : <>
+          <HomePanel view={view} onChangePartner={() => setTab('pokedex')} />
+          <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
+            <TabsList className="nav">
+              <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
+              <TabsTrigger value="explore"><Compass />탐험</TabsTrigger>
+              <TabsTrigger value="pokedex"><BookOpen />포켓몬 도감</TabsTrigger>
+            </TabsList>
+            <TabsContent value="daily">
+              <DailyTab view={view} busy={busy} onStart={startDaily} onOpenBox={() => setReward({ kind: 'daily' })} />
+            </TabsContent>
+            <TabsContent value="explore">
+              <ExploreTab view={view} busy={busy}
+                onExplore={s => void loadExplore(s)}
+                onSubjectReward={s => setReward({ kind: 'explore', subject: s })}
+                onMasterReward={() => setReward({ kind: 'master' })} />
+            </TabsContent>
+            <TabsContent value="pokedex">
+              <PokedexTab view={view} busy={busy}
+                onPartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
+                onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}
+                onOpenBall={setBall} />
+            </TabsContent>
+          </Tabs>
+        </>}
+
+        <footer>
+          <span>포켓몬 배움 탐험대</span>
+          <Link href="/parent"><Settings size={14} /> 보호자 공간</Link>
+          <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
+        </footer>
+      </div>
+
+      <QuizDialog
+        question={quiz?.question ?? null}
+        progress={quiz?.mode === 'daily' ? dailyProgress() : exploreProgress()}
+        busy={busy}
+        nextLabel={quiz?.mode === 'daily' ? (view.daily && view.daily.correct.length >= view.daily.questions.length ? '랜덤상자 받으러 가기' : '다음 문제') : '다음 문제'}
+        onAnswer={choice => act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice })}
+        onNext={afterCorrect}
+        onClose={() => setQuiz(null)}
+      />
+
+      <RewardPicker
+        kind={reward?.kind ?? null}
+        subject={reward?.subject}
+        busy={busy}
+        onPick={pick => {
+          if (!reward) return Promise.resolve(null);
+          if (reward.kind === 'daily') return act<RewardResult>({ type: 'dailyBox', pick });
+          if (reward.kind === 'explore') return act<RewardResult>({ type: 'exploreReward', subject: reward.subject!, pick });
+          return act<RewardResult>({ type: 'masterReward', pick });
+        }}
+        onClose={() => setReward(null)}
+        onOpenBall={() => { setReward(null); const last = view.balls[view.balls.length - 1]; if (last) setBall(last); }}
+      />
+
+      <BallDialog
+        ball={ball}
+        busy={busy}
+        onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
+        onClose={() => setBall(null)}
+      />
+
+      <Dialog open={!!evolved} onOpenChange={open => { if (!open) setEvolved(null); }}>
+        <DialogContent className="reward-dialog">
+          <DialogTitle>우와, 진화했어!</DialogTitle>
+          <DialogDescription>{evolved?.message}</DialogDescription>
+          {evolved && <PokemonImage id={evolved.id} className="celebration-img" />}
+          {evolved && <h3 className="caught-name">{species(evolved.id).name}</h3>}
+          <button className="primary" onClick={() => setEvolved(null)}>최고야!</button>
+        </DialogContent>
+      </Dialog>
+    </main>
+  );
 }
 
+function Header() {
+  return (
+    <header className="topbar">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <Link className="brand" href="/"><img src={ASSETS.logo} alt="" /><span>포켓몬 <b>배움 탐험대</b></span></Link>
+    </header>
+  );
+}
 
-
+function ErrorBar({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return <div className="error" role="alert">{message}<button onClick={onRetry}>다시 불러오기</button></div>;
+}
