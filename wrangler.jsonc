@@ -8,8 +8,8 @@
     {
       "binding": "DB",
       "database_name": "poke-quiz-db",
-      // `npx wrangler d1 create poke-quiz-db` 실행 후 출력되는 database_id로 바꿔 주세요.
-      "database_id": "00000000-0000-4000-8000-000000000000",
+      // 기록 저장소 번호. npm run online 이 자동으로 채웁니다.
+      "database_id": "81bc5a3c-411e-461b-bc7a-6ad8d8735cdb",
       "migrations_dir": "migrations"
     }
   ]

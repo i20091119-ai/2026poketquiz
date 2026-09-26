@@ -94,6 +94,8 @@ if (!deployed.ok) {
     say('처음이라 인터넷 주소 이름을 정해야 해요. 질문이 나오면 영어 소문자로 원하는 이름(예: our-family)을 입력하고 Enter를 누르세요.');
     if (!runVisible(['deploy'])) stop('인터넷에 올리지 못했어요.');
     deployed = { ok: true, out: run(['deploy'], { env: { CI: 'true' } }).out };
+  } else if (/verify your email/i.test(deployed.out)) {
+    stop('Cloudflare 가입 인증 메일을 아직 누르지 않았어요. 메일함(스팸함 포함)에서 Cloudflare 메일을 찾아 인증 버튼을 누른 뒤, npm run online 을 다시 실행해 주세요.');
   } else { say(deployed.out); stop('인터넷에 올리지 못했어요.'); }
 }
 const siteUrl = deployed.out.match(/https:\/\/[\w.-]+\.workers\.dev/)?.[0];
