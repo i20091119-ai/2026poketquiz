@@ -61,7 +61,7 @@ export default function Game() {
   }
 
   // ---------- 일일미션 ----------
-  const nextDaily = (v: ChildView | null) => v?.daily?.questions.find(q => !v.daily!.correct.includes(q.id)) ?? null;
+  const nextDaily = (v: ChildView | null) => v?.daily?.questions.find(q => !v.daily!.correct.includes(q.id) && !v.daily!.wrong.includes(q.id)) ?? null;
   function startDaily() {
     const q = nextDaily(view);
     if (q) setQuiz({ mode: 'daily', question: q });
@@ -79,7 +79,7 @@ export default function Game() {
         if (e && e.total > 0 && e.solved === e.total && !e.rewardClaimed) {
           setNotice(`${subject} 탐험을 모두 마쳤어! 물약을 골라 봐.`);
           setReward({ kind: 'explore', subject });
-        } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 내일 복습으로 다시 나와.`);
+        } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 다른 날 다시 나와.`);
         else setNotice(`${subject} 오늘 탐험 끝!`);
       }
     } catch (e) { setError((e as Error).message); }
@@ -93,6 +93,7 @@ export default function Game() {
       else {
         setQuiz(null);
         if (view?.daily?.complete && !view.daily.claimed) setReward({ kind: 'daily' });
+        else if (view?.daily?.finished) setNotice(`오늘의 미션 끝! 틀린 ${view.daily.wrong.length}문제는 다른 날 다시 나와.`);
       }
     } else void loadExplore(quiz.subject!, quiz.question.id);
   }
@@ -100,7 +101,8 @@ export default function Game() {
   const dailyProgress = () => {
     const d = view?.daily;
     if (!d || !quiz) return undefined;
-    return `${d.correct.length + 1 > d.questions.length ? d.questions.length : d.correct.length + 1} / ${d.questions.length}`;
+    const answered = d.correct.length + d.wrong.length;
+    return `${Math.min(answered + 1, d.questions.length)} / ${d.questions.length}`;
   };
   const exploreProgress = () => {
     const e = view?.explore.find(e => e.subject === quiz?.subject);
@@ -157,7 +159,7 @@ export default function Game() {
         question={quiz?.question ?? null}
         progress={quiz?.mode === 'daily' ? dailyProgress() : exploreProgress()}
         busy={busy}
-        nextLabel={quiz?.mode === 'daily' ? (view.daily && view.daily.correct.length >= view.daily.questions.length ? '랜덤상자 받으러 가기' : '다음 문제') : '다음 문제'}
+        nextLabel={quiz?.mode === 'daily' && view.daily?.finished ? (view.daily.complete ? '랜덤상자 받으러 가기' : '미션 끝!') : '다음 문제'}
         onAnswer={choice => act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice })}
         onNext={afterCorrect}
         onClose={() => setQuiz(null)}

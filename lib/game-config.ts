@@ -59,8 +59,6 @@ export const STARTERS = [906, 909, 912]; // 나오하, 뜨아거, 꾸왁스
 
 /** 정답 한 번에 오르는 값 */
 export const REWARD_PER_ANSWER = { stat: 1, exp: 10 };
-/** 두 번 틀리면 해설을 힌트로 보여줍니다. */
-export const HINT_AFTER_WRONG = 2;
 
 export const DAILY_PER_SUBJECT = 4;
 

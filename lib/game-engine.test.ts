@@ -46,51 +46,6 @@ test('파트너는 세 시작 포켓몬 중 한 번만 고를 수 있다', () =>
   assert.throws(() => applyAction(state, { type: 'starter', species: 912 }, ctx(bank)), GameError);
 });
 
-test('일일미션: 과목별 4문제, 모두 맞히면 상자 1번만', () => {
-  const bank = makeBank();
-  const state = started(bank);
-  ensureDaily(state, bank, '2026-09-26', seeded());
-  const ids = state.daily!.questionIds;
-  assert.equal(ids.length, SUBJECTS.length * DAILY_PER_SUBJECT);
-  for (const s of SUBJECTS) assert.equal(ids.filter(id => bank.questions.find(q => q.id === id)!.subject === s).length, DAILY_PER_SUBJECT);
-
-  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /모두 맞혀야/);
-  for (const id of ids) {
-    const q = bank.questions.find(q => q.id === id)!;
-    const wrong = applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: (q.answer + 1) % 5 }, ctx(bank));
-    assert.equal(wrong?.correct, false);
-    applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: q.answer }, ctx(bank));
-  }
-  assert.equal(state.exp, ids.length * 10);
-  const statTotal = Object.values(state.stats).reduce((a, b) => a + b, 0);
-  assert.equal(statTotal, ids.length);
-
-  const box = applyAction(state, { type: 'dailyBox', pick: 1 }, ctx(bank)) as { items: unknown[] };
-  assert.equal(box.items.length, 3);
-  assert.equal(state.daily!.claimed, true);
-  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /이미/);
-});
-
-test('같은 날 미션을 다시 맞혀도 보상은 한 번', () => {
-  const bank = makeBank();
-  const state = started(bank);
-  ensureDaily(state, bank, '2026-09-26', seeded());
-  const q = bank.questions.find(q => q.id === state.daily!.questionIds[0])!;
-  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, ctx(bank));
-  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, ctx(bank));
-  assert.equal(state.exp, 10);
-});
-
-test('두 번 틀리면 힌트를 준다', () => {
-  const bank = makeBank();
-  const state = started(bank);
-  const q = bank.questions[0];
-  const first = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: (q.answer + 1) % 5 }, ctx(bank)) as { hint?: string };
-  const second = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: (q.answer + 1) % 5 }, ctx(bank)) as { hint?: string };
-  assert.equal(first.hint, undefined);
-  assert.equal(second.hint, '해설');
-});
-
 test('탐험: 과목 완료 → 물약 1번, 전 과목 완료 → 럭셔리볼', () => {
   const bank = makeBank(3);
   const state = started(bank);
@@ -98,7 +53,7 @@ test('탐험: 과목 완료 → 물약 1번, 전 과목 완료 → 럭셔리볼'
   assert.equal(view0.explore.length, SUBJECTS.length);
 
   const solveSubject = (subject: string) => {
-    for (const q of bank.questions.filter(q => q.subject === subject)) {
+    for (const q of bank.questions.filter(q => q.subject === subject && !state.banks[bank.id]?.solved.includes(q.id))) {
       applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, ctx(bank));
     }
   };
@@ -180,52 +135,104 @@ test('샘플 문제은행은 모두 형식이 맞다', () => {
   }
 });
 
-test('틀린 문제는 다른 날 탐험과 일일미션에 복습으로 다시 나온다', () => {
-  const bank = makeBank(3);
+const answerOf = (bank: ActiveBank, id: number) => bank.questions.find(q => q.id === id)!.answer;
+const wrongOf = (bank: ActiveBank, id: number) => (answerOf(bank, id) + 1) % 5;
+
+test('일일미션: 과목별 4문제, 모두 맞히면 상자 1번만', () => {
+  const bank = makeBank();
   const state = started(bank);
-  const day1 = ctx(bank);
-  const day2: Context = { ...ctx(bank), today: '2026-09-27' };
-  const qs = bank.questions.filter(q => q.subject === '국어');
-  const [q] = qs;
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  const ids = state.daily!.questionIds;
+  assert.equal(ids.length, SUBJECTS.length * DAILY_PER_SUBJECT);
+  for (const s of SUBJECTS) assert.equal(ids.filter(id => bank.questions.find(q => q.id === id)!.subject === s).length, DAILY_PER_SUBJECT);
 
-  // 1일차: 틀렸다가 다시 맞힘 → 오늘은 탐험에 다시 안 나오지만 내일은 나온다
-  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: (q.answer + 1) % 5 }, day1);
-  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1);
-  for (let i = 0; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, '국어', day1.today, seeded(i + 1))?.id, q.id);
-  assert.equal(childView(state, bank, day1.today).explore.find(e => e.subject === '국어')!.reviewLater, 1);
+  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /모두 맞혀야/);
+  for (const id of ids) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, ctx(bank));
+  assert.equal(state.exp, ids.length * 10);
+  assert.equal(Object.values(state.stats).reduce((a, b) => a + b, 0), ids.length);
 
-  // 나머지 국어 문제를 맞혀 과목 마스터
-  for (const other of qs.slice(1)) applyAction(state, { type: 'answer', mode: 'explore', questionId: other.id, choice: other.answer }, day1);
-  assert.equal(nextExploreQuestion(state, bank, '국어', day1.today, seeded()), null);
-
-  // 2일차: 복습 문제로 다시 나오고, 일일미션에서도 가장 먼저 뽑힌다
-  const view2 = childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!;
-  assert.equal(view2.review, 1);
-  assert.equal(view2.available, 1);
-  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded())?.id, q.id);
-  ensureDaily(state, bank, day2.today, seeded(9));
-  assert.ok(state.daily!.questionIds.includes(q.id));
-
-  // 2일차에 맞히면 복습 완료 + 보상
-  const exp = state.exp;
-  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day2) as { reviewed: boolean };
-  assert.equal(r.reviewed, true);
-  assert.equal(state.exp, exp + 10);
-  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded()), null);
-  assert.equal(childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!.review, 0);
+  const box = applyAction(state, { type: 'dailyBox', pick: 1 }, ctx(bank)) as { items: unknown[] };
+  assert.equal(box.items.length, 3);
+  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /이미/);
 });
 
-test('일일미션에서 틀린 문제도 다음 날 미션에 먼저 나온다', () => {
+test('일일미션: 틀리면 다시 풀 수 없고, 상자도 없고, 다음 날 미션에 먼저 나온다', () => {
   const bank = makeBank(8);
   const state = started(bank);
-  ensureDaily(state, bank, '2026-09-26', seeded(1));
-  const wrongId = state.daily!.questionIds[0];
-  const q = bank.questions.find(q => q.id === wrongId)!;
-  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: (q.answer + 1) % 5 }, ctx(bank));
-  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, ctx(bank));
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  const [wrongId, ...rest] = state.daily!.questionIds;
+
+  const r = applyAction(state, { type: 'answer', mode: 'daily', questionId: wrongId, choice: wrongOf(bank, wrongId) }, ctx(bank)) as { correct: boolean; answer: number };
+  assert.equal(r.correct, false);
+  assert.equal(r.answer, answerOf(bank, wrongId)); // 정답을 알려 준다
+  assert.throws(() => applyAction(state, { type: 'answer', mode: 'daily', questionId: wrongId, choice: answerOf(bank, wrongId) }, ctx(bank)), /이미 풀었어요/);
+  for (const id of rest) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, ctx(bank));
+
+  const view = childView(state, bank, '2026-09-26').daily!;
+  const card = childView(state, bank, '2026-09-26').explore.find(e => e.subject === bank.questions.find(q => q.id === wrongId)!.subject)!;
+  assert.equal(card.reviewLater, 1);
+  assert.equal(card.inDaily, 0);
+  assert.equal(view.finished, true);
+  assert.equal(view.complete, false);
+  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /모두 맞혀야/);
+  // 오늘은 탐험에서도 나오지 않는다
+  for (let i = 1; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, bank.questions.find(q => q.id === wrongId)!.subject, '2026-09-26', seeded(i))?.id, wrongId);
+
+  // 다음 날 미션에는 반드시 다시 나온다
   for (let seed = 1; seed < 10; seed++) {
     const copy = structuredClone(state);
     ensureDaily(copy, bank, '2026-09-27', seeded(seed));
     assert.ok(copy.daily!.questionIds.includes(wrongId));
   }
+});
+
+test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다른 날 다시 나온다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const day1 = ctx(bank);
+  const day2: Context = { ...ctx(bank), today: '2026-09-27' };
+  const [q, ...others] = bank.questions.filter(q => q.subject === '국어');
+
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, day1);
+  assert.throws(() => applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1), /다른 날/);
+  for (let i = 1; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, '국어', day1.today, seeded(i))?.id, q.id);
+  for (const o of others) applyAction(state, { type: 'answer', mode: 'explore', questionId: o.id, choice: o.answer }, day1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day1.today, seeded()), null);
+
+  const v1 = childView(state, bank, day1.today).explore.find(e => e.subject === '국어')!;
+  assert.equal(v1.solved, 2); // 틀린 문제는 안 푼 문제
+  assert.equal(v1.reviewLater, 1);
+  assert.throws(() => applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day1), /모두 맞혀야/);
+
+  // 다음 날: 다시 나오고, 맞히면 과목 마스터
+  assert.equal(childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!.review, 1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded())?.id, q.id);
+  const exp = state.exp;
+  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day2) as { reviewed: boolean };
+  assert.equal(r.reviewed, true);
+  assert.equal(state.exp, exp + 10);
+  applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day2);
+});
+
+test('오늘의 미션 문제는 탐험에서 빠진다 (하루에 두 번 풀지 않기)', () => {
+  const bank = makeBank(4);
+  const state = started(bank);
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  // 과목당 4문제가 모두 미션에 들어가므로 탐험에는 문제가 없다
+  assert.equal(nextExploreQuestion(state, bank, '수학', '2026-09-26', seeded()), null);
+  const id = state.daily!.questionIds[0];
+  assert.throws(() => applyAction(state, { type: 'answer', mode: 'explore', questionId: id, choice: 0 }, ctx(bank)), /오늘의 미션/);
+  assert.equal(childView(state, bank, '2026-09-26').explore.find(e => e.subject === '국어')!.inDaily, 4);
+});
+
+test('이미 맞힌 문제를 틀리면 다시 안 푼 문제가 된다', () => {
+  const bank = makeBank(1);
+  const state = started(bank);
+  const q = bank.questions[0];
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, ctx(bank));
+  // 다음 날 일일미션에 (맞힌 문제로) 다시 나왔는데 틀림
+  const day2: Context = { ...ctx(bank), today: '2026-09-27' };
+  ensureDaily(state, bank, day2.today, seeded());
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: wrongOf(bank, q.id) }, day2);
+  assert.ok(!state.banks[bank.id].solved.includes(q.id));
 });

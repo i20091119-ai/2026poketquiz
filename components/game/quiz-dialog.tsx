@@ -8,7 +8,8 @@ import { TypeBadge } from './common';
 export type AnswerResult = {
   correct: boolean;
   message: string;
-  hint?: string;
+  /** 틀렸을 때 알려주는 정답 번호 (0부터) */
+  answer?: number;
   explanation?: string;
   already?: boolean;
   reviewed?: boolean;
@@ -54,7 +55,7 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
     const result = await onAnswer(choice);
     if (result) setFeedback(result);
   }
-  const solved = feedback?.correct;
+  const answered = !!feedback;
 
   return (
     <>
@@ -63,7 +64,7 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
           <TypeBadge type={question.type} small />
           {progress && <span className="quiz-count">{progress}</span>}
         </DialogTitle>
-        <DialogDescription>천천히 읽고 답을 하나 골라 줘.</DialogDescription>
+        <DialogDescription>천천히 읽고 답을 하나 골라 줘. 기회는 한 번이야!</DialogDescription>
         <>
           <div className="quiz-heading">
             <h2>{question.prompt}</h2>
@@ -73,9 +74,11 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
             {question.choices.map((c, i) => (
               <button
                 type="button" role="radio" aria-checked={choice === i} key={i}
-                className={'answer-option' + (choice === i ? ' selected' : '')}
-                disabled={busy || solved}
-                onClick={() => { setChoice(i); if (feedback && !feedback.correct) setFeedback(null); }}
+                className={'answer-option' + (choice === i ? ' selected' : '') +
+                  (feedback && !feedback.correct && choice === i ? ' wrong' : '') +
+                  (feedback && (feedback.correct ? choice === i : feedback.answer === i) ? ' right' : '')}
+                disabled={busy || answered}
+                onClick={() => setChoice(i)}
               >
                 <span className="choice-no">{i + 1}</span><span>{c}</span>
               </button>
@@ -85,11 +88,10 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
             <div className={'feedback ' + (feedback.correct ? 'correct' : 'retry')} role="status">
               <b>{feedback.message}</b>
               {feedback.gained && <p className="gain-line"><TypeBadge type={feedback.gained.type} amount={'+' + feedback.gained.amount} small /> 경험치 +{feedback.gained.exp}</p>}
-              {feedback.correct && feedback.explanation && <p>{feedback.explanation}</p>}
-              {!feedback.correct && feedback.hint && <p>힌트: {feedback.hint}</p>}
+              {feedback.explanation && <p>{feedback.explanation}</p>}
             </div>
           )}
-          {solved
+          {answered
             ? <button className="primary" onClick={onNext}>{nextLabel} <ArrowRight size={20} /></button>
             : <button className="primary" disabled={busy || choice === null} onClick={() => void submit()}>정답 확인</button>}
         </>

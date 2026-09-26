@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_POTION_TABLE, HINT_AFTER_WRONG,
+  BALLS, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_POTION_TABLE,
   POTIONS, REWARD_PER_ANSWER, STARTERS, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -26,7 +26,7 @@ export type OwnedPokemon = { uid: string; species: number; obtainedAt: string };
 export type BankProgress = {
   solved: number[];
   wrong: Record<string, number>;
-  /** 틀린 문제 → 마지막으로 틀린 날짜. 다른 날 맞히면 빠집니다. */
+  /** 틀린 문제 → 마지막으로 틀린 날짜. 그날은 다시 나오지 않고, 다른 날 맞히면 빠집니다. */
   review: Record<string, string>;
   subjectRewards: Subject[];
   masterClaimed: boolean;
@@ -41,7 +41,8 @@ export type GameState = {
   dex: number[];
   balls: Ball[];
   seq: number;
-  daily: { date: string; bankId: number; questionIds: number[]; correct: number[]; claimed: boolean } | null;
+  /** 오늘의 미션. 문제마다 한 번만 풀 수 있습니다 (맞힘 → correct, 틀림 → wrong). */
+  daily: { date: string; bankId: number; questionIds: number[]; correct: number[]; wrong: number[]; claimed: boolean } | null;
   banks: Record<string, BankProgress>;
 };
 
@@ -83,8 +84,10 @@ function progress(state: GameState, bankId: number): BankProgress {
   prog.review ??= {}; // 복습 기능 이전에 저장된 기록
   return prog;
 }
-/** 전날 이전에 틀려서 오늘 다시 풀어야 하는 문제 */
+/** 전날 이전에 틀려서 오늘 다시 나와야 하는 문제 */
 const isDue = (prog: BankProgress, id: number, today: string) => !!prog.review[id] && prog.review[id] < today;
+/** 오늘 이미 틀린 문제 (오늘은 다시 풀 수 없음) */
+const wrongToday = (prog: BankProgress, id: number, today: string) => prog.review[id] === today;
 export const publicQuestion = ({ id, subject, type, prompt, choices }: Question): PublicQuestion =>
   ({ id, subject, type, prompt, choices });
 
@@ -114,6 +117,7 @@ function grant(state: GameState, item: BoxItem) {
 export function ensureDaily(state: GameState, bank: ActiveBank | null, today: string, random: Random): boolean {
   if (!bank) return false;
   const d = state.daily;
+  if (d) d.wrong ??= []; // 이전 형식으로 저장된 기록
   if (d && d.date === today && d.claimed) return false;
   if (d && d.date === today && d.bankId === bank.id) {
     // 부모가 문제를 지웠으면 오늘의 미션에서도 빼서 완료할 수 있게 합니다.
@@ -128,9 +132,10 @@ export function ensureDaily(state: GameState, bank: ActiveBank | null, today: st
   const ids: number[] = [];
   for (const subject of SUBJECTS) {
     const pool = bank.questions.filter(q => q.subject === subject);
-    // 복습할 문제(전에 틀린 문제) → 안 푼 문제 → 이미 맞힌 문제 순서
+    // 전에 틀린 문제 → 안 푼 문제 → 이미 맞힌 문제 순서
+    // 오늘 탐험에서 틀린 문제는 오늘 다시 풀지 않도록 빼 둡니다.
     const due = pool.filter(q => isDue(prog, q.id, today));
-    const rest = pool.filter(q => !isDue(prog, q.id, today));
+    const rest = pool.filter(q => !isDue(prog, q.id, today) && !wrongToday(prog, q.id, today));
     const ordered = [
       ...shuffle(due, random),
       ...shuffle(rest.filter(q => !solved.has(q.id)), random),
@@ -138,11 +143,16 @@ export function ensureDaily(state: GameState, bank: ActiveBank | null, today: st
     ];
     ids.push(...ordered.slice(0, DAILY_PER_SUBJECT).map(q => q.id));
   }
-  state.daily = { date: today, bankId: bank.id, questionIds: ids, correct: [], claimed: false };
+  state.daily = { date: today, bankId: bank.id, questionIds: ids, correct: [], wrong: [], claimed: false };
   return true;
 }
 
-const dailyComplete = (state: GameState) =>
+/** 오늘의 미션 문제를 모두 풀었는지 (맞혔든 틀렸든) */
+const dailyFinished = (state: GameState) =>
+  !!state.daily && state.daily.questionIds.length > 0 &&
+  state.daily.questionIds.every(id => state.daily!.correct.includes(id) || state.daily!.wrong.includes(id));
+/** 모두 맞혀서 상자를 받을 수 있는지 */
+const dailyPerfect = (state: GameState) =>
   !!state.daily && state.daily.questionIds.length > 0 && state.daily.questionIds.every(id => state.daily!.correct.includes(id));
 
 // ---------- 탐험 ----------
@@ -158,11 +168,16 @@ function allMastered(state: GameState, bank: ActiveBank) {
   return withQuestions.length > 0 && withQuestions.every(s => subjectMastered(state, bank, s));
 }
 
-/** 탐험에서 나올 문제: 아직 못 맞힌 문제 + 전에 틀려서 복습할 문제 */
+/** 오늘의 미션에 들어 있는 문제 (탐험에서는 빼서 하루에 두 번 풀지 않게 합니다) */
+const inTodayDaily = (state: GameState, id: number, today: string) =>
+  state.daily?.date === today && state.daily.questionIds.includes(id);
+
+/** 탐험에서 나올 문제: 아직 못 맞힌 문제. 오늘 틀린 문제와 오늘의 미션 문제는 빼 둡니다. */
 function explorePool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
-  return subjectQuestions(bank, subject).filter(q => !solved.has(q.id) || isDue(prog, q.id, today));
+  return subjectQuestions(bank, subject).filter(q =>
+    !solved.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
 }
 
 export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, subject: Subject, today: string, random: Random, skip?: number) {
@@ -223,35 +238,42 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const prog = progress(state, bank.id);
       if (action.mode === 'daily') {
         ensureDaily(state, bank, ctx.today, random);
-        if (!state.daily!.questionIds.includes(q.id)) fail('오늘의 미션 문제가 아니에요. 새로고침해 주세요.');
+        const d = state.daily!;
+        if (!d.questionIds.includes(q.id)) fail('오늘의 미션 문제가 아니에요. 새로고침해 주세요.');
+        if (d.correct.includes(q.id) || d.wrong.includes(q.id)) fail('이 문제는 오늘 이미 풀었어요.');
       } else if (action.mode === 'explore') {
-        if (prog.solved.includes(q.id) && !isDue(prog, q.id, ctx.today)) return { correct: true, already: true, explanation: q.explanation, message: '이미 맞힌 문제예요.' };
+        if (prog.solved.includes(q.id)) fail('이미 맞힌 문제예요.');
+        if (wrongToday(prog, q.id, ctx.today)) fail('이 문제는 다른 날 다시 도전해 보자!');
+        if (inTodayDaily(state, q.id, ctx.today)) fail('이 문제는 오늘의 미션에서 풀어 줘.');
       } else fail('지원하지 않는 요청이에요.');
 
+      // 틀리면: 다시 풀 기회 없이 '안 푼 문제'로 돌려놓고, 다른 날 일일미션·탐험에 다시 나오게 합니다.
       if (action.choice !== q.answer) {
-        const count = (prog.wrong[q.id] ?? 0) + 1;
-        prog.wrong[q.id] = count;
-        prog.review[q.id] = ctx.today; // 다른 날 다시 나오게 합니다
-        return { correct: false, message: '괜찮아! 다시 생각해 보자.', hint: count >= HINT_AFTER_WRONG ? q.explanation : undefined };
+        prog.wrong[q.id] = (prog.wrong[q.id] ?? 0) + 1;
+        prog.review[q.id] = ctx.today;
+        prog.solved = prog.solved.filter(id => id !== q.id);
+        if (action.mode === 'daily') state.daily!.wrong.push(q.id);
+        return {
+          correct: false, answer: q.answer, explanation: q.explanation,
+          message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 다른 날 다시 나올 거야.`,
+        };
       }
+
+      const reviewed = !!prog.review[q.id];
+      delete prog.review[q.id];
       const newlySolved = !prog.solved.includes(q.id);
       if (newlySolved) prog.solved.push(q.id);
-      // 전날 이전에 틀린 문제를 오늘 맞히면 복습 완료. 같은 날 다시 맞힌 건 내일 또 나옵니다.
-      const reviewed = isDue(prog, q.id, ctx.today);
-      if (reviewed) delete prog.review[q.id];
-      let rewarded = newlySolved || reviewed;
-      if (action.mode === 'daily') {
-        rewarded = !state.daily!.correct.includes(q.id);
-        if (rewarded) state.daily!.correct.push(q.id);
-      }
+      // 일일미션은 이미 맞힌 적 있는 문제가 나와도 보상을 줍니다 (하루 한 번만 풀 수 있으므로).
+      const rewarded = action.mode === 'daily' || newlySolved;
+      if (action.mode === 'daily') state.daily!.correct.push(q.id);
       if (rewarded) {
         state.stats[q.type] += REWARD_PER_ANSWER.stat;
         state.exp += REWARD_PER_ANSWER.exp;
       }
       return {
-        correct: true, explanation: q.explanation, gained: rewarded ? { type: q.type, amount: REWARD_PER_ANSWER.stat, exp: REWARD_PER_ANSWER.exp } : undefined,
-        reviewed,
-        message: reviewed ? '복습 성공! 이번엔 맞혔어!' : rewarded ? '정답이야!' : '정답이야! (이미 보상을 받은 문제)',
+        correct: true, explanation: q.explanation, reviewed,
+        gained: rewarded ? { type: q.type, amount: REWARD_PER_ANSWER.stat, exp: REWARD_PER_ANSWER.exp } : undefined,
+        message: reviewed ? '지난번에 틀린 문제, 이번엔 맞혔어!' : '정답이야!',
       };
     }
 
@@ -259,7 +281,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       needStarter();
       const choice = needPick(action.pick);
       ensureDaily(state, ctx.bank, ctx.today, random);
-      if (!dailyComplete(state)) fail('오늘의 미션을 모두 맞혀야 상자를 열 수 있어요.');
+      if (!dailyPerfect(state)) fail('오늘의 미션을 모두 맞혀야 상자를 열 수 있어요.');
       if (state.daily!.claimed) fail('오늘의 상자는 이미 열었어요. 내일 또 만나요!');
       const items = [0, 1, 2].map(() => {
         const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
@@ -340,8 +362,12 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
         date: state.daily.date,
         questions: state.daily.questionIds.map(id => byId.get(id)).filter((q): q is Question => !!q).map(publicQuestion),
         correct: state.daily.correct,
+        wrong: state.daily.wrong ?? [],
         claimed: state.daily.claimed,
-        complete: dailyComplete(state),
+        /** 모두 풀었는지 (틀린 문제 포함) */
+        finished: dailyFinished(state),
+        /** 모두 맞혀서 상자를 받을 수 있는지 */
+        complete: dailyPerfect(state),
       }
     : null;
   const solved = new Set(prog?.solved ?? []);
@@ -352,10 +378,12 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
       solved: qs.filter(q => solved.has(q.id)).length,
       /** 오늘 탐험에서 풀 수 있는 문제 수 (복습 포함) */
       available: explorePool(state, bank, subject, today).length,
-      /** 복습할 문제 수 (전에 틀린 문제) */
+      /** 전에 틀려서 오늘 다시 나온 문제 수 */
       review: qs.filter(q => isDue(prog!, q.id, today)).length,
-      /** 오늘 틀려서 내일 복습으로 나올 문제 수 */
-      reviewLater: qs.filter(q => prog!.review[q.id] === today).length,
+      /** 오늘 틀려서 다른 날 다시 나올 문제 수 */
+      reviewLater: qs.filter(q => wrongToday(prog!, q.id, today)).length,
+      /** 오늘의 미션에 들어 있어 탐험에서 빠진 (아직 못 맞힌) 문제 수 */
+      inDaily: qs.filter(q => !solved.has(q.id) && !wrongToday(prog!, q.id, today) && inTodayDaily(state, q.id, today)).length,
       rewardClaimed: prog!.subjectRewards.includes(subject),
     };
   }) : [];

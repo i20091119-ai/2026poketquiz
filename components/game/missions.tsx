@@ -1,5 +1,5 @@
 "use client";
-import { ArrowRight, Check, Gift, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowRight, Check, Gift, RotateCcw, Sparkles, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ASSETS } from '@/lib/assets';
 import { DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, type Subject } from '@/lib/game-config';
@@ -13,13 +13,16 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
 }) {
   const d = view.daily;
   if (!view.bank || !d) return <section className="panel empty">아직 이번 주 문제은행이 없어요. 보호자에게 알려 주세요.</section>;
-  const done = d.correct.length;
+  const done = d.correct.length + d.wrong.length;
   const total = d.questions.length;
+  const missed = d.finished && !d.complete;
   return (
     <section className="panel mission">
       <div className="section-heading"><span className="pill">TODAY&apos;S MISSION</span><span>{d.date}</span></div>
-      <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : d.complete ? '랜덤상자를 열 시간이야!' : '오늘의 미션을 풀어 보자!'}</h2>
-      <p>과목마다 {DAILY_PER_SUBJECT}문제씩, 모두 맞히면 <b>랜덤상자 3개 중 하나</b>를 고를 수 있어. 틀려도 다시 풀 수 있고, 틀린 문제는 다른 날 복습으로 또 나와!</p>
+      <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : d.complete ? '랜덤상자를 열 시간이야!' : missed ? '오늘의 미션 끝! 수고했어' : '오늘의 미션을 풀어 보자!'}</h2>
+      <p>{missed
+        ? <>틀린 {d.wrong.length}문제는 다른 날 미션에 다시 나와. 그때 맞혀 보자!</>
+        : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 한 번! 모두 맞히면 <b>랜덤상자 3개 중 하나</b>를 고를 수 있어. 틀린 문제는 다른 날 다시 나와.</>}</p>
       <div className="daily-subjects">
         {SUBJECTS.map(s => {
           const qs = d.questions.filter(q => q.subject === s);
@@ -27,16 +30,21 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
           return (
             <div className="daily-subject" key={s}>
               <span className="subject-chip" style={{ background: SUBJECT_INFO[s].color }}>{s}</span>
-              <div className="dots">{qs.map(q => <span key={q.id} className={'dot' + (d.correct.includes(q.id) ? ' on' : '')}>{d.correct.includes(q.id) && <Check size={12} />}</span>)}</div>
+              <div className="dots">{qs.map(q => {
+                const ok = d.correct.includes(q.id), miss = d.wrong.includes(q.id);
+                return <span key={q.id} className={'dot' + (ok ? ' on' : miss ? ' miss' : '')}>{ok ? <Check size={12} /> : miss ? <X size={12} /> : null}</span>;
+              })}</div>
             </div>
           );
         })}
       </div>
-      <div className="mission-footer"><span><b>{done}</b> / {total} 문제 완료</span></div>
+      <div className="mission-footer"><span><b>{done}</b> / {total} 문제 풀었어</span><span>맞힘 {d.correct.length} · 틀림 {d.wrong.length}</span></div>
       <Progress value={total ? (done / total) * 100 : 0} />
       {d.claimed
         ? <button className="primary" disabled>오늘의 미션 완료! <Check size={20} /></button>
-        : d.complete
+        : missed
+          ? <button className="primary" disabled>내일 다시 도전!</button>
+          : d.complete
           ? <button className="primary glow" disabled={busy} onClick={onOpenBox}><img className="btn-icon" src={ASSETS.boxClosed} alt="" /> 랜덤상자 고르기</button>
           : <button className="primary" disabled={busy} onClick={onStart}>{done ? '이어서 풀기' : '미션 시작!'} <ArrowRight size={20} /></button>}
     </section>
@@ -53,7 +61,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
       <section className="panel">
         <div className="section-heading"><span className="pill">EXPLORE</span><span>{view.bank.title}</span></div>
         <h2>과목을 골라 탐험을 떠나자!</h2>
-        <p>이미 맞힌 문제는 다시 나오지 않아. 틀린 문제는 다른 날 복습으로 다시 나와. 과목을 모두 풀면 <b>물약 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
+        <p>문제마다 기회는 한 번! 맞힌 문제는 다시 나오지 않고, 틀린 문제는 다른 날 다시 나와. 과목을 모두 맞히면 <b>물약 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
       </section>
       <div className="explore-grid">
         {view.explore.map(e => {
@@ -68,14 +76,15 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
                 {mastered && <span className="mastered"><Sparkles size={14} /> 마스터</span>}
               </div>
               <Progress value={e.total ? (e.solved / e.total) * 100 : 0} />
-              {e.review > 0 && <p className="review-note"><RotateCcw size={14} /> 전에 틀린 문제 {e.review}개를 다시 풀어 보자!</p>}
-              {e.reviewLater > 0 && <p className="review-note later">오늘 틀린 {e.reviewLater}문제는 내일 복습으로 다시 나와요.</p>}
+              {e.review > 0 && <p className="review-note"><RotateCcw size={14} /> 전에 틀린 문제 {e.review}개가 다시 나왔어!</p>}
+              {e.reviewLater > 0 && <p className="review-note later">오늘 틀린 {e.reviewLater}문제는 다른 날 다시 나와요.</p>}
+              {e.inDaily > 0 && <p className="review-note later">{e.inDaily}문제는 오늘의 미션에서 풀어요.</p>}
               {e.total === 0
                 ? <button className="secondary" disabled>문제가 없어요</button>
                 : mastered && !e.rewardClaimed
                   ? <button className="primary glow" disabled={busy} onClick={() => onSubjectReward(e.subject)}><Gift size={18} /> 물약 고르기</button>
                   : e.available > 0
-                    ? <button className="primary" disabled={busy} onClick={() => onExplore(e.subject)}>{mastered ? `복습하기 (${e.available})` : '탐험하기'} <ArrowRight size={18} /></button>
+                    ? <button className="primary" disabled={busy} onClick={() => onExplore(e.subject)}>탐험하기 ({e.available}) <ArrowRight size={18} /></button>
                     : <button className="secondary" disabled><Check size={16} /> {mastered ? '물약 받음' : '오늘은 끝!'}</button>}
             </section>
           );
