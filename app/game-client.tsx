@@ -3,14 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, Compass, Settings, Sun } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getJson, PokemonImage, postJson } from '@/components/game/common';
+import { getJson, goTo, PokemonImage, postJson } from '@/components/game/common';
 import { HomePanel, StarterPicker } from '@/components/game/home';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
-import type { Subject } from '@/lib/game-config';
+import { SITE_URL, type Subject } from '@/lib/game-config';
 import type { Action, Ball, ChildView, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 
@@ -150,7 +150,7 @@ export default function Game() {
 
         <footer>
           <span>포켓몬 배움 탐험대</span>
-          <a href="/parent"><Settings size={14} /> 보호자 공간</a>
+          <a href={`${SITE_URL}/parent`} target="_blank" rel="noreferrer"><Settings size={14} /> 보호자 공간 ↗</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
         </footer>
       </div>
@@ -209,7 +209,7 @@ function Header() {
   return (
     <header className="topbar">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <a className="brand" href="/"><img src={ASSETS.logo} alt="" /><span>포켓몬 <b>배움 탐험대</b></span></a>
+      <a className="brand" href="/" onClick={goTo('/')}><img src={ASSETS.logo} alt="" /><span>포켓몬 <b>배움 탐험대</b></span></a>
     </header>
   );
 }

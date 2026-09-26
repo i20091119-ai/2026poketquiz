@@ -31,6 +31,9 @@ export const TYPE_INFO: Record<TypeKey, { label: string; color: string }> = {
   ice: { label: '얼음', color: '#3dcef3' },
 };
 
+/** 인터넷에 올린 게임 주소. 보호자 공간 버튼이 이 주소의 /parent 를 새 창으로 엽니다. */
+export const SITE_URL = 'https://poke-quiz.qhfk8292.workers.dev';
+
 export const SUBJECTS = ['국어', '수학', '영어', '한자', '역사', '상식'] as const;
 export type Subject = typeof SUBJECTS[number];
 

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Copy, Download, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { getJson, postJson, TypeBadge } from '@/components/game/common';
+import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
 import { CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
 import type { Question } from '@/lib/game-engine';
@@ -83,9 +83,9 @@ function Shell({ children, onLogout }: { children: React.ReactNode; onLogout?: (
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="/"><span>포켓몬 <b>배움 탐험대</b> · 보호자 공간</span></a>
+        <a className="brand" href="/" onClick={goTo('/')}><span>포켓몬 <b>배움 탐험대</b> · 보호자 공간</span></a>
         <span className="topbar-actions">
-          <a className="text-button" href="/"><ArrowLeft size={16} /> 게임으로</a>
+          <a className="text-button" href="/" onClick={goTo('/')}><ArrowLeft size={16} /> 게임으로</a>
           {onLogout && <button className="text-button" onClick={onLogout}><LogOut size={16} /> 로그아웃</button>}
         </span>
       </header>

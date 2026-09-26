@@ -35,6 +35,12 @@ export function TypeBadge({ type, amount, small }: { type: TypeKey; amount?: str
   );
 }
 
+/**
+ * 같은 사이트 안에서 페이지를 옮길 때 씁니다. 게임 화면이 링크 누르기를 가로채도 확실히 이동하도록
+ * 브라우저에게 직접 주소를 바꾸라고 시킵니다.
+ */
+export const goTo = (path: string) => (e: { preventDefault: () => void }) => { e.preventDefault(); window.location.assign(path); };
+
 export const dexNo = (id: number) => 'No.' + String(id).padStart(4, '0');
 
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
