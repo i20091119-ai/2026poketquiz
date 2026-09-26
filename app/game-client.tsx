@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BookOpen, Compass, Settings, Sun } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getJson, goTo, PokemonImage, postJson } from '@/components/game/common';
+import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
 import { HomePanel, StarterPicker } from '@/components/game/home';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
@@ -150,7 +150,7 @@ export default function Game() {
 
         <footer>
           <span>포켓몬 배움 탐험대</span>
-          <a href={`${SITE_URL}/parent`} target="_blank" rel="noreferrer"><Settings size={14} /> 보호자 공간 ↗</a>
+          <a href={`${SITE_URL}/parent`} target="_blank" rel="noreferrer" onClick={openParent(`${SITE_URL}/parent`)}><Settings size={14} /> 보호자 공간 ↗</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
           <span className="version">버전 {__APP_VERSION__}</span>
         </footer>

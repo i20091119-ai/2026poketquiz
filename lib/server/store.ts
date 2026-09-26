@@ -12,8 +12,9 @@ export function db(): D1Database {
   return env.DB;
 }
 
+// 응답마다 지금 올라가 있는 버전을 같이 보냅니다. 화면이 예전 버전이면 스스로 새로고침합니다.
 export const json = (data: unknown, status = 200) =>
-  Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
+  Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-App-Version': __APP_VERSION__ } });
 
 // ---------- 게임 상태 ----------
 export async function readState() {
