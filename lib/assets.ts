@@ -12,8 +12,8 @@ export const ASSETS = {
   boxOpen: '/assets/boxes/box-open.svg',
   potion: {
     apple: '/assets/items/apple-berry.png',
-    blue: '/assets/items/ice-berry.svg', // 임시 그림
-    fire: '/assets/items/fire-berry.svg', // 임시 그림
+    blue: '/assets/items/ice-berry.png',
+    fire: '/assets/items/fire-berry.png',
     thunder: '/assets/items/thunder-berry.png',
     moon: '/assets/items/ghost-berry.png',
     star: '/assets/items/star-berry.png',

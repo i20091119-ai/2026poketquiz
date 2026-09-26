@@ -12,8 +12,8 @@ PNG 등 다른 형식을 쓰려면 파일을 넣고 `lib/assets.ts`의 경로만
 | `boxes/box-closed.svg` | 일일미션 랜덤상자 (닫힘) | 256×256 |
 | `boxes/box-open.svg` | 랜덤상자 (열림) | 256×256 |
 | `items/apple-berry.png` | 사과열매 (풀·벌레·땅 +5) — 완성 그림 | 256×256, 투명 배경 |
-| `items/ice-berry.svg` | 얼음열매 (물·얼음·비행 +5) — **임시** | 256×256, 투명 배경 PNG로 바꿀 예정 |
-| `items/fire-berry.svg` | 불꽃열매 (불꽃·격투·드래곤 +5) — **임시** | 256×256, 투명 배경 PNG로 바꿀 예정 |
+| `items/ice-berry.png` | 얼음열매 (물·얼음·비행 +5) — 완성 그림 | 256×256, 투명 배경 |
+| `items/fire-berry.png` | 불꽃열매 (불꽃·격투·드래곤 +5) — 완성 그림 | 256×256, 투명 배경 |
 | `items/thunder-berry.png` | 번개열매 (전기·강철·바위 +5) — 완성 그림 | 256×256, 투명 배경 |
 | `items/ghost-berry.png` | 유령열매 (고스트·악·독 +5) — 완성 그림 | 256×256, 투명 배경 |
 | `items/star-berry.png` | 별빛열매 (노말·에스퍼·페어리 +5) — 완성 그림 | 256×256, 투명 배경 |
