@@ -1,5 +1,6 @@
 // 게임을 인터넷(Cloudflare)에 올리는 자동 진행 도구입니다.
 // 사용법: npm run online
+//   - 먼저 GitHub에서 새 버전을 받습니다 (git pull을 따로 안 해도 됨).
 //   - 처음: Cloudflare 로그인 → 기록 저장소(D1) 만들기 → 표 만들기 → 올리기 → 보호자 비밀번호 정하기
 //   - 다음부터: 바뀐 내용만 다시 올립니다. 이미 된 단계는 건너뜁니다.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -50,7 +51,27 @@ function ask(question, { hidden = false } = {}) {
   return new Promise(resolve => rl.question(question, a => { rl.close(); if (hidden) say(); resolve(a.trim()); }));
 }
 
+const git = (...args) => spawnSync('git', args, { encoding: 'utf8', cwd: new URL('..', import.meta.url).pathname });
+const version = () => git('rev-parse', '--short', 'HEAD').stdout?.trim() || '?';
+
 say('🌐 포켓몬 배움 탐험대를 인터넷에 올립니다. 중간에 창을 닫지 말아 주세요.');
+
+// 0. 새 버전 받기 (받은 뒤에는 새 버전의 이 도구로 다시 시작)
+if (!process.env.POKE_UPDATED) {
+  say('\n[0/5] GitHub에서 새 버전 받기');
+  git('checkout', '--', 'wrangler.jsonc'); // 이 파일은 이 도구가 고치므로, 받기 전에 원래대로 돌려 겹침을 막습니다.
+  const before = version();
+  const pull = git('pull', '--ff-only');
+  if (pull.status !== 0) { say(`${pull.stdout}${pull.stderr}`); stop('GitHub에서 새 버전을 받지 못했어요.'); }
+  if (version() !== before) {
+    say(`✅ 새 버전(${version()})을 받았어요. 필요한 것을 설치하는 중… (1~2분)`);
+    const install = spawnSync('npm', ['install'], { encoding: 'utf8' });
+    if (install.status !== 0) { say(`${install.stdout}${install.stderr}`); stop('설치 중에 문제가 생겼어요.'); }
+    const again = spawnSync(process.execPath, [new URL(import.meta.url).pathname], { stdio: 'inherit', env: { ...process.env, POKE_UPDATED: '1' } });
+    process.exit(again.status ?? 1);
+  }
+  say(`✅ 이미 최신 버전(${version()})이에요.`);
+}
 
 // 1. 로그인
 step(1, 'Cloudflare 로그인 확인');
@@ -121,6 +142,7 @@ if (hasPassword) {
 }
 
 say('\n🎉 모두 끝났어요!');
+say(`   올린 버전: ${version()} — 게임 화면 맨 아래 "버전"에 이 글자가 보이면 새 버전이 올라간 거예요.`);
 if (siteUrl) {
   say(`   아이 게임:    ${siteUrl}`);
   say(`   보호자 공간:  ${siteUrl}/parent`);

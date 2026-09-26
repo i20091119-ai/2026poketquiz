@@ -89,7 +89,7 @@ function Shell({ children, onLogout }: { children: React.ReactNode; onLogout?: (
           {onLogout && <button className="text-button" onClick={onLogout}><LogOut size={16} /> 로그아웃</button>}
         </span>
       </header>
-      <div className="workspace">{children}</div>
+      <div className="workspace">{children}<footer><span className="version">버전 {__APP_VERSION__}</span></footer></div>
     </main>
   );
 }

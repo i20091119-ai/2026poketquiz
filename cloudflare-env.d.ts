@@ -5,3 +5,6 @@ declare namespace Cloudflare {
     PARENT_PASSWORD?: string;
   }
 }
+
+/** 빌드할 때 넣는 버전 번호 (vite.config.ts) */
+declare const __APP_VERSION__: string;

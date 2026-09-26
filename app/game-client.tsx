@@ -152,6 +152,7 @@ export default function Game() {
           <span>포켓몬 배움 탐험대</span>
           <a href={`${SITE_URL}/parent`} target="_blank" rel="noreferrer"><Settings size={14} /> 보호자 공간 ↗</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
+          <span className="version">버전 {__APP_VERSION__}</span>
         </footer>
       </div>
 
