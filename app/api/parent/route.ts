@@ -29,7 +29,7 @@ async function overview() {
       id: bank.id, title: bank.title,
       subjects: SUBJECTS.map(s => {
         const qs = bank.questions.filter(q => q.subject === s);
-        return { subject: s, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length };
+        return { subject: s, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length, review: qs.filter(q => progress?.review?.[q.id]).length };
       }),
       hardest: bank.questions.filter(q => wrong[q.id]).sort((a, b) => wrong[b.id] - wrong[a.id]).slice(0, 10)
         .map(q => ({ id: q.id, subject: q.subject, prompt: q.prompt, wrong: wrong[q.id], solved: solved.has(q.id) })),

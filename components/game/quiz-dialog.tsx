@@ -11,6 +11,7 @@ export type AnswerResult = {
   hint?: string;
   explanation?: string;
   already?: boolean;
+  reviewed?: boolean;
   gained?: { type: PublicQuestion['type']; amount: number; exp: number };
 };
 

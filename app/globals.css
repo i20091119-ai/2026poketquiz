@@ -237,6 +237,8 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #cfdcca; display: grid; place-items: center; color: #fff; }
 .dot.on { background: #3fa129; border-color: #3fa129; }
 .mission-footer { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #5f775f; margin: 12px 0 6px; }
+.review-note { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #a2573b; margin: 4px 0 0; }
+.review-note.later { color: #6a7b70; }
 .mastered { color: #b98500; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
 
 /* 탐험 */

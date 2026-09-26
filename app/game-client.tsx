@@ -30,8 +30,8 @@ export default function Game() {
 
   const refresh = useCallback((signal?: AbortSignal) =>
     getJson<{ view: ChildView }>('/api/game', signal).then(
-      data => { setView(data.view); setError(''); },
-      e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); },
+      data => { setView(data.view); setError(''); return data.view; },
+      e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); return null; },
     ), []);
   useEffect(() => {
     const controller = new AbortController();
@@ -74,9 +74,13 @@ export default function Game() {
       if (data.question) setQuiz({ mode: 'explore', subject, question: data.question });
       else {
         setQuiz(null);
-        await refresh();
-        setNotice(`${subject} 탐험을 모두 마쳤어! 물약을 골라 봐.`);
-        setReward({ kind: 'explore', subject });
+        const fresh = await refresh();
+        const e = fresh?.explore.find(e => e.subject === subject);
+        if (e && e.total > 0 && e.solved === e.total && !e.rewardClaimed) {
+          setNotice(`${subject} 탐험을 모두 마쳤어! 물약을 골라 봐.`);
+          setReward({ kind: 'explore', subject });
+        } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 내일 복습으로 다시 나와.`);
+        else setNotice(`${subject} 오늘 탐험 끝!`);
       }
     } catch (e) { setError((e as Error).message); }
   }
@@ -100,7 +104,7 @@ export default function Game() {
   };
   const exploreProgress = () => {
     const e = view?.explore.find(e => e.subject === quiz?.subject);
-    return e ? `${e.solved} / ${e.total}` : undefined;
+    return e ? `남은 문제 ${e.available}` : undefined;
   };
 
   if (!view) {

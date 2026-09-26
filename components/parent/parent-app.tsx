@@ -17,7 +17,7 @@ type Overview = {
   child: { exp: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
   active: null | {
     id: number; title: string;
-    subjects: { subject: Subject; total: number; solved: number }[];
+    subjects: { subject: Subject; total: number; solved: number; review: number }[];
     hardest: { id: number; subject: Subject; prompt: string; wrong: number; solved: boolean }[];
   };
 };
@@ -136,7 +136,7 @@ function Dashboard({ overview, busy, call, onOpenBank, reload }: {
           <h2>공개 중인 문제은행: {active.title}</h2>
           <div className="progress-table">
             {active.subjects.map(s => (
-              <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘</span>
+              <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘{s.review ? ` · 복습 대기 ${s.review}` : ''}</span>
                 <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div></div>
             ))}
           </div>

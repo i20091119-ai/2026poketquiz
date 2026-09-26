@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES } from './game-config.ts';
-import { applyAction, childView, ensureDaily, GameError, initialState, type ActiveBank, type Context, type Question } from './game-engine.ts';
+import { applyAction, childView, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -177,5 +177,55 @@ test('샘플 문제은행은 모두 형식이 맞다', () => {
     assert.equal(new Set(q.choices).size, 5);
     assert.ok(q.answer >= 0 && q.answer < 5);
     assert.ok(SUBJECT_TYPES[q.subject].includes(q.type), `${q.prompt}: ${q.type}`);
+  }
+});
+
+test('틀린 문제는 다른 날 탐험과 일일미션에 복습으로 다시 나온다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const day1 = ctx(bank);
+  const day2: Context = { ...ctx(bank), today: '2026-09-27' };
+  const qs = bank.questions.filter(q => q.subject === '국어');
+  const [q] = qs;
+
+  // 1일차: 틀렸다가 다시 맞힘 → 오늘은 탐험에 다시 안 나오지만 내일은 나온다
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: (q.answer + 1) % 5 }, day1);
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1);
+  for (let i = 0; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, '국어', day1.today, seeded(i + 1))?.id, q.id);
+  assert.equal(childView(state, bank, day1.today).explore.find(e => e.subject === '국어')!.reviewLater, 1);
+
+  // 나머지 국어 문제를 맞혀 과목 마스터
+  for (const other of qs.slice(1)) applyAction(state, { type: 'answer', mode: 'explore', questionId: other.id, choice: other.answer }, day1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day1.today, seeded()), null);
+
+  // 2일차: 복습 문제로 다시 나오고, 일일미션에서도 가장 먼저 뽑힌다
+  const view2 = childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!;
+  assert.equal(view2.review, 1);
+  assert.equal(view2.available, 1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded())?.id, q.id);
+  ensureDaily(state, bank, day2.today, seeded(9));
+  assert.ok(state.daily!.questionIds.includes(q.id));
+
+  // 2일차에 맞히면 복습 완료 + 보상
+  const exp = state.exp;
+  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day2) as { reviewed: boolean };
+  assert.equal(r.reviewed, true);
+  assert.equal(state.exp, exp + 10);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded()), null);
+  assert.equal(childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!.review, 0);
+});
+
+test('일일미션에서 틀린 문제도 다음 날 미션에 먼저 나온다', () => {
+  const bank = makeBank(8);
+  const state = started(bank);
+  ensureDaily(state, bank, '2026-09-26', seeded(1));
+  const wrongId = state.daily!.questionIds[0];
+  const q = bank.questions.find(q => q.id === wrongId)!;
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: (q.answer + 1) % 5 }, ctx(bank));
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, ctx(bank));
+  for (let seed = 1; seed < 10; seed++) {
+    const copy = structuredClone(state);
+    ensureDaily(copy, bank, '2026-09-27', seeded(seed));
+    assert.ok(copy.daily!.questionIds.includes(wrongId));
   }
 });
