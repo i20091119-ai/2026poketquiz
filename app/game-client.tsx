@@ -25,7 +25,7 @@ export default function Game() {
   const [notice, setNotice] = useState('');
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [reward, setReward] = useState<{ kind: RewardKind; subject?: Subject } | null>(null);
-  const [ball, setBall] = useState<Ball | null>(null);
+  const [ballQueue, setBallQueue] = useState<Ball[]>([]);
   const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
 
   const refresh = useCallback((signal?: AbortSignal) =>
@@ -92,8 +92,9 @@ export default function Game() {
       if (q) setQuiz({ mode: 'daily', question: q });
       else {
         setQuiz(null);
-        if (view?.daily?.complete && !view.daily.claimed) setReward({ kind: 'daily' });
-        else if (view?.daily?.finished) setNotice(`오늘의 미션 끝! 틀린 ${view.daily.wrong.length}문제는 다른 날 다시 나와.`);
+        const d = view?.daily;
+        if (d && d.boxPicks > 0 && !d.claimed) setReward({ kind: 'daily' });
+        else if (d?.finished) setNotice(`오늘의 미션 끝! 맞힌 문제 ${d.correct.length}개. 틀린 문제는 다른 날 다시 나와.`);
       }
     } else void loadExplore(quiz.subject!, quiz.question.id);
   }
@@ -143,7 +144,7 @@ export default function Game() {
               <PokedexTab view={view} busy={busy}
                 onPartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
                 onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}
-                onOpenBall={setBall} />
+                onOpenBall={b => setBallQueue([b])} />
             </TabsContent>
           </Tabs>
         </>}
@@ -159,15 +160,20 @@ export default function Game() {
         question={quiz?.question ?? null}
         progress={quiz?.mode === 'daily' ? dailyProgress() : exploreProgress()}
         busy={busy}
-        nextLabel={quiz?.mode === 'daily' && view.daily?.finished ? (view.daily.complete ? '랜덤상자 받으러 가기' : '미션 끝!') : '다음 문제'}
+        nextLabel={quiz?.mode === 'daily' && view.daily?.finished ? (view.daily.boxPicks > 0 ? '랜덤상자 받으러 가기' : '미션 끝!') : '다음 문제'}
+        chances={quiz?.mode === 'daily' ? (view.daily?.attempts ?? 1) - (view.daily?.tries[quiz.question.id] ?? 0) : 1}
+        maxChances={quiz?.mode === 'daily' ? view.daily?.attempts ?? 1 : 1}
         onAnswer={choice => act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice })}
         onNext={afterCorrect}
         onClose={() => setQuiz(null)}
       />
 
       <RewardPicker
+        key={reward ? reward.kind + (reward.subject ?? '') : 'none'}
         kind={reward?.kind ?? null}
         subject={reward?.subject}
+        picks={reward?.kind === 'daily' ? view.daily?.boxPicks ?? 1 : 1}
+        initial={reward?.kind === 'daily' ? view.daily?.box : null}
         busy={busy}
         onPick={pick => {
           if (!reward) return Promise.resolve(null);
@@ -176,14 +182,15 @@ export default function Game() {
           return act<RewardResult>({ type: 'masterReward', pick });
         }}
         onClose={() => setReward(null)}
-        onOpenBall={() => { setReward(null); const last = view.balls[view.balls.length - 1]; if (last) setBall(last); }}
+        onOpenBalls={ids => { setReward(null); setBallQueue(ids.map(id => view.balls.find(b => b.id === id)).filter((b): b is Ball => !!b)); }}
       />
 
       <BallDialog
-        ball={ball}
+        key={ballQueue[0]?.id ?? 'none'}
+        ball={ballQueue[0] ?? null}
         busy={busy}
         onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
-        onClose={() => setBall(null)}
+        onClose={() => setBallQueue(q => q.slice(1))}
       />
 
       <Dialog open={!!evolved} onOpenChange={open => { if (!open) setEvolved(null); }}>

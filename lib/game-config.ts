@@ -57,10 +57,31 @@ export const DEFAULT_GRADE = '초1';
 export const CHOICE_COUNT = 5;
 export const STARTERS = [906, 909, 912]; // 나오하, 뜨아거, 꾸왁스
 
-/** 정답 한 번에 오르는 값 */
-export const REWARD_PER_ANSWER = { stat: 1, exp: 10 };
+/**
+ * 정답 한 번에 오르는 값. 스탯은 문제에 붙은 속성에 들어갑니다.
+ * 일일미션(하루 20문제)만 꾸준히 풀어도 일주일에 한 번 이상 진화할 수 있게 맞춘 값입니다.
+ * 일일미션은 과목마다 속성을 돌아가며 내므로, 속성 하나당 일주일에 약 9문제(상식은 약 4~5문제)가 나옵니다.
+ *   → 정답률 80%면 속성 하나당 일주일에 약 30점 (첫 진화 15점, 두 번째 진화 25점+12점)
+ */
+export const REWARD_PER_ANSWER = { daily: 4, explore: 1, exp: 10 };
+/**
+ * 속성이 많은 과목은 한 속성에 문제가 덜 돌아가므로 스탯에 배수를 줍니다 (속성 수 ÷ 3).
+ * 상식은 속성이 6개라서 2배 → 일일미션 정답 1문제에 +8.
+ */
+export const statReward = (subject: Subject, mode: 'daily' | 'explore') =>
+  Math.round(REWARD_PER_ANSWER[mode] * SUBJECT_TYPES[subject].length / 3);
 
 export const DAILY_PER_SUBJECT = 4;
+/** 일일미션 문제 하나에 주는 기회 (처음 1번 + 다시 풀기 2번). 탐험은 1번입니다. */
+export const DAILY_ATTEMPTS = 3;
+/**
+ * 일일미션 랜덤상자: 맞힌 개수에 따라 3개 중 몇 개를 고를 수 있는지. 위에서부터 먼저 맞는 규칙을 씁니다.
+ * minCorrect: 'all'이면 오늘의 문제를 모두 맞혔을 때.
+ */
+export const DAILY_BOX_RULES: { minCorrect: number | 'all'; picks: number }[] = [
+  { minCorrect: 'all', picks: 2 },
+  { minCorrect: 15, picks: 1 },
+];
 
 /**
  * 진화 조건: 진화 후 포켓몬의 속성을 모읍니다. 진화하면 해당 스탯을 소모합니다.

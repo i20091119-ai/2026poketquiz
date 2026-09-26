@@ -8,7 +8,7 @@ import { species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 
 export type RewardKind = 'daily' | 'explore' | 'master';
-export type RewardResult = { items: BoxItem[]; pick: number; message: string };
+export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
 export type CatchResult = { caught: number; tier: number; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
@@ -31,41 +31,59 @@ function ItemView({ item }: { item: BoxItem }) {
   </>;
 }
 
-/** 3개 중 하나 고르기 → 열어 보기 → 고른 것이 볼이면 바로 열 수 있게 안내 */
-export function RewardPicker({ kind, subject, busy, onPick, onClose, onOpenBall }: {
+/** 3개 중 picks개 고르기 → 다 고르면 나머지도 공개 → 고른 것 중에 볼이 있으면 바로 열 수 있게 안내 */
+export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onClose, onOpenBalls }: {
   kind: RewardKind | null;
   subject?: string;
+  /** 고를 수 있는 개수 */
+  picks: number;
+  /** 이어서 고르는 경우 (일일미션 상자를 하나만 고르고 창을 닫았을 때) */
+  initial?: { items: (BoxItem | null)[]; picks: number[] } | null;
   busy: boolean;
   onPick: (pick: number) => Promise<RewardResult | null>;
   onClose: () => void;
-  onOpenBall: () => void;
+  onOpenBalls: (ballIds: string[]) => void;
 }) {
-  const [result, setResult] = useState<RewardResult | null>(null);
+  const [items, setItems] = useState<(BoxItem | null)[]>(initial?.items ?? [null, null, null]);
+  const [picked, setPicked] = useState<number[]>(initial?.picks ?? []);
+  const [ballIds, setBallIds] = useState<string[]>([]);
+  const done = picked.length >= picks;
   const copy = kind ? COPY[kind] : COPY.daily;
-  const chosen = result?.items[result.pick];
-  const close = () => { if (!busy) { setResult(null); onClose(); } };
+  const pickedBall = picked.some(i => items[i]?.kind === 'ball');
+  const close = () => { if (!busy) onClose(); };
+  const title = done ? '짜잔! 이런 게 들어 있었어'
+    : picked.length ? `하나 더 골라! (${picks - picked.length}개 남음)`
+    : (subject ? `${subject} ` : '') + copy.title.replace('하나를', picks > 1 ? `${picks}개를` : '하나를');
+
+  async function choose(i: number) {
+    const r = await onPick(i);
+    if (!r) return;
+    setItems(r.items);
+    setPicked(r.picks);
+    setBallIds(ids => [...ids, ...r.ballIds]);
+  }
 
   return (
     <Dialog open={!!kind} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent className="reward-dialog">
-        <DialogTitle>{result ? '짜잔! 이런 게 들어 있었어' : (subject ? `${subject} ` : '') + copy.title}</DialogTitle>
-        <DialogDescription>{result ? '고른 것만 가질 수 있어. 다른 것에는 뭐가 있었는지 볼까?' : copy.description}</DialogDescription>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{done ? '고른 것만 가질 수 있어. 다른 것에는 뭐가 있었는지 볼까?' : copy.description}</DialogDescription>
         <div className="choice-row">
-          {[0, 1, 2].map(i => result ? (
-            <div key={i} className={'reward-card revealed' + (i === result.pick ? ' picked' : '')}>
-              {i === result.pick && <span className="picked-tag">내 것!</span>}
-              <ItemView item={result.items[i]} />
+          {[0, 1, 2].map(i => picked.includes(i) || (done && items[i]) ? (
+            <div key={i} className={'reward-card revealed' + (picked.includes(i) ? ' picked' : '')}>
+              {picked.includes(i) && <span className="picked-tag">내 것!</span>}
+              <ItemView item={items[i]!} />
             </div>
           ) : (
-            <button key={i} className="reward-card" disabled={busy} onClick={async () => { const r = await onPick(i); if (r) setResult(r); }}>
+            <button key={i} className="reward-card" disabled={busy || done} onClick={() => void choose(i)}>
               <img src={copy.closed} alt="" />
               <b>{i + 1}번 {copy.label}</b>
             </button>
           ))}
         </div>
-        {result && (chosen?.kind === 'ball'
-          ? <button className="primary" onClick={() => { setResult(null); onOpenBall(); }}>볼 열어 보기!</button>
-          : <button className="primary" onClick={close}>좋아!</button>)}
+        {done && (pickedBall && ballIds.length
+          ? <button className="primary" onClick={() => onOpenBalls(ballIds)}>볼 열어 보기!</button>
+          : <button className="primary" onClick={close}>{pickedBall ? '좋아! 볼은 도감 탭 가방에 있어' : '좋아!'}</button>)}
       </DialogContent>
     </Dialog>
   );

@@ -2,11 +2,14 @@
 import { ArrowRight, Check, Gift, RotateCcw, Sparkles, X } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ASSETS } from '@/lib/assets';
-import { DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, type Subject } from '@/lib/game-config';
+import { DAILY_BOX_RULES, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, type Subject } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
 import { TypeBadge } from './common';
 
 /* eslint-disable @next/next/no-img-element */
+
+/** 상자 1개를 받는 최소 맞힌 개수 */
+const oneBoxAt = DAILY_BOX_RULES.find(r => r.picks === 1 && r.minCorrect !== 'all')?.minCorrect ?? 0;
 
 export function DailyTab({ view, busy, onStart, onOpenBox }: {
   view: ChildView; busy: boolean; onStart: () => void; onOpenBox: () => void;
@@ -15,14 +18,16 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
   if (!view.bank || !d) return <section className="panel empty">아직 이번 주 문제은행이 없어요. 보호자에게 알려 주세요.</section>;
   const done = d.correct.length + d.wrong.length;
   const total = d.questions.length;
-  const missed = d.finished && !d.complete;
+  const canOpen = d.boxPicks > 0 && !d.claimed;
+  const missed = d.finished && d.boxPicks === 0;
+  const picksLeft = d.boxPicks - (d.box?.picks.length ?? 0);
   return (
     <section className="panel mission">
       <div className="section-heading"><span className="pill">TODAY&apos;S MISSION</span><span>{d.date}</span></div>
-      <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : d.complete ? '랜덤상자를 열 시간이야!' : missed ? '오늘의 미션 끝! 수고했어' : '오늘의 미션을 풀어 보자!'}</h2>
+      <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : canOpen ? '랜덤상자를 열 시간이야!' : missed ? '오늘의 미션 끝! 수고했어' : '오늘의 미션을 풀어 보자!'}</h2>
       <p>{missed
-        ? <>틀린 {d.wrong.length}문제는 다른 날 미션에 다시 나와. 그때 맞혀 보자!</>
-        : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 한 번! 모두 맞히면 <b>랜덤상자 3개 중 하나</b>를 고를 수 있어. 틀린 문제는 다른 날 다시 나와.</>}</p>
+        ? <>상자는 {oneBoxAt}문제 이상 맞히면 받을 수 있어. 틀린 {d.wrong.length}문제는 다른 날 미션에 다시 나와. 내일 또 도전하자!</>
+        : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 {d.attempts}번! <b>모두 맞히면 랜덤상자 2개</b>, <b>{oneBoxAt}문제 이상 맞히면 1개</b>를 고를 수 있어. 틀린 문제는 다른 날 다시 나와.</>}</p>
       <div className="daily-subjects">
         {SUBJECTS.map(s => {
           const qs = d.questions.filter(q => q.subject === s);
@@ -44,8 +49,8 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
         ? <button className="primary" disabled>오늘의 미션 완료! <Check size={20} /></button>
         : missed
           ? <button className="primary" disabled>내일 다시 도전!</button>
-          : d.complete
-          ? <button className="primary glow" disabled={busy} onClick={onOpenBox}><img className="btn-icon" src={ASSETS.boxClosed} alt="" /> 랜덤상자 고르기</button>
+          : canOpen
+          ? <button className="primary glow" disabled={busy} onClick={onOpenBox}><img className="btn-icon" src={ASSETS.boxClosed} alt="" /> 랜덤상자 {picksLeft}개 고르기</button>
           : <button className="primary" disabled={busy} onClick={onStart}>{done ? '이어서 풀기' : '미션 시작!'} <ArrowRight size={20} /></button>}
     </section>
   );

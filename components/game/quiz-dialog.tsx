@@ -8,7 +8,10 @@ import { TypeBadge } from './common';
 export type AnswerResult = {
   correct: boolean;
   message: string;
-  /** 틀렸을 때 알려주는 정답 번호 (0부터) */
+  /** false면 아직 기회가 남아 다시 풀 수 있음 */
+  final?: boolean;
+  triesLeft?: number;
+  /** 기회를 다 쓰고 틀렸을 때 알려주는 정답 번호 (0부터) */
   answer?: number;
   explanation?: string;
   already?: boolean;
@@ -19,6 +22,9 @@ export type AnswerResult = {
 type Props = {
   question: PublicQuestion | null;
   progress?: string;
+  /** 이 문제에 남은 기회 / 처음 기회 */
+  chances: number;
+  maxChances: number;
   busy: boolean;
   onAnswer: (choice: number) => Promise<AnswerResult | null>;
   onNext: () => void;
@@ -38,9 +44,10 @@ export function QuizDialog(props: Props) {
   );
 }
 
-function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Props & { question: PublicQuestion }) {
+function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onNext, nextLabel }: Props & { question: PublicQuestion }) {
   const [choice, setChoice] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<AnswerResult | null>(null);
+  const [missed, setMissed] = useState<number[]>([]); // 이번에 틀린 보기
 
   function readAloud() {
     if (!('speechSynthesis' in window)) return;
@@ -53,9 +60,13 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
   async function submit() {
     if (choice === null) return;
     const result = await onAnswer(choice);
-    if (result) setFeedback(result);
+    if (!result) return;
+    setFeedback(result);
+    if (!result.correct && result.final === false) { setMissed(m => [...m, choice]); setChoice(null); }
   }
-  const answered = !!feedback;
+  // 맞혔거나, 기회를 다 써서 틀렸으면 끝
+  const answered = !!feedback && (feedback.correct || feedback.final !== false);
+  const finalWrong = !!feedback && !feedback.correct && feedback.final !== false;
 
   return (
     <>
@@ -64,7 +75,7 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
           <TypeBadge type={question.type} small />
           {progress && <span className="quiz-count">{progress}</span>}
         </DialogTitle>
-        <DialogDescription>천천히 읽고 답을 하나 골라 줘. 기회는 한 번이야!</DialogDescription>
+        <DialogDescription>천천히 읽고 답을 하나 골라 줘. {maxChances === 1 ? '기회는 한 번이야!' : chances === maxChances ? `기회는 ${maxChances}번이야!` : chances === 1 ? '마지막 기회야!' : `남은 기회 ${chances}번`}</DialogDescription>
         <>
           <div className="quiz-heading">
             <h2>{question.prompt}</h2>
@@ -75,10 +86,11 @@ function QuizBody({ question, progress, busy, onAnswer, onNext, nextLabel }: Pro
               <button
                 type="button" role="radio" aria-checked={choice === i} key={i}
                 className={'answer-option' + (choice === i ? ' selected' : '') +
-                  (feedback && !feedback.correct && choice === i ? ' wrong' : '') +
-                  (feedback && (feedback.correct ? choice === i : feedback.answer === i) ? ' right' : '')}
-                disabled={busy || answered}
-                onClick={() => setChoice(i)}
+                  (missed.includes(i) || (finalWrong && choice === i) ? ' wrong' : '') +
+                  (feedback?.correct && choice === i ? ' right' : '') +
+                  (finalWrong && feedback!.answer === i ? ' right' : '')}
+                disabled={busy || answered || missed.includes(i)}
+                onClick={() => { setChoice(i); if (feedback && !answered) setFeedback(null); }}
               >
                 <span className="choice-no">{i + 1}</span><span>{c}</span>
               </button>

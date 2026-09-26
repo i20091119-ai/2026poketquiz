@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES } from './game-config.ts';
-import { applyAction, childView, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type Question } from './game-engine.ts';
+import { DAILY_ATTEMPTS, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { applyAction, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -138,54 +138,6 @@ test('샘플 문제은행은 모두 형식이 맞다', () => {
 const answerOf = (bank: ActiveBank, id: number) => bank.questions.find(q => q.id === id)!.answer;
 const wrongOf = (bank: ActiveBank, id: number) => (answerOf(bank, id) + 1) % 5;
 
-test('일일미션: 과목별 4문제, 모두 맞히면 상자 1번만', () => {
-  const bank = makeBank();
-  const state = started(bank);
-  ensureDaily(state, bank, '2026-09-26', seeded());
-  const ids = state.daily!.questionIds;
-  assert.equal(ids.length, SUBJECTS.length * DAILY_PER_SUBJECT);
-  for (const s of SUBJECTS) assert.equal(ids.filter(id => bank.questions.find(q => q.id === id)!.subject === s).length, DAILY_PER_SUBJECT);
-
-  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /모두 맞혀야/);
-  for (const id of ids) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, ctx(bank));
-  assert.equal(state.exp, ids.length * 10);
-  assert.equal(Object.values(state.stats).reduce((a, b) => a + b, 0), ids.length);
-
-  const box = applyAction(state, { type: 'dailyBox', pick: 1 }, ctx(bank)) as { items: unknown[] };
-  assert.equal(box.items.length, 3);
-  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /이미/);
-});
-
-test('일일미션: 틀리면 다시 풀 수 없고, 상자도 없고, 다음 날 미션에 먼저 나온다', () => {
-  const bank = makeBank(8);
-  const state = started(bank);
-  ensureDaily(state, bank, '2026-09-26', seeded());
-  const [wrongId, ...rest] = state.daily!.questionIds;
-
-  const r = applyAction(state, { type: 'answer', mode: 'daily', questionId: wrongId, choice: wrongOf(bank, wrongId) }, ctx(bank)) as { correct: boolean; answer: number };
-  assert.equal(r.correct, false);
-  assert.equal(r.answer, answerOf(bank, wrongId)); // 정답을 알려 준다
-  assert.throws(() => applyAction(state, { type: 'answer', mode: 'daily', questionId: wrongId, choice: answerOf(bank, wrongId) }, ctx(bank)), /이미 풀었어요/);
-  for (const id of rest) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, ctx(bank));
-
-  const view = childView(state, bank, '2026-09-26').daily!;
-  const card = childView(state, bank, '2026-09-26').explore.find(e => e.subject === bank.questions.find(q => q.id === wrongId)!.subject)!;
-  assert.equal(card.reviewLater, 1);
-  assert.equal(card.inDaily, 0);
-  assert.equal(view.finished, true);
-  assert.equal(view.complete, false);
-  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /모두 맞혀야/);
-  // 오늘은 탐험에서도 나오지 않는다
-  for (let i = 1; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, bank.questions.find(q => q.id === wrongId)!.subject, '2026-09-26', seeded(i))?.id, wrongId);
-
-  // 다음 날 미션에는 반드시 다시 나온다
-  for (let seed = 1; seed < 10; seed++) {
-    const copy = structuredClone(state);
-    ensureDaily(copy, bank, '2026-09-27', seeded(seed));
-    assert.ok(copy.daily!.questionIds.includes(wrongId));
-  }
-});
-
 test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다른 날 다시 나온다', () => {
   const bank = makeBank(3);
   const state = started(bank);
@@ -235,4 +187,135 @@ test('이미 맞힌 문제를 틀리면 다시 안 푼 문제가 된다', () => 
   ensureDaily(state, bank, day2.today, seeded());
   applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: wrongOf(bank, q.id) }, day2);
   assert.ok(!state.banks[bank.id].solved.includes(q.id));
+});
+
+/** 오늘의 미션을 풀기: correctIds는 맞히고 나머지는 기회를 다 써서 틀림 */
+function playDaily(state: GameState, bank: ActiveBank, c: Context, correct: (id: number, i: number) => boolean) {
+  ensureDaily(state, bank, c.today, c.random);
+  state.daily!.questionIds.forEach((id, i) => {
+    if (correct(id, i)) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, c);
+    else for (let k = 0; k < DAILY_ATTEMPTS; k++) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: wrongOf(bank, id) }, c);
+  });
+}
+
+test('일일미션: 과목별 4문제, 정답 1개마다 그 속성 +4 (상식 +8)', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  const ids = state.daily!.questionIds;
+  assert.equal(ids.length, SUBJECTS.length * DAILY_PER_SUBJECT);
+  for (const s of SUBJECTS) assert.equal(ids.filter(id => bank.questions.find(q => q.id === id)!.subject === s).length, DAILY_PER_SUBJECT);
+  assert.equal(statReward('국어', 'daily'), 4);
+  assert.equal(statReward('상식', 'daily'), 8);
+  assert.equal(statReward('국어', 'explore'), 1);
+
+  const q = bank.questions.find(q => q.id === ids[0])!;
+  const before = state.stats[q.type];
+  const r = applyAction(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, ctx(bank)) as { gained: { amount: number } };
+  assert.equal(state.stats[q.type], before + statReward(q.subject, 'daily'));
+  assert.equal(r.gained.amount, statReward(q.subject, 'daily'));
+  assert.equal(state.exp, 10);
+});
+
+test('일일미션: 틀려도 기회가 3번, 다 틀리면 정답을 알려주고 끝', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  const [a, b] = state.daily!.questionIds;
+  // a: 두 번 틀리고 세 번째에 맞힘
+  const r1 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: wrongOf(bank, a) }, ctx(bank)) as { final: boolean; triesLeft: number; answer?: number };
+  assert.deepEqual([r1.final, r1.triesLeft, r1.answer], [false, 2, undefined]); // 기회가 남으면 정답을 알려주지 않음
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: wrongOf(bank, a) }, ctx(bank));
+  const r3 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: answerOf(bank, a) }, ctx(bank)) as { correct: boolean };
+  assert.equal(r3.correct, true);
+  assert.ok(state.daily!.correct.includes(a));
+  // b: 세 번 모두 틀림
+  for (let k = 0; k < 2; k++) applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank));
+  const last = applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank)) as { final: boolean; answer: number };
+  assert.deepEqual([last.final, last.answer], [true, answerOf(bank, b)]);
+  assert.throws(() => applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: answerOf(bank, b) }, ctx(bank)), /이미 풀었어요/);
+
+  // 둘 다 다음 날 미션에 다시 나온다 (다시 맞힌 문제 포함)
+  for (let seed = 1; seed < 6; seed++) {
+    const copy = structuredClone(state);
+    ensureDaily(copy, bank, '2026-09-27', seeded(seed));
+    assert.ok(copy.daily!.questionIds.includes(a) && copy.daily!.questionIds.includes(b));
+  }
+});
+
+test('랜덤상자: 모두 맞히면 2개, 15개 이상이면 1개, 그 아래는 없음', () => {
+  const bank = makeBank(8);
+  const cases: [number, number][] = [[20, 2], [19, 1], [15, 1], [14, 0]];
+  for (const [correctCount, picks] of cases) {
+    const state = started(bank);
+    playDaily(state, bank, ctx(bank), (_, i) => i < correctCount);
+    assert.equal(dailyBoxPicks(state), picks, `${correctCount}개 맞힘`);
+    const view = childView(state, bank, '2026-09-26').daily!;
+    assert.equal(view.finished, true);
+    if (!picks) { assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /맞히지 못했어요/); continue; }
+    const first = applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)) as { items: unknown[]; done: boolean };
+    assert.equal(first.done, picks === 1);
+    if (picks === 2) {
+      assert.equal(first.items.filter(Boolean).length, 1); // 안 고른 상자는 아직 숨김
+      assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /이미 연 상자/);
+      const second = applyAction(state, { type: 'dailyBox', pick: 2 }, ctx(bank)) as { items: unknown[]; done: boolean };
+      assert.equal(second.done, true);
+      assert.equal(second.items.filter(Boolean).length, 3); // 다 고르면 모두 공개
+    }
+    assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 1 }, ctx(bank)), /이미 열었어요/);
+  }
+});
+
+test('미션을 다 풀기 전에는 상자를 열 수 없다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  ensureDaily(state, bank, '2026-09-26', seeded());
+  const id = state.daily!.questionIds[0];
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: answerOf(bank, id) }, ctx(bank));
+  assert.throws(() => applyAction(state, { type: 'dailyBox', pick: 0 }, ctx(bank)), /먼저 끝내/);
+});
+
+test('일일미션은 과목 속성을 고르게 낸다', () => {
+  let id = 1;
+  const questions: Question[] = SUBJECTS.flatMap(subject => Array.from({ length: 60 }, (_, i) => ({
+    id: id++, subject, type: SUBJECT_TYPES[subject][i % SUBJECT_TYPES[subject].length], prompt: '', choices: ['a', 'b', 'c', 'd', 'e'], answer: 0, explanation: '',
+  })));
+  const bank: ActiveBank = { id: 1, title: '', questions };
+  const state = initialState();
+  const count: Record<string, number> = {};
+  for (let day = 1; day <= 6; day++) {
+    ensureDaily(state, bank, `2026-10-0${day}`, seeded(day));
+    for (const qid of state.daily!.questionIds) { const t = questions[qid - 1].type; count[t] = (count[t] ?? 0) + 1; }
+  }
+  // 6일 × 상식 4문제 = 24문제 → 6속성에 4문제씩
+  for (const t of SUBJECT_TYPES['상식']) assert.equal(count[t], 4, t);
+  for (const t of SUBJECT_TYPES['국어']) assert.equal(count[t], 8, t);
+});
+
+test('일일미션만 일주일(정답률 80%, 상자 보상 제외) 풀어도 시작 포켓몬 첫 진화 가능', () => {
+  // 실제 문제은행처럼 과목마다 100문제, 속성은 과목 속성에 고르게 퍼짐
+  let id = 1;
+  const questions: Question[] = SUBJECTS.flatMap(subject => Array.from({ length: 100 }, (_, i) => ({
+    id: id++, subject, type: SUBJECT_TYPES[subject][i % SUBJECT_TYPES[subject].length], prompt: `${subject}${i}`,
+    choices: ['a', 'b', 'c', 'd', 'e'], answer: i % 5, explanation: '',
+  })));
+  const bank: ActiveBank = { id: 1, title: '시뮬레이션', questions };
+  let ok = 0;
+  const RUNS = 20;
+  for (let run = 1; run <= RUNS; run++) {
+    const state = initialState();
+    const random = seeded(run * 101);
+    applyAction(state, { type: 'starter', species: 906 }, { bank, today: '2026-10-01', now: '', random });
+    for (let day = 0; day < 7; day++) {
+      const today = `2026-10-0${day + 1}`;
+      playDaily(state, bank, { bank, today, now: today, random }, () => random() < 0.8);
+    }
+    // 시작 포켓몬(풀/불꽃/물) 각각 첫 진화 조건(15)을 넘었는지
+    for (const starter of STARTERS) {
+      const [target] = evolutionsOf(starter);
+      if (evolutionRequirement(target).every(r => state.stats[r.type] >= r.amount)) ok++;
+    }
+  }
+  console.log(`  일주일 안에 시작 포켓몬 첫 진화 가능: ${ok}/${RUNS * STARTERS.length}`);
+  assert.ok(ok >= RUNS * STARTERS.length * 0.95, `일주일 안에 첫 진화 가능: ${ok}/${RUNS * STARTERS.length}`);
 });
