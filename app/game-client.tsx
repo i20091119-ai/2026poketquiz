@@ -1,12 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { BookOpen, Compass, Settings, Sun } from 'lucide-react';
+import { Backpack, BookOpen, Compass, Settings, Sun } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
 import { HomePanel, StarterPicker } from '@/components/game/home';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
+import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
@@ -76,7 +77,7 @@ export default function Game() {
         const fresh = await refresh();
         const e = fresh?.explore.find(e => e.subject === subject);
         if (e && e.total > 0 && e.solved === e.total && !e.rewardClaimed) {
-          setNotice(`${subject} 탐험을 모두 마쳤어! 물약을 골라 봐.`);
+          setNotice(`${subject} 탐험을 모두 마쳤어! 선물을 골라 봐.`);
           setReward({ kind: 'explore', subject });
         } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 다른 날 다시 나와.`);
         else setNotice(`${subject} 오늘 탐험 끝!`);
@@ -129,6 +130,7 @@ export default function Game() {
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
               <TabsTrigger value="explore"><Compass />탐험</TabsTrigger>
               <TabsTrigger value="pokedex"><BookOpen />포켓몬 도감</TabsTrigger>
+              <TabsTrigger value="bag"><Backpack />가방{view.balls.length + view.potions.length > 0 && <span className="tab-count">{view.balls.length + view.potions.length}</span>}</TabsTrigger>
             </TabsList>
             <TabsContent value="daily">
               <DailyTab view={view} busy={busy} onStart={startDaily} onOpenBox={() => setReward({ kind: 'daily' })} />
@@ -142,8 +144,12 @@ export default function Game() {
             <TabsContent value="pokedex">
               <PokedexTab view={view} busy={busy}
                 onPartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
-                onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}
-                onOpenBall={b => setBallQueue([b])} />
+                onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}/>
+            </TabsContent>
+            <TabsContent value="bag">
+              <BagTab view={view} busy={busy}
+                onOpenBall={b => setBallQueue([b])}
+                onUsePotion={async (potionId, uid) => { const r = await act<{ message: string }>({ type: 'usePotion', potionId, uid }); if (r) setNotice(r.message); return !!r; }} />
             </TabsContent>
           </Tabs>
         </>}

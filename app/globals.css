@@ -267,6 +267,13 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .dex-summary { display: flex; gap: 20px; align-items: center; justify-content: space-between; }
 .dex-summary > div { flex: 1; }
 .bag h3 { margin-bottom: 10px; }
+.bag h3 small { font-size: 13px; color: #6a7b70; font-weight: 400; margin-left: 6px; }
+.bag-ball.potion small { font-size: 11px; color: #6a7b70; }
+.bag-ball.potion img { animation: none; }
+.tab-count { margin-left: 4px; background: #e5484d; color: #fff; border-radius: 999px; font-size: 11px; padding: 0 6px; line-height: 18px; }
+.feed-types { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.feed-type { display: flex; align-items: center; gap: 10px; justify-content: center; font-size: 15px; }
+.feed-type small { color: #2f7d33; font-weight: 700; }
 .bag-list { display: flex; gap: 12px; flex-wrap: wrap; }
 .bag-ball { display: flex; flex-direction: column; align-items: center; gap: 4px; border: 1px solid #dfe8dd; background: #fbfcfa; border-radius: 14px; padding: 10px 14px; font-size: 13px; }
 .bag-ball img { width: 52px; height: 52px; animation: wobble 1.4s ease-in-out infinite; }

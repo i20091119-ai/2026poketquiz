@@ -60,10 +60,10 @@ test('탐험: 과목 완료 → 물약 1번, 전 과목 완료 → 럭셔리볼'
   assert.throws(() => applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank)), /모두 맞혀야/);
   solveSubject('국어');
   const before = { ...state.stats };
-  const reward = applyAction(state, { type: 'exploreReward', subject: '국어', pick: 2 }, ctx(bank)) as { items: { type: string; amount: number }[] };
-  const chosen = reward.items[2];
-  assert.ok(SUBJECT_TYPES['국어'].includes(chosen.type as never));
-  assert.equal(state.stats[chosen.type as keyof typeof state.stats], before[chosen.type as keyof typeof before] + chosen.amount);
+  const reward = applyAction(state, { type: 'exploreReward', subject: '국어', pick: 2 }, ctx(bank)) as unknown as { items: { kind: string; potion: string }[] };
+  assert.equal(reward.items[2].kind, 'potion');
+  assert.deepEqual(state.potions.map(p => p.kind), [reward.items[2].potion]); // 물약은 가방으로
+  assert.deepEqual(state.stats, before); // 스탯은 먹일 때 오름
   assert.throws(() => applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank)), /이미/);
 
   assert.throws(() => applyAction(state, { type: 'masterReward', pick: 0 }, ctx(bank)), /모든 과목/);
@@ -320,4 +320,36 @@ test('일일미션만 일주일(정답률 80%, 상자 보상 제외) 풀어도 �
   }
   console.log(`  일주일 안에 시작 포켓몬 첫 진화 가능: ${ok}/${RUNS * STARTERS.length}`);
   assert.ok(ok >= RUNS * STARTERS.length * 0.95, `일주일 안에 첫 진화 가능: ${ok}/${RUNS * STARTERS.length}`);
+});
+
+test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성이 모두 오른다', () => {
+  const bank = makeBank();
+  const state = started(bank); // 나오하(풀) — 다음 진화 나로테(풀 15)
+  state.potions.push({ id: 'm1', kind: 'apple' }, { id: 'm2', kind: 'potion' }, { id: 'm3', kind: 'apple' });
+  const uid = state.owned[0].uid;
+  const r = applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, ctx(bank)) as unknown as { types: string[]; amount: number };
+  assert.deepEqual([...r.types], ['grass', 'bug', 'ground']); // 사과열매 = 자연 계열
+  assert.deepEqual([state.stats.grass, state.stats.bug, state.stats.ground, state.stats.water], [5, 5, 5, 0]);
+  assert.throws(() => applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, ctx(bank)), /찾을 수 없어요/);
+  applyAction(state, { type: 'usePotion', potionId: 'm2', uid }, ctx(bank)); // 상처약 = 모든 속성 +5
+  assert.ok(Object.values(state.stats).every(v => v >= 5));
+  assert.equal(state.stats.grass, 10);
+  applyAction(state, { type: 'usePotion', potionId: 'm3', uid }, ctx(bank));
+  assert.equal(state.stats.grass, 15);
+  assert.equal(state.potions.length, 0);
+  applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)); // 아이템만으로 첫 진화
+  assert.equal(state.owned[0].species, 907);
+});
+
+test('탐험 보상 아이템은 주로 그 과목 열매', () => {
+  const bank = makeBank(1);
+  let own = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const state = started(bank);
+    const q = bank.questions.find(q => q.subject === '상식')!;
+    applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, ctx(bank, seeded(seed)));
+    const r = applyAction(state, { type: 'exploreReward', subject: '상식', pick: 0 }, ctx(bank, seeded(seed))) as unknown as { items: { potion: string }[] };
+    own += r.items.filter(i => i.potion === 'apple').length;
+  }
+  assert.ok(own / 120 > 0.45 && own / 120 < 0.75, `상식 열매 비율 ${own / 120}`);
 });

@@ -66,7 +66,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
       <section className="panel">
         <div className="section-heading"><span className="pill">EXPLORE</span><span>{view.bank.title}</span></div>
         <h2>과목을 골라 탐험을 떠나자!</h2>
-        <p>문제마다 기회는 한 번! 맞힌 문제는 다시 나오지 않고, 틀린 문제는 다른 날 다시 나와. 과목을 모두 맞히면 <b>물약 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
+        <p>문제마다 기회는 한 번! 맞힌 문제는 다시 나오지 않고, 틀린 문제는 다른 날 다시 나와. 과목을 모두 맞히면 <b>선물(열매·상처약) 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
       </section>
       <div className="explore-grid">
         {view.explore.map(e => {
@@ -87,10 +87,10 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
               {e.total === 0
                 ? <button className="secondary" disabled>문제가 없어요</button>
                 : mastered && !e.rewardClaimed
-                  ? <button className="primary glow" disabled={busy} onClick={() => onSubjectReward(e.subject)}><Gift size={18} /> 물약 고르기</button>
+                  ? <button className="primary glow" disabled={busy} onClick={() => onSubjectReward(e.subject)}><Gift size={18} /> 선물 고르기</button>
                   : e.available > 0
                     ? <button className="primary" disabled={busy} onClick={() => onExplore(e.subject)}>탐험하기 ({e.available}) <ArrowRight size={18} /></button>
-                    : <button className="secondary" disabled><Check size={16} /> {mastered ? '물약 받음' : '오늘은 끝!'}</button>}
+                    : <button className="secondary" disabled><Check size={16} /> {mastered ? '선물 받음' : '오늘은 끝!'}</button>}
             </section>
           );
         })}

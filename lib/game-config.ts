@@ -34,6 +34,12 @@ export const TYPE_INFO: Record<TypeKey, { label: string; color: string }> = {
 /** 인터넷에 올린 게임 주소. 보호자 공간 버튼이 이 주소의 /parent 를 새 창으로 엽니다. */
 export const SITE_URL = 'https://poke-quiz.qhfk8292.workers.dev';
 
+/** 받침에 따라 을/를 붙이기 (예: 사과열매를, 상처약을) */
+export const eulReul = (word: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return word + (code >= 0 && code <= 11171 && code % 28 ? '을' : '를');
+};
+
 export const SUBJECTS = ['국어', '수학', '영어', '한자', '역사', '상식'] as const;
 export type Subject = typeof SUBJECTS[number];
 
@@ -101,13 +107,28 @@ export const EVOLUTION_COST: Record<number, { dual: [number, number]; single: nu
   3: { dual: [25, 12], single: 35 },
 };
 
-// ---- 물약 ----
+// ---- 아이템 (열매·상처약) ----
+// 보상으로 받으면 가방에 들어가고, 아이가 포켓몬에게 먹이면 적힌 속성 스탯이 모두 오릅니다.
+// 열매는 과목 계열 하나(속성 3개), 상처약은 모든 속성을 올립니다.
 export const POTIONS = {
-  potion: { label: '상처약', amount: 3 },
-  super: { label: '좋은상처약', amount: 5 },
-  hyper: { label: '고급상처약', amount: 10 },
-} as const;
+  apple: { label: '사과열매', types: SUBJECT_TYPES.상식, amount: 5 },
+  blue: { label: '파랑열매', types: SUBJECT_TYPES.영어, amount: 5 },
+  fire: { label: '불꽃열매', types: SUBJECT_TYPES.한자, amount: 5 },
+  thunder: { label: '번개열매', types: SUBJECT_TYPES.수학, amount: 5 },
+  moon: { label: '달빛열매', types: SUBJECT_TYPES.역사, amount: 5 },
+  star: { label: '별빛열매', types: SUBJECT_TYPES.국어, amount: 5 },
+  potion: { label: '상처약', types: 'all', amount: 5 },
+} as const satisfies Record<string, { label: string; types: readonly TypeKey[] | 'all'; amount: number }>;
 export type PotionKind = keyof typeof POTIONS;
+/** 이 아이템을 먹이면 오르는 속성들 */
+export const potionTargets = (kind: PotionKind): readonly TypeKey[] => {
+  const types = POTIONS[kind].types;
+  return types === 'all' ? TYPE_KEYS : types;
+};
+/** 과목별 열매 (탐험에서 그 과목을 다 풀면 주로 이 열매가 나옵니다) */
+export const SUBJECT_BERRY: Record<Subject, PotionKind> = {
+  국어: 'star', 수학: 'thunder', 영어: 'blue', 한자: 'fire', 역사: 'moon', 상식: 'apple',
+};
 
 // ---- 볼 ----
 // 등급: 0 흔함, 1 조금 드묾, 2 희귀, 3 전설·환상
@@ -122,23 +143,23 @@ export const BALLS = {
 export type BallKind = keyof typeof BALLS;
 export const TIER_LABELS = ['흔함', '조금 드묾', '희귀', '전설'];
 
-/** 일일미션 랜덤상자 내용물 확률(가중치) */
+/** 일일미션 랜덤상자 내용물 확률(가중치, 합 100) */
 export const DAILY_BOX_TABLE: { item: { kind: 'potion'; potion: PotionKind } | { kind: 'ball'; ball: BallKind }; weight: number }[] = [
-  { item: { kind: 'potion', potion: 'potion' }, weight: 30 },
-  { item: { kind: 'potion', potion: 'super' }, weight: 20 },
-  { item: { kind: 'potion', potion: 'hyper' }, weight: 10 },
-  { item: { kind: 'ball', ball: 'poke' }, weight: 20 },
-  { item: { kind: 'ball', ball: 'great' }, weight: 12 },
-  { item: { kind: 'ball', ball: 'ultra' }, weight: 6 },
+  { item: { kind: 'potion', potion: 'apple' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'blue' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'fire' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'thunder' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'moon' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'star' }, weight: 8 },
+  { item: { kind: 'potion', potion: 'potion' }, weight: 4 },
+  { item: { kind: 'ball', ball: 'poke' }, weight: 25 },
+  { item: { kind: 'ball', ball: 'great' }, weight: 14 },
+  { item: { kind: 'ball', ball: 'ultra' }, weight: 7 },
   { item: { kind: 'ball', ball: 'master' }, weight: 2 },
 ];
 
-/** 탐험에서 과목을 모두 풀었을 때 나오는 물약 확률(가중치). 오르는 속성은 그 과목의 속성 중 랜덤. */
-export const EXPLORE_POTION_TABLE: { potion: PotionKind; weight: number }[] = [
-  { potion: 'potion', weight: 50 },
-  { potion: 'super', weight: 35 },
-  { potion: 'hyper', weight: 15 },
-];
+/** 탐험에서 과목을 모두 풀었을 때 3개 중 고르는 아이템 확률(가중치): 그 과목 열매 / 다른 열매 / 상처약 */
+export const EXPLORE_ITEM_WEIGHTS = { subjectBerry: 60, otherBerry: 30, potion: 10 };
 
 /** 이미 가진 포켓몬이 또 나오면 그 포켓몬 첫째 속성 스탯으로 바꿔 줍니다. */
 export const DUPLICATE_BONUS = 5;

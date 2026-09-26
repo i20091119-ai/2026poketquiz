@@ -11,9 +11,13 @@ export const ASSETS = {
   boxClosed: '/assets/boxes/box-closed.svg',
   boxOpen: '/assets/boxes/box-open.svg',
   potion: {
+    apple: '/assets/items/apple-berry.svg',
+    blue: '/assets/items/blue-berry.svg',
+    fire: '/assets/items/fire-berry.svg',
+    thunder: '/assets/items/thunder-berry.svg',
+    moon: '/assets/items/moon-berry.svg',
+    star: '/assets/items/star-berry.svg',
     potion: '/assets/items/potion.svg',
-    super: '/assets/items/super-potion.svg',
-    hyper: '/assets/items/hyper-potion.svg',
   } satisfies Record<PotionKind, string>,
   ball: {
     poke: '/assets/balls/poke.svg',

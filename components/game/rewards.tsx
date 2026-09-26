@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
-import { BALLS, POTIONS, TIER_LABELS, type TypeKey } from '@/lib/game-config';
+import { BALLS, POTIONS, potionTargets, TIER_LABELS, TYPE_INFO, TYPE_KEYS, type PotionKind, type TypeKey } from '@/lib/game-config';
 import type { Ball, BoxItem } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
@@ -12,17 +12,23 @@ export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: b
 export type CatchResult = { caught: number; tier: number; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
-  daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '물약이나 포켓볼이 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
-  explore: { title: '물약 3개 중 하나를 골라!', description: '이 과목 속성 중 하나의 스탯이 올라가.', closed: ASSETS.potion.super, label: '물약' },
+  daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
+  explore: { title: '아이템 3개 중 하나를 골라!', description: '열매나 상처약이 들어 있어. 가방에 넣었다가 포켓몬에게 먹여 줘.', closed: ASSETS.boxClosed, label: '선물' },
   master: { title: '탐험 마스터! 볼 3개 중 하나를 골라!', description: '절반의 확률로 전설이나 희귀한 포켓몬이 나와.', closed: ASSETS.ball.master, label: '볼' },
 };
 
 /* eslint-disable @next/next/no-img-element */
+
+/** "풀·벌레·땅 +5" 또는 "모든 속성 +5" */
+export function potionEffect(kind: PotionKind) {
+  const types = potionTargets(kind);
+  return `${types.length === TYPE_KEYS.length ? '모든 속성' : types.map(t => TYPE_INFO[t].label).join('·')} +${POTIONS[kind].amount}`;
+}
 function ItemView({ item }: { item: BoxItem }) {
   if (item.kind === 'potion') return <>
     <img src={ASSETS.potion[item.potion]} alt={POTIONS[item.potion].label} />
     <b>{POTIONS[item.potion].label}</b>
-    <TypeBadge type={item.type} amount={'+' + item.amount} small />
+    <small>{potionEffect(item.potion)}</small>
   </>;
   return <>
     <img src={ASSETS.ball[item.ball]} alt={BALLS[item.ball].label} />
@@ -83,7 +89,7 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
         </div>
         {done && (pickedBall && ballIds.length
           ? <button className="primary" onClick={() => onOpenBalls(ballIds)}>볼 열어 보기!</button>
-          : <button className="primary" onClick={close}>{pickedBall ? '좋아! 볼은 도감 탭 가방에 있어' : '좋아!'}</button>)}
+          : <button className="primary" onClick={close}>{pickedBall ? '좋아! 볼은 가방에 넣었어' : '좋아! 가방에 넣었어'}</button>)}
       </DialogContent>
     </Dialog>
   );

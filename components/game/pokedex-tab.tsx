@@ -2,19 +2,14 @@
 import { useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
-import { ASSETS } from '@/lib/assets';
-import { BALLS } from '@/lib/game-config';
-import type { Ball, ChildView, OwnedPokemon } from '@/lib/game-engine';
+import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
 import { evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 
-/* eslint-disable @next/next/no-img-element */
-
-export function PokedexTab({ view, busy, onPartner, onEvolve, onOpenBall }: {
+export function PokedexTab({ view, busy, onPartner, onEvolve }: {
   view: ChildView; busy: boolean;
   onPartner: (uid: string) => void;
   onEvolve: (uid: string, target: number) => void;
-  onOpenBall: (ball: Ball) => void;
 }) {
   const [showDex, setShowDex] = useState(false);
   const dex = useMemo(() => [...view.dex].sort((a, b) => a - b), [view.dex]);
@@ -29,18 +24,6 @@ export function PokedexTab({ view, busy, onPartner, onEvolve, onOpenBall }: {
         <button className="secondary" onClick={() => setShowDex(v => !v)}>{showDex ? '내 포켓몬 보기' : '만난 포켓몬 전체 보기'}</button>
       </section>
 
-      {view.balls.length > 0 && (
-        <section className="panel bag">
-          <h3>아직 열지 않은 볼 {view.balls.length}개</h3>
-          <div className="bag-list">
-            {view.balls.map(b => (
-              <button key={b.id} className="bag-ball" disabled={busy} onClick={() => onOpenBall(b)}>
-                <img src={ASSETS.ball[b.kind]} alt="" /><span>{BALLS[b.kind].label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
 
       {showDex ? (
         <div className="dex-grid">

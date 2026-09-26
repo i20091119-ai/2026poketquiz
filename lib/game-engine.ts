@@ -1,7 +1,7 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_POTION_TABLE,
-  POTIONS, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
+  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_ITEM_WEIGHTS,
+  eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, typeLabel } from './pokedex.ts';
@@ -19,9 +19,10 @@ export type PublicQuestion = Omit<Question, 'answer' | 'explanation'>;
 export type ActiveBank = { id: number; title: string; questions: Question[] };
 
 export type BoxItem =
-  | { kind: 'potion'; potion: PotionKind; type: TypeKey; amount: number }
+  | { kind: 'potion'; potion: PotionKind; amount: number }
   | { kind: 'ball'; ball: BallKind };
 export type Ball = { id: string; kind: BallKind };
+export type Potion = { id: string; kind: PotionKind };
 export type OwnedPokemon = { uid: string; species: number; obtainedAt: string };
 export type BankProgress = {
   solved: number[];
@@ -40,6 +41,8 @@ export type GameState = {
   owned: OwnedPokemon[];
   dex: number[];
   balls: Ball[];
+  /** 가방에 있는 아이템(열매·상처약). 포켓몬에게 먹이면 적힌 속성 스탯이 오릅니다. */
+  potions: Potion[];
   seq: number;
   /**
    * 오늘의 미션. 문제마다 DAILY_ATTEMPTS번까지 풀 수 있습니다.
@@ -69,7 +72,7 @@ export function initialState(): GameState {
   return {
     version: 1, exp: 0,
     stats: Object.fromEntries(TYPE_KEYS.map(t => [t, 0])) as Record<TypeKey, number>,
-    partner: null, owned: [], dex: [], balls: [], seq: 0, daily: null, banks: {},
+    partner: null, owned: [], dex: [], balls: [], potions: [], seq: 0, daily: null, banks: {},
   };
 }
 
@@ -113,12 +116,12 @@ function addPokemon(state: GameState, id: number, now: string) {
   return { duplicate: false, uid };
 }
 
-function rollPotion(potion: PotionKind, types: readonly TypeKey[], random: Random): BoxItem {
-  return { kind: 'potion', potion, type: pick(types, random), amount: POTIONS[potion].amount };
+function rollPotion(potion: PotionKind): BoxItem {
+  return { kind: 'potion', potion, amount: POTIONS[potion].amount };
 }
 /** 보상을 주고, 볼이면 새 볼 id를 돌려줍니다. */
 function grant(state: GameState, item: BoxItem): string | null {
-  if (item.kind === 'potion') { state.stats[item.type] += item.amount; return null; }
+  if (item.kind === 'potion') { (state.potions ??= []).push({ id: nextId(state, 'm'), kind: item.potion }); return null; }
   const id = nextId(state, 'b');
   state.balls.push({ id, kind: item.ball });
   return id;
@@ -236,6 +239,7 @@ export type Action =
   | { type: 'exploreReward'; subject: Subject; pick: number }
   | { type: 'masterReward'; pick: number }
   | { type: 'openBall'; ballId: string }
+  | { type: 'usePotion'; potionId: string; uid: string }
   | { type: 'evolve'; uid: string; target: number };
 
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
@@ -337,7 +341,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       d.box ??= {
         items: [0, 1, 2].map(() => {
           const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
-          return row.item.kind === 'potion' ? rollPotion(row.item.potion, TYPE_KEYS, random) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
+          return row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
         }),
         picks: [],
       };
@@ -360,8 +364,15 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!SUBJECTS.includes(action.subject)) fail('과목을 다시 골라 주세요.');
       const prog = progress(state, bank.id);
       if (!subjectMastered(state, bank, action.subject)) fail(`${action.subject} 문제를 모두 맞혀야 해요.`);
-      if (prog.subjectRewards.includes(action.subject)) fail('이 과목의 물약은 이미 받았어요.');
-      const items = [0, 1, 2].map(() => rollPotion(weighted<(typeof EXPLORE_POTION_TABLE)[number]>(EXPLORE_POTION_TABLE, random).potion, SUBJECT_TYPES[action.subject], random));
+      if (prog.subjectRewards.includes(action.subject)) fail('이 과목의 선물은 이미 받았어요.');
+      const own = SUBJECT_BERRY[action.subject];
+      const others = (Object.keys(POTIONS) as PotionKind[]).filter(k => k !== own && k !== 'potion');
+      const table = [
+        { kind: own, weight: EXPLORE_ITEM_WEIGHTS.subjectBerry },
+        ...others.map(kind => ({ kind, weight: EXPLORE_ITEM_WEIGHTS.otherBerry / others.length })),
+        { kind: 'potion' as PotionKind, weight: EXPLORE_ITEM_WEIGHTS.potion },
+      ];
+      const items = [0, 1, 2].map(() => rollPotion(weighted<(typeof table)[number]>(table, random).kind));
       grant(state, items[choice]);
       prog.subjectRewards.push(action.subject);
       return { items, picks: [choice], done: true, ballIds: [], message: `${action.subject} 탐험 완료!` };
@@ -392,6 +403,21 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return {
         caught: id, tier, ...result,
         message: result.duplicate ? `${name}를 또 만났어! 우정 보너스를 받았어.` : `${name}를 잡았어!`,
+      };
+    }
+
+    case 'usePotion': {
+      const index = (state.potions ?? []).findIndex(p => p.id === action.potionId);
+      if (index < 0) fail('아이템을 찾을 수 없어요.');
+      const p = state.owned.find(p => p.uid === action.uid);
+      if (!p) fail('포켓몬을 골라 주세요.');
+      const [item] = state.potions.splice(index, 1);
+      const { amount, label } = POTIONS[item.kind];
+      const types = potionTargets(item.kind);
+      for (const t of types) state.stats[t] += amount;
+      return {
+        types, amount,
+        message: `${species(p.species).name}에게 ${eulReul(label)} 먹였어! ${types.length === TYPE_KEYS.length ? '모든 속성' : types.map(t => TYPE_INFO[t].label).join('·')} +${amount}`,
       };
     }
 
@@ -459,6 +485,7 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     owned: state.owned,
     dex: state.dex,
     balls: state.balls,
+    potions: state.potions ?? [],
     bank: bank ? { id: bank.id, title: bank.title } : null,
     daily,
     explore,

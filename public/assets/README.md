@@ -11,9 +11,13 @@ PNG 등 다른 형식을 쓰려면 파일을 넣고 `lib/assets.ts`의 경로만
 | `ui/pokemon-placeholder.svg` | 포켓몬 이미지를 못 불러올 때 대신 보이는 그림 | 256×256 |
 | `boxes/box-closed.svg` | 일일미션 랜덤상자 (닫힘) | 256×256 |
 | `boxes/box-open.svg` | 랜덤상자 (열림) | 256×256 |
-| `items/potion.svg` | 상처약 (+3) | 128×128 |
-| `items/super-potion.svg` | 좋은상처약 (+5) | 128×128 |
-| `items/hyper-potion.svg` | 고급상처약 (+10) | 128×128 |
+| `items/apple-berry.svg` | 사과열매 (풀·벌레·땅 +5) | 128×128 |
+| `items/blue-berry.svg` | 파랑열매 (물·얼음·비행 +5) | 128×128 |
+| `items/fire-berry.svg` | 불꽃열매 (불꽃·격투·드래곤 +5) | 128×128 |
+| `items/thunder-berry.svg` | 번개열매 (전기·강철·바위 +5) | 128×128 |
+| `items/moon-berry.svg` | 달빛열매 (고스트·악·독 +5) | 128×128 |
+| `items/star-berry.svg` | 별빛열매 (노말·에스퍼·페어리 +5) | 128×128 |
+| `items/potion.svg` | 상처약 (모든 속성 +5) | 128×128 |
 | `balls/poke.svg` | 몬스터볼 | 128×128 |
 | `balls/great.svg` | 슈퍼볼 | 128×128 |
 | `balls/ultra.svg` | 하이퍼볼 | 128×128 |
