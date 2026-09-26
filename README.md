@@ -111,21 +111,24 @@ npm run dev                             # http://localhost:5173 , 보호자: /pa
 
 처음 접속하면 샘플 문제은행(초1, 과목별 7문제)이 자동으로 공개됩니다.
 
-## Cloudflare 배포
+## Cloudflare 배포 (인터넷에 올리기)
 
-1. **로그인:** `npx wrangler login`
-2. **D1 만들기:** `npx wrangler d1 create poke-quiz-db`
-   - 출력된 `database_id`를 `wrangler.jsonc`에 넣고 커밋합니다.
-3. **표 만들기:** `npm run db:migrate:remote`
-   - 나중에 `migrations/`에 파일이 추가되면 다시 실행합니다.
-4. **부모 비밀번호 등록:** `npx wrangler secret put PARENT_PASSWORD`
-5. **배포:** 둘 중 하나를 고릅니다.
-   - 직접 배포: `npm run deploy`
-   - GitHub 자동 배포: Cloudflare 대시보드 → Workers & Pages → 만들기 → 저장소 가져오기(Import a repository)로 이 저장소를 연결합니다.
-     - 빌드 명령: `npm run build`
-     - 배포 명령: `npx wrangler deploy`
-     - 이후에는 main 브랜치에 push할 때마다 자동 배포됩니다.
-6. **(선택) 접속 제한:** `*.workers.dev` 주소는 누구나 열 수 있습니다. Cloudflare Zero Trust → Access에서 이 Worker에 애플리케이션을 추가하고 가족 이메일만 허용하면, 이메일 인증을 거친 사람만 들어올 수 있습니다.
+맥 터미널에서 게임 폴더로 이동한 뒤 아래 한 줄이면 됩니다. 처음이든, 코드를 고친 뒤 다시 올리든 같은 명령입니다.
+
+```sh
+npm run online
+```
+
+`scripts/online.mjs`가 아래를 차례로 합니다. 이미 된 단계는 건너뜁니다.
+1. Cloudflare 로그인 (처음 한 번 브라우저가 열림)
+2. 기록 저장소(D1) `poke-quiz-db` 만들기, `wrangler.jsonc`에 번호 적기
+3. 기록 저장소에 표 만들기 (`migrations/`)
+4. 게임을 만들어서 올리기 (처음이면 `*.workers.dev` 주소 이름을 물어봄)
+5. 보호자 비밀번호(`PARENT_PASSWORD`)가 없으면 입력받아 저장
+
+끝나면 게임 주소와 보호자 공간 주소를 알려 주고 브라우저로 엽니다.
+- 비밀번호 바꾸기: `npx wrangler secret put PARENT_PASSWORD`
+- (선택) 접속 제한: `*.workers.dev` 주소는 주소를 아는 사람은 누구나 열 수 있습니다. Cloudflare Zero Trust → Access에서 이 Worker에 애플리케이션을 추가하고 가족 이메일만 허용하면, 이메일 인증을 거친 사람만 들어올 수 있습니다.
 
 ## 폴더 구조
 
