@@ -124,7 +124,8 @@ export default function Game() {
         {!view.partner ? (
           <StarterPicker busy={busy} onPick={async id => { const r = await act<{ message: string }>({ type: 'starter', species: id }); if (r) setNotice(r.message); }} />
         ) : <>
-          <HomePanel view={view} busy={busy} onChoosePartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }} />
+          <HomePanel view={view} busy={busy} onChoosePartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
+            onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>

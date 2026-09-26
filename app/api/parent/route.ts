@@ -22,7 +22,7 @@ async function overview() {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     banks,
     child: {
-      exp: state.exp, stats: state.stats, owned: state.owned.length, dex: state.dex.length,
+      exp: state.exp, expSpent: state.expSpent ?? 0, stats: state.stats, owned: state.owned.length, dex: state.dex.length,
       partner: state.owned.find(p => p.uid === state.partner)?.species ?? null,
     },
     active: bank && {

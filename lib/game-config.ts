@@ -83,6 +83,8 @@ export const REWARD_PER_ANSWER = { daily: 5, explore: 1, exp: 10 };
  * 속성이 많은 과목은 한 속성에 문제가 덜 돌아가므로 스탯에 배수를 줍니다 (속성 수 ÷ 3).
  * 지금은 모든 과목이 속성 3개라 배수는 1입니다. 과목별 속성 수를 바꾸면 자동으로 맞춰집니다.
  */
+/** 모은 경험치를 원하는 속성 스탯으로 바꾸기: 경험치 cost → 고른 속성 +amount */
+export const EXP_EXCHANGE = { cost: 50, amount: 5 };
 export const statReward = (subject: Subject, mode: 'daily' | 'explore') =>
   Math.round(REWARD_PER_ANSWER[mode] * SUBJECT_TYPES[subject].length / 3);
 

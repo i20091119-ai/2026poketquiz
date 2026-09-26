@@ -211,6 +211,19 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .exp-box { display: flex; align-items: center; gap: 8px; background: #fff4c6; border: 1px solid #eedc98; border-radius: 16px; padding: 10px 16px; color: #85631c; font-size: 15px; }
 .exp-box img { width: 26px; height: 26px; }
 .exp-box strong { font-size: 26px; }
+.exp-exchange { margin-left: auto; border: 0; border-radius: 999px; background: #f2b705; color: #4a3500; font-weight: 800; font-size: 13px; padding: 6px 12px; cursor: pointer; }
+.exp-exchange:disabled { opacity: .5; cursor: default; }
+.exchange-hint { margin: 0; color: #85631c; font-weight: 700; font-size: 14px; }
+.exchange-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 10px; margin: 8px 0 4px; }
+.exchange-group { position: relative; border: 1px solid #e6ede3; border-radius: 14px; padding: 16px 6px 6px; display: flex; flex-direction: column; gap: 4px; }
+.exchange-group .stat-subject { top: -10px; left: 10px; }
+.exchange-type { display: flex; align-items: center; gap: 6px; border: 2px solid transparent; border-radius: 10px; background: #fbfcfa; padding: 4px 6px; font-size: 13px; cursor: pointer; text-align: left; }
+.exchange-type img { width: 20px; height: 20px; }
+.exchange-type b { margin-left: auto; }
+.exchange-type small { color: #8a8f87; font-weight: 600; }
+.exchange-type.needed { background: #fff4c6; }
+.exchange-type.current { border-color: #f2b705; }
+@media (max-width: 560px) { .exchange-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @keyframes float { 50% { transform: translateY(-8px); } }
 .stat-board { padding: 22px 26px 26px; border-top: 1px solid #e6ede3; }
 .stat-groups { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }

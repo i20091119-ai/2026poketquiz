@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAILY_ATTEMPTS, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { DAILY_ATTEMPTS, EXP_EXCHANGE, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
 import { applyAction, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
@@ -352,4 +352,18 @@ test('탐험 보상 아이템은 주로 그 과목 열매', () => {
     own += r.items.filter(i => i.potion === 'apple').length;
   }
   assert.ok(own / 120 > 0.45 && own / 120 < 0.75, `상식 열매 비율 ${own / 120}`);
+});
+
+test('경험치를 스탯으로 바꾸기: 경험치 50 → 고른 속성 +5, 모은 경험치 기록은 남는다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  state.exp = 120;
+  assert.throws(() => applyAction(state, { type: 'exchangeExp', statType: 'nope' as never }, ctx(bank)), GameError);
+  applyAction(state, { type: 'exchangeExp', statType: 'grass' }, ctx(bank));
+  applyAction(state, { type: 'exchangeExp', statType: 'grass' }, ctx(bank));
+  assert.equal(state.stats.grass, EXP_EXCHANGE.amount * 2);
+  assert.throws(() => applyAction(state, { type: 'exchangeExp', statType: 'grass' }, ctx(bank)), GameError);
+  const view = childView(state, bank, '2026-09-26');
+  assert.equal(view.exp, 120 - EXP_EXCHANGE.cost * 2);
+  assert.equal(view.expTotal, 120);
 });

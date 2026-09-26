@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXPLORE_ITEM_WEIGHTS,
+  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -35,7 +35,10 @@ export type BankProgress = {
 
 export type GameState = {
   version: 1;
+  /** 지금까지 모은 경험치 (줄지 않음). 쓸 수 있는 경험치 = exp - expSpent */
   exp: number;
+  /** 스탯으로 바꾸는 데 쓴 경험치 */
+  expSpent?: number;
   stats: Record<TypeKey, number>;
   partner: string | null;
   owned: OwnedPokemon[];
@@ -240,7 +243,8 @@ export type Action =
   | { type: 'masterReward'; pick: number }
   | { type: 'openBall'; ballId: string }
   | { type: 'usePotion'; potionId: string; uid: string }
-  | { type: 'evolve'; uid: string; target: number };
+  | { type: 'evolve'; uid: string; target: number }
+  | { type: 'exchangeExp'; statType: TypeKey };
 
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
 
@@ -435,10 +439,24 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return { evolved: action.target, message: `축하해! ${before}가 ${species(action.target).name}로 진화했어!` };
     }
 
+    case 'exchangeExp': {
+      needStarter();
+      if (!TYPE_KEYS.includes(action.statType)) fail('속성을 골라 주세요.');
+      const { cost, amount } = EXP_EXCHANGE;
+      const left = expAvailable(state);
+      if (left < cost) fail(`경험치가 ${cost - left} 더 필요해요.`);
+      state.expSpent = (state.expSpent ?? 0) + cost;
+      state.stats[action.statType] += amount;
+      return { type: action.statType, amount, message: `경험치 ${cost}로 ${typeLabel(action.statType)} 스탯 +${amount}!` };
+    }
+
     default:
       fail('지원하지 않는 요청이에요.');
   }
 }
+
+/** 스탯으로 바꿀 수 있는 남은 경험치 */
+export const expAvailable = (state: GameState) => state.exp - (state.expSpent ?? 0);
 
 // ---------- 아이 화면에 보낼 정보 ----------
 export function childView(state: GameState, bank: ActiveBank | null, today: string) {
@@ -479,7 +497,10 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
   }) : [];
   return {
     today,
-    exp: state.exp,
+    /** 쓸 수 있는 경험치 */
+    exp: expAvailable(state),
+    /** 지금까지 모은 경험치 */
+    expTotal: state.exp,
     stats: state.stats,
     partner: state.partner,
     owned: state.owned,

@@ -13,7 +13,7 @@ type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
   loggedIn: true; grade: string; aiConfigured: boolean; banks: BankSummary[];
-  child: { exp: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
+  child: { exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
   active: null | {
     id: number; title: string;
     subjects: { subject: Subject; total: number; solved: number; review: number }[];
@@ -124,7 +124,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <span className="pill">아이 현황</span>
         <h2>{child.partner ? `${species(child.partner).name}와 모험 중` : '아직 파트너를 고르지 않았어요'}</h2>
         <div className="parent-summary">
-          <span>경험치 {child.exp.toLocaleString()}</span>
+          <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (스탯으로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
           <span>보유 포켓몬 {child.owned}마리</span>
           <span>도감 {child.dex} / {TOTAL_SPECIES}</span>
         </div>
