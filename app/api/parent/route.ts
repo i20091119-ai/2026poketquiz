@@ -4,7 +4,7 @@ import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type Questi
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
 import {
   activeBank, addQuestions, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,
-  listBanks, publishBank, readState, setGrade, updateBank, updateQuestion,
+  listBanks, publishBank, readState, resetGame, setGrade, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -188,6 +188,10 @@ export async function POST(request: Request) {
         await updateQuestion(Number(body.id), clean);
         return json({ message: '문제를 저장했어요.' });
       }
+
+      case 'resetChild':
+        await resetGame();
+        return json({ message: '아이 게임을 처음부터 다시 시작하도록 초기화했어요. 아이 화면에서 파트너를 새로 고르면 돼요.' });
 
       case 'deleteQuestion':
         await deleteQuestion(Number(body.id));

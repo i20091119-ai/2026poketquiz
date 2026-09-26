@@ -175,6 +175,15 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </div>
       </section>
 
+      <section className="panel parent-section danger-zone">
+        <h2>아이 게임 처음부터 다시 하기</h2>
+        <p>파트너, 포켓몬, 스탯, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
+        <div><button className="secondary danger" disabled={busy} onClick={async () => {
+          if (!window.confirm('정말 아이 게임 기록을 모두 지우고 처음부터 시작할까요? 되돌릴 수 없어요.')) return;
+          if (await call({ action: 'resetChild' })) await reload();
+        }}>초기화하기</button></div>
+      </section>
+
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
     </>

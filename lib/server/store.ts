@@ -26,6 +26,11 @@ export async function readState() {
   return { revision: row.revision, state: { ...initialState(), ...JSON.parse(row.document) } as GameState };
 }
 
+/** 아이 게임 기록을 지웁니다. 다음에 열면 파트너 고르기부터 다시 시작합니다. (문제은행은 그대로) */
+export async function resetGame() {
+  await db().prepare('DELETE FROM game_state WHERE id = ?').bind(PLAYER_ID).run();
+}
+
 /** revision이 그대로일 때만 저장합니다. 다른 요청이 먼저 저장했다면 false. */
 export async function saveState(state: GameState, revision: number) {
   const result = await db().prepare('UPDATE game_state SET document = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND revision = ?')

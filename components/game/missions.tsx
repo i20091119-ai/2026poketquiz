@@ -96,7 +96,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
         })}
       </div>
       <section className={'panel master-card' + (view.allMastered && !view.masterClaimed ? ' ready' : '')}>
-        <img src={ASSETS.ball.luxury} alt="" />
+        <img src={ASSETS.ball.master} alt="" />
         <div>
           <h3>모든 과목 마스터 보상</h3>
           <p>{view.masterClaimed ? '이번 문제은행의 마스터 보상을 받았어!' : view.allMastered ? '모든 과목을 마스터했어! 볼 3개 중 하나를 골라 봐.' : '모든 과목의 문제를 다 맞히면 전설이나 희귀한 포켓몬을 만날 확률이 50%인 볼을 받아.'}</p>
