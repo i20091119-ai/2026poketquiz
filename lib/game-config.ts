@@ -112,10 +112,10 @@ export const EVOLUTION_COST: Record<number, { dual: [number, number]; single: nu
 // 열매는 과목 계열 하나(속성 3개), 상처약은 모든 속성을 올립니다.
 export const POTIONS = {
   apple: { label: '사과열매', types: SUBJECT_TYPES.상식, amount: 5 },
-  blue: { label: '파랑열매', types: SUBJECT_TYPES.영어, amount: 5 },
+  blue: { label: '얼음열매', types: SUBJECT_TYPES.영어, amount: 5 },
   fire: { label: '불꽃열매', types: SUBJECT_TYPES.한자, amount: 5 },
   thunder: { label: '번개열매', types: SUBJECT_TYPES.수학, amount: 5 },
-  moon: { label: '달빛열매', types: SUBJECT_TYPES.역사, amount: 5 },
+  moon: { label: '유령열매', types: SUBJECT_TYPES.역사, amount: 5 },
   star: { label: '별빛열매', types: SUBJECT_TYPES.국어, amount: 5 },
   potion: { label: '상처약', types: 'all', amount: 5 },
 } as const satisfies Record<string, { label: string; types: readonly TypeKey[] | 'all'; amount: number }>;
