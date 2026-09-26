@@ -209,9 +209,12 @@ function NewBankDialog({ open, grade, busy, error, call, onClose, onCreated }: {
   const [title, setTitle] = useState(thisWeekTitle);
   const [bankGrade, setBankGrade] = useState(grade);
   const [sheetUrl, setSheetUrl] = useState('');
+  const [pasted, setPasted] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
   const [keywords, setKeywords] = useState<Keywords>({});
   const [showKeywords, setShowKeywords] = useState(false);
-  const withSheet = !!sheetUrl.trim();
+  const withPaste = showPaste && !!pasted.trim();
+  const withSheet = !withPaste && !!sheetUrl.trim();
   return (
     <Dialog open={open} onOpenChange={o => { if (!o && !busy) onClose(); }}>
       <DialogContent className="edit-dialog wide">
@@ -224,15 +227,22 @@ function NewBankDialog({ open, grade, busy, error, call, onClose, onCreated }: {
         </label>
         <p className="muted">시트 오른쪽 위 <b>공유</b> → 일반 액세스를 <b>링크가 있는 모든 사용자</b>로 바꾼 뒤 <b>링크 복사</b>해서 붙여 넣어 주세요.
           {' '}<a className="text-button" href="/templates/question-template.csv" download><Download size={14} /> 시트 양식 내려받기</a></p>
+        <button type="button" className="text-button" onClick={() => setShowPaste(v => !v)}>
+          {showPaste ? '▾' : '▸'} 링크가 안 되면: 시트 내용을 통째로 복사해서 붙여 넣기
+        </button>
+        {showPaste && <>
+          <p className="muted">구글 시트에서 아무 칸이나 누르고 <b>⌘ + A</b>(전체 선택) → <b>⌘ + C</b>(복사)한 뒤, 아래 칸을 누르고 <b>⌘ + V</b>(붙여 넣기) 하세요.</p>
+          <textarea rows={5} value={pasted} onChange={e => setPasted(e.target.value)} placeholder="여기에 붙여 넣기" />
+        </>}
         <button type="button" className="text-button" onClick={() => setShowKeywords(v => !v)}>
           {showKeywords ? '▾' : '▸'} 과목별 키워드 적기 (선택 · AI 요청문에 쓰여요)
         </button>
         {showKeywords && <KeywordFields keywords={keywords} onChange={setKeywords} />}
         {error && <p className="error" role="alert">{error}</p>}
         <button className="primary" disabled={busy} onClick={async () => {
-          const r = await call<ImportResult>({ action: 'createBank', title, grade: bankGrade, keywords, ...(withSheet ? { sheetUrl } : {}) });
+          const r = await call<ImportResult>({ action: 'createBank', title, grade: bankGrade, keywords, ...(withPaste ? { csv: pasted } : withSheet ? { sheetUrl } : {}) });
           if (r?.bankId) onCreated(r.bankId, r.issues ?? []);
-        }}>{busy ? '가져오는 중…' : withSheet ? '시트에서 문제 가져와서 만들기' : '빈 문제은행 만들기'}</button>
+        }}>{busy ? '가져오는 중…' : withPaste ? '붙여 넣은 문제로 만들기' : withSheet ? '시트에서 문제 가져와서 만들기' : '빈 문제은행 만들기'}</button>
       </DialogContent>
     </Dialog>
   );
@@ -321,8 +331,8 @@ function BankEditor({ bankId, initialIssues, grade, aiConfigured, busy, call, on
             <input placeholder="https://docs.google.com/spreadsheets/d/…" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} />
             <button className="primary small" disabled={busy || !sheetUrl.trim()} onClick={() => void importSheet({ sheetUrl })}>시트에서 가져오기</button>
             <details>
-              <summary>CSV를 직접 붙여 넣기</summary>
-              <textarea rows={5} value={csv} onChange={e => setCsv(e.target.value)} placeholder="과목,문제,보기1,보기2,보기3,보기4,보기5,정답,해설,속성" />
+              <summary>링크가 안 되면: 시트 내용을 통째로 복사해서 붙여 넣기 (⌘A → ⌘C → ⌘V)</summary>
+              <textarea rows={5} value={csv} onChange={e => setCsv(e.target.value)} placeholder="여기에 붙여 넣기" />
               <button className="secondary small" disabled={busy || !csv.trim()} onClick={() => void importSheet({ csv })}>붙여 넣은 내용 가져오기</button>
             </details>
             <a className="text-button" href="/templates/question-template.csv" download><Download size={16} /> 시트 양식(CSV) 내려받기</a>

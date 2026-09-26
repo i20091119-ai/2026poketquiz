@@ -1,6 +1,6 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
-import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrl, type QuestionInput } from '@/lib/question-import';
+import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
 import {
   activeBank, addQuestions, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,
@@ -37,17 +37,39 @@ async function overview() {
   };
 }
 
-async function loadSheet(body: { sheetUrl?: string; csv?: string }) {
-  let text = body.csv ?? '';
-  if (body.sheetUrl) {
-    const res = await fetch(sheetCsvUrl(body.sheetUrl), { redirect: 'follow' });
-    const type = res.headers.get('content-type') ?? '';
-    if (!res.ok || type.includes('text/html')) {
-      throw new ParentError("구글 시트를 읽지 못했어요. 공유 설정을 '링크가 있는 모든 사용자(뷰어)'로 바꿔 주세요.");
+/** 구글 시트를 CSV로 읽어 옵니다. 주소 후보를 차례로 시도하고, 실패하면 이유를 쉬운 말로 알려 줍니다. */
+async function fetchSheet(link: string): Promise<string> {
+  let target: ReturnType<typeof sheetCsvUrls>;
+  try { target = sheetCsvUrls(link); } catch (e) { throw new ParentError((e as Error).message); }
+  const tried: string[] = [];
+  let needLogin = false, notFound = false, offline = false;
+  for (const url of target.urls) {
+    try {
+      const res = await fetch(url, { redirect: 'follow' });
+      const type = res.headers.get('content-type') ?? '';
+      const body = await res.text();
+      const looksCsv = res.ok && !type.includes('text/html') && !/^\s*<(!doctype|html)/i.test(body);
+      if (looksCsv) return body;
+      tried.push(`${url} → ${res.status} ${type} (최종 주소: ${res.url})`);
+      if (/accounts\.google\.com|ServiceLogin/i.test(res.url + body.slice(0, 3000))) needLogin = true;
+      if (res.status === 404) notFound = true;
+    } catch (error) {
+      offline = true;
+      tried.push(`${url} → 접속 실패: ${(error as Error).message}`);
     }
-    text = await res.text();
   }
-  if (!text.trim()) throw new ParentError('구글 시트 링크나 CSV 내용을 넣어 주세요.');
+  // 터미널에 자세한 내용을 남겨 두면 문제를 찾을 때 도움이 됩니다.
+  console.error('[구글 시트 가져오기 실패]\n' + tried.join('\n'));
+  if (target.excel) throw new ParentError("엑셀 파일(.xlsx)을 드라이브에서 연 시트라서 읽을 수 없어요. 시트 위쪽 메뉴에서 '파일 → Google Sheets로 저장'을 누른 뒤, 새로 열린 시트의 링크를 넣어 주세요.");
+  if (offline) throw new ParentError('구글에 접속하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+  if (needLogin) throw new ParentError("구글 시트를 볼 권한이 없어요. 시트 오른쪽 위 '공유' → 일반 액세스를 '링크가 있는 모든 사용자'로 바꾼 뒤, 다시 '링크 복사'해서 넣어 주세요.");
+  if (notFound) throw new ParentError('시트를 찾을 수 없어요. 링크를 끝까지 빠짐없이 복사했는지 확인해 주세요.');
+  throw new ParentError('구글 시트를 읽지 못했어요. 링크를 다시 복사해서 넣어 보고, 그래도 안 되면 "링크가 안 되면: 시트 내용을 통째로 복사해서 붙여 넣기"를 눌러 주세요.');
+}
+
+async function loadSheet(body: { sheetUrl?: string; csv?: string }) {
+  const text = body.sheetUrl ? await fetchSheet(body.sheetUrl) : body.csv ?? '';
+  if (!text.trim()) throw new ParentError('구글 시트 링크를 넣거나 시트 내용을 붙여 넣어 주세요.');
   if (text.length > 2_000_000) throw new ParentError('시트가 너무 커요. 나눠서 올려 주세요.');
   const { questions, issues } = rowsToQuestions(parseCsv(text));
   if (questions.length > MAX_IMPORT) throw new ParentError(`한 번에 ${MAX_IMPORT}문제까지 올릴 수 있어요.`);

@@ -12,31 +12,41 @@ const SUBJECT_ALIASES: Record<string, Subject> = {
   상식: '상식', 사회: '상식', 과학: '상식', '사회/과학': '상식', '사회·과학': '상식',
 };
 
-/** 구글 시트 공유 링크를 CSV 내려받기 주소로 바꿉니다. */
-export function sheetCsvUrl(link: string): string {
+/**
+ * 구글 시트 링크를 CSV로 내려받을 수 있는 주소 후보들로 바꿉니다. 앞에서부터 차례로 시도합니다.
+ * - 링크에 탭 번호(gid)가 없으면 첫 번째 탭을 가져옵니다 (첫 탭 번호가 0이 아닐 수 있어서 지정하지 않음).
+ * - 엑셀 파일(.xlsx)을 드라이브에서 연 링크(rtpof=true)는 excel: true 로 알려 줍니다.
+ */
+export function sheetCsvUrls(link: string): { urls: string[]; excel: boolean } {
   let url: URL;
   try { url = new URL(link.trim()); } catch { throw new Error('구글 시트 링크를 확인해 주세요.'); }
   if (url.hostname !== 'docs.google.com') throw new Error('docs.google.com 의 구글 시트 링크만 사용할 수 있어요.');
+  const gid = url.searchParams.get('gid') ?? url.hash.match(/gid=(\d+)/)?.[1] ?? null;
+  const excel = url.searchParams.get('rtpof') === 'true';
   // "웹에 게시" 링크: /spreadsheets/d/e/<id>/pub...
   const published = url.pathname.match(/^\/spreadsheets\/d\/e\/([\w-]+)/);
   if (published) {
     const out = new URL(`https://docs.google.com/spreadsheets/d/e/${published[1]}/pub`);
     out.searchParams.set('output', 'csv');
-    const gid = url.searchParams.get('gid');
     if (gid) out.searchParams.set('gid', gid);
-    return out.toString();
+    return { urls: [out.toString()], excel };
   }
   const shared = url.pathname.match(/^\/spreadsheets\/d\/([\w-]+)/);
   if (!shared) throw new Error('구글 시트 링크를 확인해 주세요.');
-  const gid = url.searchParams.get('gid') ?? url.hash.match(/gid=(\d+)/)?.[1] ?? '0';
-  return `https://docs.google.com/spreadsheets/d/${shared[1]}/export?format=csv&gid=${gid}`;
+  const base = `https://docs.google.com/spreadsheets/d/${shared[1]}`;
+  const tab = gid ? `&gid=${gid}` : '';
+  return { urls: [`${base}/export?format=csv${tab}`, `${base}/gviz/tq?tqx=out:csv${tab}`], excel };
 }
 
-/** RFC 4180 CSV (따옴표, 줄바꿈 포함 칸 지원) */
+/**
+ * RFC 4180 CSV (따옴표, 줄바꿈 포함 칸 지원).
+ * 구글 시트에서 칸을 복사해 붙여 넣은 내용(탭으로 구분)도 읽습니다. 첫 줄에 탭이 있으면 탭으로만 나눕니다.
+ */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [], cell = '', quoted = false;
   const src = text.replace(/^﻿/, '');
+  const sep = src.split(/\r?\n/, 1)[0].includes('\t') ? '\t' : ',';
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (quoted) {
@@ -44,7 +54,7 @@ export function parseCsv(text: string): string[][] {
       else if (c === '"') quoted = false;
       else cell += c;
     } else if (c === '"') quoted = true;
-    else if (c === ',' || c === '\t') { row.push(cell); cell = ''; }
+    else if (c === sep) { row.push(cell); cell = ''; }
     else if (c === '\n' || c === '\r') {
       if (c === '\r' && src[i + 1] === '\n') i++;
       row.push(cell); rows.push(row); row = []; cell = '';
