@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ArrowLeft, Copy, Download, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getJson, postJson, TypeBadge } from '@/components/game/common';
@@ -84,9 +83,9 @@ function Shell({ children, onLogout }: { children: React.ReactNode; onLogout?: (
   return (
     <main>
       <header className="topbar">
-        <Link className="brand" href="/"><span>포켓몬 <b>배움 탐험대</b> · 보호자 공간</span></Link>
+        <a className="brand" href="/"><span>포켓몬 <b>배움 탐험대</b> · 보호자 공간</span></a>
         <span className="topbar-actions">
-          <Link className="text-button" href="/"><ArrowLeft size={16} /> 게임으로</Link>
+          <a className="text-button" href="/"><ArrowLeft size={16} /> 게임으로</a>
           {onLogout && <button className="text-button" onClick={onLogout}><LogOut size={16} /> 로그아웃</button>}
         </span>
       </header>

@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
+    // vinext로 올린 버전에서 next/link 페이지 이동이 동작하지 않아, 페이지 사이는 일반 <a> 링크로 이동합니다.
+    rules: { "@next/next/no-html-link-for-pages": "off" },
+  },
+  {
     files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the

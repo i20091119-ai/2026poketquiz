@@ -1,4 +1,6 @@
 "use client";
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
 import { SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INFO } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
@@ -8,8 +10,9 @@ import { dexNo, PokemonImage, TypeBadge } from './common';
 /* eslint-disable @next/next/no-img-element */
 
 /** 첫 화면: 파트너 포켓몬과 경험치, 속성 스탯 */
-export function HomePanel({ view, onChangePartner }: { view: ChildView; onChangePartner: () => void }) {
+export function HomePanel({ view, busy, onChoosePartner }: { view: ChildView; busy: boolean; onChoosePartner: (uid: string) => void }) {
   const partner = view.owned.find(p => p.uid === view.partner);
+  const [picking, setPicking] = useState(false);
   return (
     <section className="home panel">
       <div className="partner-stage" style={{ backgroundImage: `url(${ASSETS.homeBackground})` }}>
@@ -20,11 +23,31 @@ export function HomePanel({ view, onChangePartner }: { view: ChildView; onChange
             <h2>{species(partner.species).name}</h2>
             <div className="type-row">{species(partner.species).types.map(t => <TypeBadge key={t} type={t} />)}</div>
             <div className="exp-box"><img src={ASSETS.exp} alt="" /> 경험치 <strong>{view.exp.toLocaleString()}</strong></div>
-            <button className="text-button" onClick={onChangePartner}>파트너 바꾸기 →</button>
+            <button className="text-button" onClick={() => setPicking(true)}>파트너 바꾸기 →</button>
           </div>
         </>}
       </div>
       <StatBoard stats={view.stats} />
+      <Dialog open={picking} onOpenChange={setPicking}>
+        <DialogContent className="reward-dialog">
+          <DialogTitle>함께 모험할 파트너를 골라 줘</DialogTitle>
+          <DialogDescription>
+            {view.owned.length > 1 ? '내가 모은 포켓몬 중에서 한 마리를 눌러 봐.' : '아직 다른 친구가 없어. 일일미션 상자에서 볼을 얻어 새 친구를 만나면 바꿀 수 있어!'}
+          </DialogDescription>
+          <div className="partner-choices">
+            {view.owned.map(p => (
+              <button key={p.uid} className={'partner-choice' + (p.uid === view.partner ? ' current' : '')}
+                disabled={busy || p.uid === view.partner}
+                onClick={() => { onChoosePartner(p.uid); setPicking(false); }}>
+                <PokemonImage id={p.species} />
+                <b>{species(p.species).name}</b>
+                {p.uid === view.partner && <small>지금 파트너</small>}
+              </button>
+            ))}
+          </div>
+          <button className="primary" onClick={() => setPicking(false)}>닫기</button>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

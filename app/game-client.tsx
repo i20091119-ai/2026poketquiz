@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { BookOpen, Compass, Settings, Sun } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -124,7 +123,7 @@ export default function Game() {
         {!view.partner ? (
           <StarterPicker busy={busy} onPick={async id => { const r = await act<{ message: string }>({ type: 'starter', species: id }); if (r) setNotice(r.message); }} />
         ) : <>
-          <HomePanel view={view} onChangePartner={() => setTab('pokedex')} />
+          <HomePanel view={view} busy={busy} onChoosePartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
@@ -151,7 +150,7 @@ export default function Game() {
 
         <footer>
           <span>포켓몬 배움 탐험대</span>
-          <Link href="/parent"><Settings size={14} /> 보호자 공간</Link>
+          <a href="/parent"><Settings size={14} /> 보호자 공간</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
         </footer>
       </div>
@@ -210,7 +209,7 @@ function Header() {
   return (
     <header className="topbar">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <Link className="brand" href="/"><img src={ASSETS.logo} alt="" /><span>포켓몬 <b>배움 탐험대</b></span></Link>
+      <a className="brand" href="/"><img src={ASSETS.logo} alt="" /><span>포켓몬 <b>배움 탐험대</b></span></a>
     </header>
   );
 }
