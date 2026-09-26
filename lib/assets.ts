@@ -20,11 +20,11 @@ export const ASSETS = {
     potion: '/assets/items/potion.png',
   } satisfies Record<PotionKind, string>,
   ball: {
-    poke: '/assets/balls/poke.svg',
-    great: '/assets/balls/great.svg',
-    ultra: '/assets/balls/ultra.svg',
-    master: '/assets/balls/master.svg',
-    luxury: '/assets/balls/luxury.svg',
+    poke: '/assets/balls/poke.png',
+    great: '/assets/balls/great.png',
+    ultra: '/assets/balls/ultra.png',
+    master: '/assets/balls/master.png',
+    luxury: '/assets/balls/luxury.png',
   } satisfies Record<BallKind, string>,
   type: (t: TypeKey) => `/assets/types/${t}.svg`,
 };
