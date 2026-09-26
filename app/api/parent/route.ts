@@ -109,7 +109,10 @@ export async function POST(request: Request) {
         const sheet = body.sheetUrl || body.csv ? await loadSheet(body as { sheetUrl?: string; csv?: string }) : null;
         const bankId = await createBank(String(body.title ?? ''), grade, keywords);
         if (sheet) await addQuestions(bankId, sheet.questions);
-        return json({ bankId, imported: sheet?.questions.length ?? 0, issues: sheet?.issues ?? [], message: '문제은행을 만들었어요.' });
+        const message = !sheet ? '빈 문제은행을 만들었어요. 아래에서 문제를 채워 주세요.'
+          : sheet.questions.length ? `문제은행을 만들고 시트에서 ${sheet.questions.length}문제를 가져왔어요. 확인 후 '아이에게 공개'를 눌러 주세요.`
+          : '문제은행은 만들었지만 가져온 문제가 없어요. 아래 안내를 확인해 주세요.';
+        return json({ bankId, imported: sheet?.questions.length ?? 0, issues: sheet?.issues ?? [], message });
       }
 
       case 'updateBank': {

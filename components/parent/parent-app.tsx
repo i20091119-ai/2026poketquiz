@@ -32,6 +32,7 @@ export default function ParentApp() {
   const [passwordConfigured, setPasswordConfigured] = useState(true);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [bankId, setBankId] = useState<number | null>(null);
+  const [firstIssues, setFirstIssues] = useState<ImportResult['issues']>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -70,9 +71,9 @@ export default function ParentApp() {
       {error && <div className="error" role="alert">{error}<button onClick={() => setError('')}>닫기</button></div>}
       {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice('')}>×</button></div>}
       {bankId
-        ? <BankEditor bankId={bankId} grade={overview.grade} aiConfigured={overview.aiConfigured} busy={busy} call={call}
+        ? <BankEditor bankId={bankId} initialIssues={firstIssues} grade={overview.grade} aiConfigured={overview.aiConfigured} busy={busy} call={call}
             onBack={() => { setBankId(null); void load(); }} />
-        : <Dashboard overview={overview} busy={busy} call={call} onOpenBank={setBankId} reload={load} />}
+        : <Dashboard overview={overview} busy={busy} error={error} call={call} onOpenBank={(id, issues = []) => { setFirstIssues(issues); setBankId(id); }} reload={load} />}
     </Shell>
   );
 }
@@ -112,8 +113,8 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 }
 
 // ---------------- 대시보드 ----------------
-function Dashboard({ overview, busy, call, onOpenBank, reload }: {
-  overview: Overview; busy: boolean; call: Call; onOpenBank: (id: number) => void; reload: () => Promise<void>;
+function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
+  overview: Overview; busy: boolean; error: string; call: Call; onOpenBank: (id: number, issues?: ImportResult['issues']) => void; reload: () => Promise<void>;
 }) {
   const [grade, setGrade] = useState(overview.grade);
   const [creating, setCreating] = useState(false);
@@ -161,7 +162,7 @@ function Dashboard({ overview, busy, call, onOpenBank, reload }: {
       <section className="panel parent-section">
         <div className="heading-row">
           <div><h2>주차별 문제은행</h2><p>공개한 문제은행 하나가 아이의 일일미션과 탐험에 쓰여요.</p></div>
-          <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 새 문제은행</button>
+          <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 구글 시트로 문제은행 추가</button>
         </div>
         <div className="bank-list">
           {overview.banks.map(b => (
@@ -175,8 +176,8 @@ function Dashboard({ overview, busy, call, onOpenBank, reload }: {
         </div>
       </section>
 
-      <NewBankDialog open={creating} grade={overview.grade} busy={busy} call={call}
-        onClose={() => setCreating(false)} onCreated={id => { setCreating(false); onOpenBank(id); }} />
+      <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
+        onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
     </>
   );
 }
@@ -201,32 +202,45 @@ function KeywordFields({ keywords, onChange }: { keywords: Keywords; onChange: (
   );
 }
 
-function NewBankDialog({ open, grade, busy, call, onClose, onCreated }: {
-  open: boolean; grade: string; busy: boolean; call: Call; onClose: () => void; onCreated: (id: number) => void;
+function NewBankDialog({ open, grade, busy, error, call, onClose, onCreated }: {
+  open: boolean; grade: string; busy: boolean; error: string; call: Call; onClose: () => void;
+  onCreated: (id: number, issues: ImportResult['issues']) => void;
 }) {
   const [title, setTitle] = useState(thisWeekTitle);
   const [bankGrade, setBankGrade] = useState(grade);
+  const [sheetUrl, setSheetUrl] = useState('');
   const [keywords, setKeywords] = useState<Keywords>({});
+  const [showKeywords, setShowKeywords] = useState(false);
+  const withSheet = !!sheetUrl.trim();
   return (
     <Dialog open={open} onOpenChange={o => { if (!o && !busy) onClose(); }}>
       <DialogContent className="edit-dialog wide">
-        <DialogTitle>새 문제은행</DialogTitle>
-        <DialogDescription>이번 주에 공부할 키워드를 적어 주세요. 문제는 다음 화면에서 구글 시트나 AI로 채워요.</DialogDescription>
+        <DialogTitle>새 문제은행 만들기</DialogTitle>
+        <DialogDescription>구글 시트 링크를 넣으면 시트의 문제를 바로 가져와요.</DialogDescription>
         <label>이름<input value={title} maxLength={100} onChange={e => setTitle(e.target.value)} /></label>
         <label>학년<select value={bankGrade} onChange={e => setBankGrade(e.target.value)}>{GRADES.map(g => <option key={g}>{g}</option>)}</select></label>
-        <KeywordFields keywords={keywords} onChange={setKeywords} />
+        <label>구글 시트 링크
+          <input placeholder="https://docs.google.com/spreadsheets/d/…" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} />
+        </label>
+        <p className="muted">시트 오른쪽 위 <b>공유</b> → 일반 액세스를 <b>링크가 있는 모든 사용자</b>로 바꾼 뒤 <b>링크 복사</b>해서 붙여 넣어 주세요.
+          {' '}<a className="text-button" href="/templates/question-template.csv" download><Download size={14} /> 시트 양식 내려받기</a></p>
+        <button type="button" className="text-button" onClick={() => setShowKeywords(v => !v)}>
+          {showKeywords ? '▾' : '▸'} 과목별 키워드 적기 (선택 · AI 요청문에 쓰여요)
+        </button>
+        {showKeywords && <KeywordFields keywords={keywords} onChange={setKeywords} />}
+        {error && <p className="error" role="alert">{error}</p>}
         <button className="primary" disabled={busy} onClick={async () => {
-          const r = await call<ImportResult>({ action: 'createBank', title, grade: bankGrade, keywords });
-          if (r?.bankId) onCreated(r.bankId);
-        }}>만들기</button>
+          const r = await call<ImportResult>({ action: 'createBank', title, grade: bankGrade, keywords, ...(withSheet ? { sheetUrl } : {}) });
+          if (r?.bankId) onCreated(r.bankId, r.issues ?? []);
+        }}>{busy ? '가져오는 중…' : withSheet ? '시트에서 문제 가져와서 만들기' : '빈 문제은행 만들기'}</button>
       </DialogContent>
     </Dialog>
   );
 }
 
 // ---------------- 문제은행 편집 ----------------
-function BankEditor({ bankId, grade, aiConfigured, busy, call, onBack }: {
-  bankId: number; grade: string; aiConfigured: boolean; busy: boolean; call: Call; onBack: () => void;
+function BankEditor({ bankId, initialIssues, grade, aiConfigured, busy, call, onBack }: {
+  bankId: number; initialIssues: ImportResult['issues']; grade: string; aiConfigured: boolean; busy: boolean; call: Call; onBack: () => void;
 }) {
   const [detail, setDetail] = useState<BankDetail | null>(null);
   const [title, setTitle] = useState('');
@@ -234,7 +248,7 @@ function BankEditor({ bankId, grade, aiConfigured, busy, call, onBack }: {
   const [keywords, setKeywords] = useState<Keywords>({});
   const [sheetUrl, setSheetUrl] = useState('');
   const [csv, setCsv] = useState('');
-  const [issues, setIssues] = useState<ImportResult['issues']>([]);
+  const [issues, setIssues] = useState<ImportResult['issues']>(initialIssues);
   const [editing, setEditing] = useState<Question | null>(null);
   const [filter, setFilter] = useState<Subject | '전체'>('전체');
   const [generating, setGenerating] = useState<string>('');
