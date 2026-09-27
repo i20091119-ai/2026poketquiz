@@ -111,10 +111,17 @@ export class TitlePhase extends Phase {
                 setModeAndEnd(GameModes.CLASSIC);
                 return;
               }
-              ui.showText(result.message ?? "", null, () => {
-                globalScene.phaseManager.toTitleScreen();
-                super.end();
-              });
+              ui.setMode(UiMode.MESSAGE);
+              ui.showText(
+                result.message ?? "",
+                null,
+                () => {
+                  globalScene.phaseManager.toTitleScreen();
+                  super.end();
+                },
+                null,
+                true,
+              );
             });
             return true;
           }

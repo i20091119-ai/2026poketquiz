@@ -1,3 +1,4 @@
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { isDev } from "#constants/app-constants";
 import { BattleStyle } from "#enums/battle-style";
 import { CandyUpgradeDisplayMode } from "#enums/candy-upgrade-display-mode";
@@ -235,173 +236,175 @@ if (isDev) {
 // #region Display Settings
 
 /** UI items for display settings */
-export const displaySettingUiItems: SettingsUiItem<DisplaySettingsKey>[] = [
-  {
-    key: "language",
-    label: t("settings:language"),
-    options: [
-      {
-        label: SUPPORTED_LANGUAGE_ENTRIES[i18next.resolvedLanguage ?? "en"]?.label ?? "English",
-        value: 0,
-      },
-      {
-        label: t("settings:change"),
-        value: 1,
-      },
-    ],
-    requiresReload: true,
-  },
-  {
-    key: "uiTheme",
-    label: t("settings:uiTheme"),
-    options: [
-      { value: UiTheme.DEFAULT, label: t("settings:default") },
-      { value: UiTheme.LEGACY, label: t("settings:legacy") },
-    ],
-    requiresReload: true,
-  },
-  {
-    key: "uiWindowStyle",
-    label: t("settings:windowType"),
-    options: Array.from({ length: 5 }).map((_, i) => ({ value: i + 1, label: `${i + 1}` })),
-  },
-  {
-    key: "moneyFormat",
-    label: t("settings:moneyFormat"),
-    options: [
-      { value: MoneyFormat.NORMAL, label: t("settings:normal") },
-      { value: MoneyFormat.ABBREVIATED, label: t("settings:abbreviated") },
-    ],
-  },
-  {
-    key: "damageNumbersMode",
-    label: t("settings:damageNumbers"),
-    options: [
-      { value: DamageNumbersMode.OFF, label: t("settings:off") },
-      { value: DamageNumbersMode.SIMPLE, label: t("settings:simple") },
-      { value: DamageNumbersMode.FANCY, label: t("settings:fancy") },
-    ],
-  },
-  {
-    key: "enableMoveAnimations",
-    label: t("settings:moveAnimations"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "showStatsOnLevelUp",
-    label: t("settings:showStatsOnLevelUp"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "candyUpgradeNotificationMode",
-    label: t("settings:candyUpgradeNotification"),
-    options: [
-      { value: CandyUpgradeNotificationMode.OFF, label: t("settings:off") },
-      { value: CandyUpgradeNotificationMode.PASSIVES_ONLY, label: t("settings:passivesOnly") },
-      { value: CandyUpgradeNotificationMode.ON, label: t("settings:on") },
-    ],
-  },
-  {
-    key: "candyUpgradeDisplayMode",
-    label: t("settings:candyUpgradeDisplay"),
-    options: [
-      { value: CandyUpgradeDisplayMode.ICON, label: t("settings:icon") },
-      { value: CandyUpgradeDisplayMode.ANIMATION, label: t("settings:animation") },
-    ],
-    requiresReload: true,
-  },
-  {
-    key: "enableMoveInfo",
-    label: t("settings:moveInfo"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "showMovesetFlyout",
-    label: t("settings:showMovesetFlyout"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "showArenaFlyout",
-    label: t("settings:showArenaFlyout"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "showTimeOfDayWidget",
-    label: t("settings:showTimeOfDayWidget"),
-    options: useOnOffOptions(),
-    requiresReload: true,
-  },
-  {
-    key: "timeOfDayAnimation",
-    label: t("settings:timeOfDayAnimation"),
-    options: [
-      { value: EaseType.BOUNCE, label: t("settings:bounce") },
-      { value: EaseType.BACK, label: t("settings:timeOfDayBack") },
-    ],
-  },
-  {
-    key: "spriteSet",
-    label: t("settings:spriteSet"),
-    options: [
-      {
-        value: SpriteSet.CONSISTENT,
-        label: t("settings:consistent"),
-      },
-      {
-        value: SpriteSet.EXPERIMENTAL,
-        label: t("settings:experimental"),
-      },
-    ],
-    requiresReload: true,
-  },
-  {
-    key: "enableFusionPaletteSwaps",
-    label: t("settings:fusionPaletteSwaps"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "typeHintsMode",
-    label: t("settings:typeHints"),
-    options: [
-      { value: TypeHints.OFF, label: t("settings:off") },
-      { value: TypeHints.ON, label: t("settings:on") },
-      { value: TypeHints.HIGH_CONTRAST, label: t("settings:highContrast") },
-    ],
-  },
-  {
-    key: "showBgmBar",
-    label: t("settings:showBgmBar"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "hideUsername",
-    label: t("settings:hideUsername"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "showMissingRibbons",
-    label: t("settings:showMissingRibbons"),
-    options: useOnOffOptions(),
-  },
-  {
-    key: "shopCursorTarget",
-    label: t("settings:shopCursorTarget"),
-    options: [
-      { value: ShopCursorTarget.REWARDS, label: t("settings:rewards") },
-      { value: ShopCursorTarget.SHOP, label: t("settings:shop") },
-      { value: ShopCursorTarget.REROLL, label: t("settings:reroll") },
-      { value: ShopCursorTarget.CHECK_TEAM, label: t("settings:checkTeam") },
-    ],
-  },
-  {
-    key: "shopOverlayOpacity",
-    label: t("settings:shopOverlayOpacity"),
-    options: Array.from({ length: 9 }).map((_, i) => ({
-      value: Number(((i + 1) * 0.1).toFixed(1)),
-      label: `${(i + 1) * 10}`,
-    })),
-  },
-];
+export const displaySettingUiItems: SettingsUiItem<DisplaySettingsKey>[] = (
+  [
+    {
+      key: "language",
+      label: t("settings:language"),
+      options: [
+        {
+          label: SUPPORTED_LANGUAGE_ENTRIES[i18next.resolvedLanguage ?? "en"]?.label ?? "English",
+          value: 0,
+        },
+        {
+          label: t("settings:change"),
+          value: 1,
+        },
+      ],
+      requiresReload: true,
+    },
+    {
+      key: "uiTheme",
+      label: t("settings:uiTheme"),
+      options: [
+        { value: UiTheme.DEFAULT, label: t("settings:default") },
+        { value: UiTheme.LEGACY, label: t("settings:legacy") },
+      ],
+      requiresReload: true,
+    },
+    {
+      key: "uiWindowStyle",
+      label: t("settings:windowType"),
+      options: Array.from({ length: 5 }).map((_, i) => ({ value: i + 1, label: `${i + 1}` })),
+    },
+    {
+      key: "moneyFormat",
+      label: t("settings:moneyFormat"),
+      options: [
+        { value: MoneyFormat.NORMAL, label: t("settings:normal") },
+        { value: MoneyFormat.ABBREVIATED, label: t("settings:abbreviated") },
+      ],
+    },
+    {
+      key: "damageNumbersMode",
+      label: t("settings:damageNumbers"),
+      options: [
+        { value: DamageNumbersMode.OFF, label: t("settings:off") },
+        { value: DamageNumbersMode.SIMPLE, label: t("settings:simple") },
+        { value: DamageNumbersMode.FANCY, label: t("settings:fancy") },
+      ],
+    },
+    {
+      key: "enableMoveAnimations",
+      label: t("settings:moveAnimations"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "showStatsOnLevelUp",
+      label: t("settings:showStatsOnLevelUp"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "candyUpgradeNotificationMode",
+      label: t("settings:candyUpgradeNotification"),
+      options: [
+        { value: CandyUpgradeNotificationMode.OFF, label: t("settings:off") },
+        { value: CandyUpgradeNotificationMode.PASSIVES_ONLY, label: t("settings:passivesOnly") },
+        { value: CandyUpgradeNotificationMode.ON, label: t("settings:on") },
+      ],
+    },
+    {
+      key: "candyUpgradeDisplayMode",
+      label: t("settings:candyUpgradeDisplay"),
+      options: [
+        { value: CandyUpgradeDisplayMode.ICON, label: t("settings:icon") },
+        { value: CandyUpgradeDisplayMode.ANIMATION, label: t("settings:animation") },
+      ],
+      requiresReload: true,
+    },
+    {
+      key: "enableMoveInfo",
+      label: t("settings:moveInfo"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "showMovesetFlyout",
+      label: t("settings:showMovesetFlyout"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "showArenaFlyout",
+      label: t("settings:showArenaFlyout"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "showTimeOfDayWidget",
+      label: t("settings:showTimeOfDayWidget"),
+      options: useOnOffOptions(),
+      requiresReload: true,
+    },
+    {
+      key: "timeOfDayAnimation",
+      label: t("settings:timeOfDayAnimation"),
+      options: [
+        { value: EaseType.BOUNCE, label: t("settings:bounce") },
+        { value: EaseType.BACK, label: t("settings:timeOfDayBack") },
+      ],
+    },
+    {
+      key: "spriteSet",
+      label: t("settings:spriteSet"),
+      options: [
+        {
+          value: SpriteSet.CONSISTENT,
+          label: t("settings:consistent"),
+        },
+        {
+          value: SpriteSet.EXPERIMENTAL,
+          label: t("settings:experimental"),
+        },
+      ],
+      requiresReload: true,
+    },
+    {
+      key: "enableFusionPaletteSwaps",
+      label: t("settings:fusionPaletteSwaps"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "typeHintsMode",
+      label: t("settings:typeHints"),
+      options: [
+        { value: TypeHints.OFF, label: t("settings:off") },
+        { value: TypeHints.ON, label: t("settings:on") },
+        { value: TypeHints.HIGH_CONTRAST, label: t("settings:highContrast") },
+      ],
+    },
+    {
+      key: "showBgmBar",
+      label: t("settings:showBgmBar"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "hideUsername",
+      label: t("settings:hideUsername"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "showMissingRibbons",
+      label: t("settings:showMissingRibbons"),
+      options: useOnOffOptions(),
+    },
+    {
+      key: "shopCursorTarget",
+      label: t("settings:shopCursorTarget"),
+      options: [
+        { value: ShopCursorTarget.REWARDS, label: t("settings:rewards") },
+        { value: ShopCursorTarget.SHOP, label: t("settings:shop") },
+        { value: ShopCursorTarget.REROLL, label: t("settings:reroll") },
+        { value: ShopCursorTarget.CHECK_TEAM, label: t("settings:checkTeam") },
+      ],
+    },
+    {
+      key: "shopOverlayOpacity",
+      label: t("settings:shopOverlayOpacity"),
+      options: Array.from({ length: 9 }).map((_, i) => ({
+        value: Number(((i + 1) * 0.1).toFixed(1)),
+        label: `${(i + 1) * 10}`,
+      })),
+    },
+  ] as SettingsUiItem<DisplaySettingsKey>[]
+).filter(item => !(QUIZ_RULES.koreanOnly && item.key === "language")); // 한국어 고정(SPEC 10번): 언어 선택 메뉴 제거
 
 // #endregion Display Settings
 

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>포켓로그 게임 준비하기</title>
+<style>
+  :root { color-scheme: light; }
+  body { margin: 0; padding: 24px 16px 40px; font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; background: #f3f6f2; color: #23302a; }
+  main { max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  p { line-height: 1.55; margin: 8px 0; }
+  .card { background: #fff; border: 1px solid #dfe7dc; border-radius: 16px; padding: 18px 16px; margin-top: 14px; }
+  .big { font-size: 34px; font-weight: 800; margin: 4px 0; }
+  .muted { color: #6c7a72; font-size: 14px; }
+  button { width: 100%; border: 0; border-radius: 14px; padding: 16px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 12px; }
+  .primary { background: #2e7d5b; color: #fff; }
+  .primary:disabled { background: #9fb8ad; cursor: default; }
+  .secondary { background: #eef2ec; color: #23302a; font-weight: 700; font-size: 15px; }
+  .bar { height: 14px; background: #e6ede3; border-radius: 999px; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; width: 0; background: #f2b705; transition: width .3s; }
+  .warn { background: #fff4c6; border-color: #eedc98; color: #85631c; }
+  a.play { display: block; text-align: center; margin-top: 18px; font-weight: 800; color: #2e7d5b; font-size: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>포켓로그 게임 준비하기</h1>
+  <p>와이파이가 되는 곳에서 그림과 소리를 한 번 받아 두면, 나중에 데이터를 거의 쓰지 않고 게임을 할 수 있어요. 이미 받은 파일은 다시 받지 않아요.</p>
+
+  <div class="card">
+    <div class="muted">받아 둔 파일</div>
+    <div class="big" id="have">확인 중…</div>
+    <div class="muted" id="detail"></div>
+    <div class="bar"><div id="bar"></div></div>
+    <button class="primary" id="start" disabled>지금 받기 (와이파이 권장)</button>
+    <button class="secondary" id="clear">받아 둔 파일 지우기</button>
+    <p class="muted" id="note"></p>
+  </div>
+
+  <div class="card warn" id="unsupported" hidden>이 브라우저에서는 미리 받기를 쓸 수 없어요. 그래도 게임은 할 수 있고, 한 번 본 그림·소리는 브라우저가 알아서 기억해요.</div>
+
+  <a class="play" href="./">▶ 게임 하러 가기</a>
+</main>
+<script>
+(async () => {
+  const $ = id => document.getElementById(id);
+  const mb = n => (n / 1048576).toFixed(0) + 'MB';
+  if (!('serviceWorker' in navigator)) { $('unsupported').hidden = false; $('have').textContent = '-'; return; }
+  const reg = await navigator.serviceWorker.register('./service-worker.js');
+  await navigator.serviceWorker.ready;
+  const sw = () => reg.active || navigator.serviceWorker.controller;
+  const send = msg => sw() && sw().postMessage(msg);
+  let running = false;
+  navigator.serviceWorker.addEventListener('message', e => {
+    const d = e.data || {};
+    if (d.type === 'STATUS') {
+      $('have').textContent = d.have.toLocaleString() + ' / ' + d.total.toLocaleString() + '개';
+      $('detail').textContent = mb(d.haveBytes) + ' / ' + mb(d.totalBytes) + (d.have === d.total ? ' · 모두 받아 두었어요!' : '');
+      $('bar').style.width = (d.total ? d.have / d.total * 100 : 0) + '%';
+      $('start').disabled = running || d.have === d.total;
+      $('start').textContent = d.have === d.total ? '준비 끝!' : (d.have ? '이어서 받기 (와이파이 권장)' : '지금 받기 (와이파이 권장)');
+    } else if (d.type === 'PROGRESS') {
+      $('have').textContent = d.done.toLocaleString() + ' / ' + d.total.toLocaleString() + '개';
+      $('detail').textContent = mb(d.doneBytes) + ' / ' + mb(d.totalBytes) + ' 받는 중… 화면을 켜 둔 채 기다려 주세요.';
+      $('bar').style.width = (d.done / d.total * 100) + '%';
+    } else if (d.type === 'DONE') {
+      running = false;
+      $('note').textContent = d.failed ? '파일 ' + d.failed + '개는 받지 못했어요. 다시 "이어서 받기"를 누르면 그것만 받아요.' : '다 받았어요! 이제 데이터를 거의 쓰지 않고 게임할 수 있어요.';
+      send({ type: 'STATUS' });
+    } else if (d.type === 'CLEARED') {
+      $('note').textContent = '받아 둔 파일을 지웠어요.';
+      send({ type: 'STATUS' });
+    } else if (d.type === 'ERROR') {
+      running = false; $('note').textContent = '문제가 생겼어요: ' + d.message; $('start').disabled = false;
+    }
+  });
+  $('start').onclick = () => { running = true; $('start').disabled = true; $('note').textContent = ''; send({ type: 'PREFETCH' }); };
+  $('clear').onclick = () => { if (confirm('받아 둔 게임 파일을 모두 지울까요? 게임 기록은 지워지지 않아요.')) send({ type: 'CLEAR' }); };
+  send({ type: 'STATUS' });
+})();
+</script>
+</body>
+</html>

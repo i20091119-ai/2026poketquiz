@@ -156,6 +156,7 @@ await i18next
   .use(new KoreanPostpositionProcessor())
   .init(
     {
+      lng: "ko", // 퀴즈 앱 연동판(SPEC 10번): 브라우저 언어와 무관하게 한국어 고정
       fallbackLng: {
         "es-419": ["es-ES", "en"],
         default: ["en"],

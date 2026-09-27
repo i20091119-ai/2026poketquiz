@@ -16,4 +16,6 @@ export const QUIZ_RULES = {
    * 지역 변경·보스·체육관 배치는 원본 그대로 두고, 클리어 시점만 앞당깁니다. 추후 100 → 150 → 200 으로 늘릴 수 있습니다.
    */
   finalWave: 55,
+  /** SPEC 10번: 한국어 고정 — 설정의 언어 선택 메뉴 제거 (i18n.ts 에서 lng: "ko") */
+  koreanOnly: true,
 } as const;

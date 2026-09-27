@@ -37,10 +37,16 @@ export class SelectStarterPhase extends Phase {
             return;
           }
           globalScene.ui.setMode(UiMode.MESSAGE);
-          globalScene.ui.showText(result.message ?? "", null, () => {
-            globalScene.phaseManager.toTitleScreen();
-            this.end();
-          });
+          globalScene.ui.showText(
+            result.message ?? "",
+            null,
+            () => {
+              globalScene.phaseManager.toTitleScreen();
+              this.end();
+            },
+            null,
+            true,
+          );
         });
       });
     });
