@@ -1,4 +1,5 @@
 // 게임을 인터넷(Cloudflare)에 올리는 자동 진행 도구입니다.
+// 평소에는 GitHub 자동 작업(.github/workflows/deploy.yml)이 올려 주므로, 이 도구는 예비 방법입니다.
 // 사용법: npm run online
 //   - 먼저 GitHub에서 새 버전을 받습니다 (git pull을 따로 안 해도 됨).
 //   - 처음: Cloudflare 로그인 → 기록 저장소(D1) 만들기 → 표 만들기 → 올리기 → 보호자 비밀번호 정하기
