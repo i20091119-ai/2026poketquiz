@@ -4,20 +4,37 @@
 // - 비밀번호를 바꾸면 이전 쿠키는 모두 무효가 됩니다.
 // - 보호자 비밀번호(PARENT_PASSWORD)가 없는 곳(미리보기 등)에서는 문을 잠그지 않습니다.
 import { env } from 'cloudflare:workers';
+import { BATTLE_PASSWORD_MIN } from '../game-config.ts';
 import { sameText, sign } from './parent-auth.ts';
 import { getBattlePasswordHash } from './store.ts';
 
 const COOKIE = 'pq_battle';
 const MAX_AGE = 60 * 60 * 24 * 365; // 1년
-export const BATTLE_PASSWORD_MIN = 4;
+export { BATTLE_PASSWORD_MIN };
 
 export const hashBattlePassword = (password: string) => sign('battle-pw:' + password, env.PARENT_PASSWORD ?? '');
 
-/** open: 문 없음(보호자 비밀번호 미설정) / unset: 포켓로그 비밀번호를 아직 안 정함 / locked: 비밀번호 필요 */
-export async function battleGateMode(): Promise<'open' | 'unset' | 'locked'> {
-  if (!env.PARENT_PASSWORD) return 'open';
-  return (await getBattlePasswordHash()) ? 'locked' : 'unset';
+export type BattleGateMode = 'open' | 'unset' | 'locked';
+export type BattleAccess = { mode: BattleGateMode; allowed: boolean };
+
+/**
+ * 이 요청의 문 상태와 통과 여부를 한 번에 봅니다 (기록 저장소는 한 번만 읽음).
+ * open: 문 없음(보호자 비밀번호 미설정) / unset: 포켓로그 비밀번호를 아직 안 정함 / locked: 비밀번호 필요
+ */
+export async function battleAccess(request: Request): Promise<BattleAccess> {
+  if (!env.PARENT_PASSWORD) return { mode: 'open', allowed: true };
+  const stored = await getBattlePasswordHash();
+  if (!stored) return { mode: 'unset', allowed: false };
+  const cookie = request.headers.get('cookie') ?? '';
+  const value = cookie.split(/;\s*/).find(c => c.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
+  if (!value) return { mode: 'locked', allowed: false };
+  const [expires, sig] = value.split('.');
+  if (!expires || !sig || Number(expires) < Date.now() / 1000) return { mode: 'locked', allowed: false };
+  return { mode: 'locked', allowed: sameText(sig, await sign(`battle:${expires}:${stored}`, env.PARENT_PASSWORD)) };
 }
+
+/** 이 요청이 포켓로그를 써도 되는지 (문이 없으면 항상 true) */
+export const isBattleAllowed = async (request: Request) => (await battleAccess(request)).allowed;
 
 export async function checkBattlePassword(password: string) {
   const stored = await getBattlePasswordHash();
@@ -31,18 +48,4 @@ export async function battleLoginCookie(request: Request) {
   const value = `${expires}.${await sign(`battle:${expires}:${stored}`, env.PARENT_PASSWORD ?? '')}`;
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${secure}`;
-}
-
-/** 이 요청이 포켓로그를 써도 되는지 (문이 없으면 항상 true) */
-export async function isBattleAllowed(request: Request) {
-  const mode = await battleGateMode();
-  if (mode === 'open') return true;
-  if (mode === 'unset') return false;
-  const cookie = request.headers.get('cookie') ?? '';
-  const value = cookie.split(/;\s*/).find(c => c.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
-  if (!value) return false;
-  const [expires, sig] = value.split('.');
-  if (!expires || !sig || Number(expires) < Date.now() / 1000) return false;
-  const stored = (await getBattlePasswordHash()) ?? '';
-  return sameText(sig, await sign(`battle:${expires}:${stored}`, env.PARENT_PASSWORD ?? ''));
 }

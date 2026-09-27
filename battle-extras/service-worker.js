@@ -7,18 +7,24 @@ const VERSION = "__BATTLE_VERSION__";
 const CACHE = "battle-assets";
 const SCOPE = new URL(self.registration.scope).pathname; // 예: /battle/
 const MANIFEST_URL = SCOPE + "prefetch-manifest.json";
-const ALWAYS_FRESH = [SCOPE, SCOPE + "index.html", SCOPE + "asset-manifest.json", SCOPE + "prefetch-manifest.json", SCOPE + "prepare.html", SCOPE + "service-worker.js"];
+const ALWAYS_FRESH = [SCOPE, SCOPE + "index.html", SCOPE + "asset-manifest.json", SCOPE + "prefetch-manifest.json", SCOPE + "prepare", SCOPE + "prepare.html", SCOPE + "login", SCOPE + "service-worker.js"];
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
 
-const isCacheable = url => url.origin === self.location.origin && url.pathname.startsWith(SCOPE) && !ALWAYS_FRESH.includes(url.pathname) && !url.pathname.startsWith("/api/");
+const isCacheable = (req, url) =>
+  url.origin === self.location.origin
+  && url.pathname.startsWith(SCOPE)
+  && !ALWAYS_FRESH.includes(url.pathname)
+  && !url.pathname.startsWith("/api/")
+  && req.mode !== "navigate" // 화면(HTML)은 늘 새로 받음: 로그인·안내 화면이 굳지 않게
+  && !(req.headers.get("accept") || "").includes("text/html");
 
 self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (!isCacheable(url)) return;
+  if (!isCacheable(req, url)) return;
   event.respondWith(
     caches.open(CACHE).then(async cache => {
       const hit = await cache.match(req, { ignoreSearch: true });

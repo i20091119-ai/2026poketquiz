@@ -1,7 +1,7 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
-import { GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
+import { BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
-import { BATTLE_PASSWORD_MIN, hashBattlePassword } from '@/lib/server/battle-auth';
+import { hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
 import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,

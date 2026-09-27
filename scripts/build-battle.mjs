@@ -3,7 +3,7 @@
 //   - 번역(locales)과 그림·소리(assets)가 없으면 원본 저장소에서 받아옵니다 (원본에서는 git submodule).
 //   - 배경음악은 스마트폰에서 가볍게 받도록 ffmpeg로 모노·저비트레이트로 다시 압축합니다 (약 1/3 크기).
 //   - 그림·소리도 우리 사이트에 정적 파일로 함께 올립니다 (Cloudflare 유료 요금제, 파일 수 한도 10만 개).
-//     혹시 빠진 파일은 app/battle/[...path]/route.ts 가 원본 저장소에서 가져옵니다.
+//     혹시 빠진 파일은 app/battle/[[...path]]/route.ts 가 원본 저장소에서 가져옵니다.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

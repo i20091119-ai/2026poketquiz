@@ -6,13 +6,14 @@ import { globalScene } from "#app/global-scene";
 import { TrainerSlot } from "#enums/trainer-slot";
 import type { EnemyPokemon } from "#field/pokemon";
 import type { Variant } from "#sprites/variant";
-import { randSeedInt, randSeedItem } from "#utils/common";
+import { randSeedItem } from "#utils/common";
 
 /** 파티에서 무작위로 하나를 골라, 같은 종·같은 레벨의 이로치 개체를 만듭니다 (아직 파티에 넣지는 않음). */
 export function makeShinyGiftFromParty(): EnemyPokemon {
   const base = randSeedItem(globalScene.getPlayerParty());
   const gift = globalScene.addEnemyPokemon(base.species, base.level, TrainerSlot.NONE, false, true);
   gift.shiny = true;
-  gift.variant = randSeedInt(3) as Variant;
+  // 색 번호는 원본과 같은 규칙으로: 색 데이터가 없는 종은 0 (protected 메서드라 형만 맞춰 호출)
+  gift.variant = (gift as unknown as { generateShinyVariant(): Variant }).generateShinyVariant();
   return gift;
 }

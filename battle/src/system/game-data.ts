@@ -66,6 +66,7 @@ import type {
   VoucherCounts,
   VoucherUnlocks,
 } from "#types/save-data";
+import type { StarterSpeciesId } from "#types/starter-species-id";
 import type { ConfirmModeConfig } from "#types/ui-types";
 import { RUN_HISTORY_LIMIT } from "#ui/run-history-ui-handler";
 import { applyChallenges } from "#utils/challenge-utils";
@@ -1551,13 +1552,20 @@ export class GameData {
    * - 목록에 없는 스타터: 잠금 (저장된 도감 데이터로 해제 범위가 늘지 않게)
    */
   private applyQuizStarterUnlocks(): void {
-    for (const speciesId of speciesDataRegistry.getAllStarters()) {
+    const starters = new Set<number>(speciesDataRegistry.getAllStarters());
+    for (const key of Object.keys(this.dexData)) {
+      const speciesId = Number(key) as SpeciesId;
       const dexEntry = this.dexData[speciesId];
-      const starterEntry = this.starterData[speciesId];
       if (!dexEntry) {
         continue;
       }
-      if (defaultStarterSpecies.includes(speciesId)) {
+      if (!starters.has(speciesId)) {
+        // 진화형 등 스타터가 아닌 종: 판 안에서 얻은 "잡음" 표시는 다음 실행에 남기지 않음 (SPEC 6번)
+        dexEntry.caughtAttr = 0n;
+        continue;
+      }
+      const starterEntry = this.starterData[speciesId as StarterSpeciesId];
+      if (defaultStarterSpecies.includes(speciesId as StarterSpeciesId)) {
         dexEntry.seenAttr |= DEFAULT_STARTER_ATTR;
         // 기본 속성으로만 해제. 판 안에서 얻은 이로치·진화형은 다음 실행에 남기지 않음 (SPEC 3·6번)
         dexEntry.caughtAttr = DEFAULT_STARTER_ATTR;
