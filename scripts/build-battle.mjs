@@ -35,6 +35,9 @@ if (!existsSync(path.join(locales, 'en'))) {
   rmSync(path.join(locales, '.git'), { recursive: true, force: true });
 }
 
+// 1-2. 그림·소리 폴더는 비워 두되 존재는 해야 합니다 (만들기 도구가 이 폴더를 읽습니다).
+mkdirSync(path.join(battle, 'assets'), { recursive: true });
+
 // 2. 설치와 만들기 (로그인 없이 브라우저 저장 모드: VITE_BYPASS_LOGIN=1)
 run('pnpm', ['install', '--frozen-lockfile'], battle, { LEFTHOOK: '0' });
 run('pnpm', ['build'], battle, { VITE_BYPASS_LOGIN: '1' });
