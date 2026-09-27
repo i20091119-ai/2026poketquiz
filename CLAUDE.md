@@ -58,7 +58,8 @@
 
 - `battle/`는 포켓로그 포크(`i20091119-ai/pokerogue-westjun` beta)를 git subtree(--squash)로 가져온 별도 프로젝트입니다. 사양서는 `battle/SPEC.md`. 퀴즈 앱의 lint·tsconfig에서는 제외되어 있습니다.
 - 퀴즈 앱의 `/battle/` 주소에서 열립니다. `npm run build:battle`(`scripts/build-battle.mjs`)이 pnpm으로 만들어 `dist/client/battle/`에 넣습니다 (node 24 필요, 로그인 없이 브라우저 저장 모드 `VITE_BYPASS_LOGIN=1`).
-- 그림·소리(원본 submodule `assets`, 3만 2천 개)는 Cloudflare 정적 파일 한도(2만 개)를 넘어 올리지 않고, `app/battle/[...path]/route.ts`가 원본 에셋 저장소(커밋 고정, `lib/battle-assets.ts`)에서 가져와 Cloudflare 캐시에 둡니다. 번역(`locales`)은 빌드 때 받아 함께 올립니다.
+- 그림·소리(원본 submodule `assets`, 3만 2천 개·817MB)와 번역(`locales`)은 빌드 때 고정 커밋(`lib/battle-assets.ts`, `scripts/build-battle.mjs`)으로 받아 정적 파일로 함께 올립니다 (Cloudflare 유료 요금제, 파일 수 한도 10만 개). 배경음악 170곡은 ffmpeg로 모노 64k로 다시 압축해 스마트폰에서 가볍게 받게 합니다. 혹시 빠진 파일은 `app/battle/[...path]/route.ts`가 원본 저장소에서 가져옵니다.
+- 앱 정보 파일(manifest.webmanifest)의 시작 주소를 `/battle/`로 고쳐 스마트폰 "홈 화면에 추가"가 포켓로그로 열리게 합니다.
 - 이 작업본은 `.github/workflows/deploy-preview.yml`이 **미리보기 사이트**(Worker `poke-quiz-preview`, 기록 저장소 `poke-quiz-preview-db`)에 올립니다. 아이가 쓰는 진짜 게임과는 완전히 별개입니다.
 - 헤드리스 크로미움에는 mp4 코덱이 없어 로컬 Playwright에서는 로딩 화면(evo_bg.mp4)에서 멈춥니다. 실제 확인은 미리보기 사이트에서 합니다.
 
