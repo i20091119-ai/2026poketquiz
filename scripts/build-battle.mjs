@@ -114,6 +114,10 @@ if (existsSync(manifestPath)) {
 const version = (() => { try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return String(Date.now()); } })();
 writeFileSync(path.join(out, 'service-worker.js'), readFileSync(path.join(extras, 'service-worker.js'), 'utf8').replace('__BATTLE_VERSION__', version));
 cpSync(path.join(extras, 'prepare.html'), path.join(out, 'prepare.html'));
+// 비밀번호 문(SPEC 9번): 첫 화면은 정적으로 바로 열리므로, 문이 잠겨 있으면(401/403) 로그인 화면으로 보내는 확인 스크립트를 넣습니다.
+const indexPath = path.join(out, 'index.html');
+const gateScript = '<script>fetch("./asset-manifest.json",{cache:"no-store",credentials:"same-origin"}).then(function(r){if(r.status===401||r.status===403){location.replace("./login")}}).catch(function(){})</script>';
+writeFileSync(indexPath, readFileSync(indexPath, 'utf8').replace('<head>', '<head>' + gateScript));
 const SKIP = new Set(['index.html', 'asset-manifest.json', 'prefetch-manifest.json', 'prepare.html', 'service-worker.js']);
 const files = readdirSync(out, { withFileTypes: true, recursive: true })
   .filter(d => d.isFile())

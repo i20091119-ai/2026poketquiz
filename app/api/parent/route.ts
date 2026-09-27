@@ -1,9 +1,10 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
+import { BATTLE_PASSWORD_MIN, hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
 import {
-  activeBank, addQuestions, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,
+  activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,
   listBanks, publishBank, readState, resetGame, setGrade, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -14,12 +15,13 @@ const MAX_IMPORT = 1000;
 class ParentError extends Error {}
 
 async function overview() {
-  const [grade, banks, bank, { state }] = await Promise.all([getGrade(), listBanks(), activeBank(), readState()]);
+  const [grade, banks, bank, { state }, battleHash] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(), getBattlePasswordHash()]);
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
   const wrong = progress?.wrong ?? {};
   return {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
+    battlePasswordSet: !!battleHash,
     banks,
     child: {
       exp: state.exp, expSpent: state.expSpent ?? 0, stats: state.stats, owned: state.owned.length, dex: state.dex.length,
@@ -123,6 +125,16 @@ export async function POST(request: Request) {
       case 'setGrade':
         await setGrade(String(body.grade));
         return json({ message: '학년을 저장했어요.' });
+
+      case 'setBattlePassword': {
+        const password = String(body.password ?? '').trim();
+        if (password.length < BATTLE_PASSWORD_MIN) throw new ParentError(`포켓로그 비밀번호는 ${BATTLE_PASSWORD_MIN}자 이상으로 정해 주세요.`);
+        await setBattlePasswordHash(await hashBattlePassword(password));
+        return json({ message: '포켓로그 비밀번호를 저장했어요. 가족 기기에서 한 번씩 넣어 주면 돼요.' });
+      }
+      case 'clearBattlePassword':
+        await setBattlePasswordHash(null);
+        return json({ message: '포켓로그 비밀번호를 지웠어요. 다시 정하기 전까지 포켓로그는 열리지 않아요.' });
 
       case 'createBank': {
         const grade = String(body.grade ?? await getGrade());

@@ -59,6 +59,17 @@ export async function setGrade(grade: string) {
   await db().prepare("INSERT INTO settings (key, value) VALUES ('grade', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(grade).run();
 }
 
+// ---------- 포켓로그(/battle) 비밀번호 ----------
+// 비밀번호 자체가 아니라 서명값(해시)만 저장합니다 (lib/server/battle-auth.ts).
+export async function getBattlePasswordHash(): Promise<string | null> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'battle_password'").first<{ value: string }>();
+  return row?.value ?? null;
+}
+export async function setBattlePasswordHash(hash: string | null) {
+  if (hash === null) await db().prepare("DELETE FROM settings WHERE key = 'battle_password'").run();
+  else await db().prepare("INSERT INTO settings (key, value) VALUES ('battle_password', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(hash).run();
+}
+
 // ---------- 문제은행 ----------
 type QuestionRow = { id: number; bank_id: number; subject: string; type: string; prompt: string; choices: string; answer: number; explanation: string };
 const toQuestion = (r: QuestionRow): Question => ({

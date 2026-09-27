@@ -6,6 +6,12 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
+  // 정적 파일 설정. /battle/* 은 비밀번호 문(app/battle/[[...path]]/route.ts)을 거치도록 Worker 가 먼저 받습니다.
+  // 첫 화면(index.html)만은 정적으로 바로 내보내고, 그 안의 확인 스크립트가 문이 잠겨 있으면 로그인 화면으로 보냅니다.
+  "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": ["/battle/*", "!/battle/", "!/battle/index.html"]
+  },
   "d1_databases": [
     {
       "binding": "DB",
