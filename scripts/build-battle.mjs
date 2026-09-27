@@ -12,6 +12,8 @@ const battle = path.join(root, 'battle');
 const locales = path.join(battle, 'locales');
 const out = path.join(root, 'dist', 'client', 'battle');
 const LOCALES_REPO = 'https://github.com/pagefaultgames/pokerogue-locales.git';
+/** 포크(battle/)가 가져온 시점에 submodule로 가리키던 번역 저장소 커밋. 포크를 새로 받아오면 함께 맞춰 줍니다. */
+const LOCALES_COMMIT = '270ed0a2938b2c3e2e34e7de940e84aecadf548b';
 
 const run = (cmd, args, cwd, env = {}) => {
   console.log(`$ ${cmd} ${args.join(' ')}`);
@@ -25,7 +27,11 @@ if (!existsSync(path.join(root, 'dist', 'client'))) { console.error('먼저 npm 
 if (!existsSync(path.join(locales, 'en'))) {
   console.log('번역 파일을 받아옵니다…');
   rmSync(locales, { recursive: true, force: true });
-  execFileSync('git', ['clone', '--depth', '1', '--branch', 'main', LOCALES_REPO, locales], { stdio: 'inherit' });
+  mkdirSync(locales, { recursive: true });
+  const g = (...args) => execFileSync('git', ['-C', locales, ...args], { stdio: 'inherit' });
+  g('init', '-q');
+  g('fetch', '-q', '--depth', '1', LOCALES_REPO, LOCALES_COMMIT);
+  g('checkout', '-q', 'FETCH_HEAD');
   rmSync(path.join(locales, '.git'), { recursive: true, force: true });
 }
 
