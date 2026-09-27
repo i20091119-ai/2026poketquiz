@@ -54,7 +54,7 @@ export class VictoryPhase extends PokemonPhase {
       const gameMode = globalScene.gameMode;
       const currentWaveIndex = globalScene.currentBattle.waveIndex;
 
-      if (gameMode.isEndless || !gameMode.isWaveFinal(currentWaveIndex)) {
+      if (gameMode.isEndless || !(gameMode.isWaveFinal(currentWaveIndex) || gameMode.isWaveClear(currentWaveIndex))) {
         globalScene.phaseManager.pushNew("EggLapsePhase");
         if (gameMode.isClassic) {
           switch (currentWaveIndex) {

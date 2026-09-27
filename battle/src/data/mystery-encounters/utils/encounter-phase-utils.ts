@@ -850,7 +850,11 @@ export function handleMysteryEncounterVictory(addHealPhase = false, doNotContinu
     if (encounter.encounterMode === MysteryEncounterMode.TRAINER_BATTLE) {
       globalScene.phaseManager.pushNew("TrainerVictoryPhase");
     }
-    if (globalScene.gameMode.isEndless || !globalScene.gameMode.isWaveFinal(globalScene.currentBattle.waveIndex)) {
+    const { gameMode, currentBattle } = globalScene;
+    if (
+      gameMode.isEndless
+      || !(gameMode.isWaveFinal(currentBattle.waveIndex) || gameMode.isWaveClear(currentBattle.waveIndex))
+    ) {
       globalScene.phaseManager.pushNew("MysteryEncounterRewardsPhase", addHealPhase);
       if (!encounter.doContinueEncounter) {
         // Only lapse eggs once for multi-battle encounters
