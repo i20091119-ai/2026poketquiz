@@ -2,6 +2,7 @@ import { PLAYER_PARTY_MAX_SIZE } from "#app/constants";
 import { audioManager } from "#app/global-audio-manager";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { IS_TEST, isBeta, isDev } from "#constants/app-constants";
 import { SubstituteTag } from "#data/battler-tags";
 import { Gender } from "#data/gender";
@@ -45,6 +46,10 @@ export class AttemptCapturePhase extends PokemonPhase {
 
   start() {
     super.start();
+
+    if (QUIZ_RULES.captureDisabled) {
+      return this.end(); // 포획 금지 (SPEC 2번)
+    }
 
     const pokemon = this.getPokemon() as EnemyPokemon;
 

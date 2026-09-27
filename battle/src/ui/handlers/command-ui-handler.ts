@@ -1,5 +1,6 @@
 import { MAX_TERAS_PER_ARENA } from "#app/constants";
 import { globalScene } from "#app/global-scene";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { getTypeRgb } from "#data/type";
 import { Button } from "#enums/buttons";
 import { Command } from "#enums/command";
@@ -50,6 +51,9 @@ export class CommandUiHandler extends UiHandler {
     this.commandsContainer.add(this.teraButton);
 
     for (let c = 0; c < commands.length; c++) {
+      if (c === Command.BALL && QUIZ_RULES.captureDisabled) {
+        continue; // 포획 금지: 볼 명령을 보여 주지 않음
+      }
       const commandText = addTextObject(
         c % 2 === 0 ? 0 : 55.8,
         c < 2 ? 0 : 16,
@@ -121,6 +125,9 @@ export class CommandUiHandler extends UiHandler {
             break;
           // Ball
           case Command.BALL:
+            if (QUIZ_RULES.captureDisabled) {
+              break; // 포획 금지
+            }
             ui.setModeWithoutClear(UiMode.BALL);
             success = true;
             break;
@@ -156,7 +163,8 @@ export class CommandUiHandler extends UiHandler {
       switch (button) {
         case Button.UP:
           if (cursor === Command.POKEMON || cursor === Command.RUN) {
-            success = this.setCursor(cursor - 2);
+            // 포획 금지: 볼 자리가 비어 있으므로 도망에서 위로 가면 싸우기로
+            success = this.setCursor(cursor === Command.RUN && QUIZ_RULES.captureDisabled ? Command.FIGHT : cursor - 2);
           }
           break;
         case Button.DOWN:
@@ -173,6 +181,9 @@ export class CommandUiHandler extends UiHandler {
           }
           break;
         case Button.RIGHT:
+          if (cursor === Command.FIGHT && QUIZ_RULES.captureDisabled) {
+            break; // 포획 금지: 볼 자리가 비어 있음
+          }
           if (cursor === Command.FIGHT || cursor === Command.POKEMON) {
             success = this.setCursor(cursor + 1);
           } else if (cursor === Command.TERA) {

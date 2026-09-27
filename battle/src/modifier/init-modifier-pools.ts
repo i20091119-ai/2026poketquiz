@@ -1,6 +1,7 @@
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { modifierTypes } from "#data/data-lists";
 import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
 import { AbilityId } from "#enums/ability-id";
@@ -26,7 +27,7 @@ import {
   wildModifierPool,
 } from "#modifiers/modifier-pools";
 import type { initModifierTypes } from "#modifiers/modifier-type";
-import { WeightedModifierType } from "#modifiers/modifier-type";
+import { AddPokeballModifierType, WeightedModifierType } from "#modifiers/modifier-type";
 import type { WeightedModifierTypeWeightFunc } from "#types/modifier-types";
 
 /**
@@ -803,6 +804,7 @@ export function initModifierPools() {
   initTrainerModifierPool();
   initEnemyBuffModifierPool();
   initDailyStarterModifierPool();
+  removeBallRewards();
 }
 
 /**
@@ -855,4 +857,17 @@ function lureWeightFunc(maxBattles: number, weight: number): WeightedModifierTyp
  */
 function hasMaximumBalls(ballType: PokeballType): boolean {
   return globalScene.gameMode.isClassic && globalScene.pokeballCounts[ballType] >= MAX_PER_TYPE_POKEBALLS;
+}
+
+/**
+ * 포획 금지(SPEC 2번): 상점 보상 목록에서 볼을 뺍니다.
+ * 볼이 나올 자리는 같은 등급의 다른 아이템이 가중치대로 채웁니다.
+ */
+function removeBallRewards() {
+  if (!QUIZ_RULES.captureDisabled) {
+    return;
+  }
+  for (const tier of Object.keys(modifierPool) as unknown as ModifierTier[]) {
+    modifierPool[tier] = modifierPool[tier].filter(m => !(m.modifierType instanceof AddPokeballModifierType));
+  }
 }
