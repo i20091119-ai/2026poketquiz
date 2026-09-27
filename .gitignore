@@ -47,3 +47,9 @@ next-env.d.ts
 *.tsbuildinfo
 # wrangler local secrets
 .dev.vars
+
+# 포켓로그(battle/)의 그림·소리·번역 파일은 빌드할 때 받아옵니다 (원본에서는 submodule)
+/battle/assets/
+/battle/locales/
+/battle/dist/
+/battle/node_modules/
