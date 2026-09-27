@@ -6,7 +6,7 @@ import { ASSETS } from '@/lib/assets';
 import { EXP_EXCHANGE, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INFO, type TypeKey } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
 import { evolutionRequirement, evolutionsOf, species, typesLabel } from '@/lib/pokedex';
-import { dexNo, PokemonImage, TypeBadge } from './common';
+import { dexNo, goTo, PokemonImage, TypeBadge } from './common';
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -43,6 +43,7 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
           </div>
         </>}
       </div>
+      <BattleCard left={view.battle.left} perDay={view.battle.perDay} />
       <StatBoard stats={view.stats} />
       {exchanging && <ExchangeDialog view={view} busy={busy} onClose={() => setExchanging(false)} onExchange={onExchange} />}
       <Dialog open={picking} onOpenChange={setPicking}>
@@ -118,6 +119,22 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
         <button className="secondary" onClick={onClose}>닫기</button>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만, 이어하기는 자유입니다. */
+function BattleCard({ left, perDay }: { left: number; perDay: number }) {
+  return (
+    <div className="battle-card">
+      <div>
+        <h3>⚔️ 포켓로그 배틀</h3>
+        <p>내 포켓몬으로 55웨이브까지 싸워 보자! {left > 0 ? <>오늘 새 게임 <b>{left}번</b> 남았어.</> : <>오늘 새 게임은 다 했어. 하던 게임은 이어서 할 수 있어!</>}{perDay > 1 ? ` (하루 ${perDay}번)` : ''}</p>
+      </div>
+      <div className="battle-actions">
+        <a className="primary" href="/battle/" onClick={goTo('/battle/')}>배틀하러 가기 →</a>
+        <a className="text-button" href="/battle/prepare" onClick={goTo('/battle/prepare')}>와이파이에서 미리 받아 두기</a>
+      </div>
+    </div>
   );
 }
 

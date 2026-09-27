@@ -229,6 +229,13 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .exchange-type.current { border-color: #f2b705; }
 @media (max-width: 560px) { .exchange-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @keyframes float { 50% { transform: translateY(-8px); } }
+.battle-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 26px; border-top: 1px solid #e6ede3; background: linear-gradient(90deg, #fff4e5, #ffe9d6); }
+.battle-card h3 { margin: 0 0 4px; font-size: 18px; }
+.battle-card p { margin: 0; color: #6b4f3a; font-size: 14px; }
+.battle-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.battle-actions a.primary { display: inline-flex; align-items: center; justify-content: center; width: auto; padding: 12px 20px; border-radius: 14px; background: #d9602c; color: #fff; font-weight: 800; text-decoration: none; font-size: 16px; }
+.battle-actions .text-button { font-size: 13px; }
+@media (max-width: 560px) { .battle-actions { align-items: stretch; width: 100%; } .battle-actions a.primary { width: 100%; } }
 .stat-board { padding: 22px 26px 26px; border-top: 1px solid #e6ede3; }
 .stat-groups { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
 .stat-group { border: 2px solid; border-radius: 16px; padding: 12px 10px 10px; position: relative; background: #fbfcfa; }
