@@ -7,6 +7,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
+import { canStartNewBattle } from "#app/quiz-link";
 import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin } from "#constants/app-constants";
 import { getDailyRunStarters, startDailyEventChallenges } from "#data/daily-run";
@@ -104,7 +105,17 @@ export class TitlePhase extends Phase {
             this.end();
           };
           if (QUIZ_RULES.classicOnly) {
-            setModeAndEnd(GameModes.CLASSIC); // 클래식만 (SPEC 4번): 모드 고르기 없이 바로 시작
+            // 클래식만 (SPEC 4번): 모드 고르기 없이 바로 시작. 그 전에 오늘 시도 횟수를 확인 (SPEC 7번)
+            void canStartNewBattle().then(result => {
+              if (result.ok) {
+                setModeAndEnd(GameModes.CLASSIC);
+                return;
+              }
+              ui.showText(result.message ?? "", null, () => {
+                globalScene.phaseManager.toTitleScreen();
+                super.end();
+              });
+            });
             return true;
           }
           const newGameOptions: OptionSelectItem[] = [];

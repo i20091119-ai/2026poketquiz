@@ -167,3 +167,7 @@ export const EXPLORE_ITEM_WEIGHTS = { subjectBerry: 60, otherBerry: 30, potion: 
 
 /** 이미 가진 포켓몬이 또 나오면 그 포켓몬 첫째 속성 스탯으로 바꿔 줍니다. */
 export const DUPLICATE_BONUS = 5;
+
+// ---- 포켓로그(/battle) 시도 횟수 ----
+/** 하루(한국 시간 자정 기준)에 새 게임을 시작할 수 있는 횟수. 이어하기는 횟수를 쓰지 않습니다. */
+export const BATTLE_STARTS_PER_DAY = 1;

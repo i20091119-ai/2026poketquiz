@@ -58,3 +58,43 @@ export function applyQuizStarters(): void {
   defaultStarterSpecies.splice(0, defaultStarterSpecies.length, ...starters);
   console.log(`퀴즈 앱 보유 포켓몬 ${quizOwnedSpecies.length}마리 → 스타터 ${starters.size}종`);
 }
+
+// ---- 하루 시도 횟수 (SPEC 7번) — 퀴즈 앱 서버가 관리합니다 ----
+export const QUIZ_BATTLE_URL = "/api/battle";
+const OFFLINE_MESSAGE = "퀴즈 앱 서버에 연결되지 않아 새 게임을 시작할 수 없어요. 인터넷을 확인하고 다시 해 주세요.";
+
+export interface BattleStartResult {
+  ok: boolean;
+  /** 시작할 수 없을 때 아이에게 보여 줄 말 */
+  message?: string;
+}
+
+/** 오늘 새 게임을 시작할 수 있는지 확인만 합니다 (횟수를 쓰지 않음). */
+export async function canStartNewBattle(): Promise<BattleStartResult> {
+  try {
+    const res = await fetch(QUIZ_BATTLE_URL, { cache: "no-store" });
+    if (!res.ok) {
+      return { ok: false, message: OFFLINE_MESSAGE };
+    }
+    const body = (await res.json()) as { left?: number; message?: string | null };
+    return (body.left ?? 0) > 0 ? { ok: true } : { ok: false, message: body.message ?? OFFLINE_MESSAGE };
+  } catch (err) {
+    console.warn("시도 횟수 확인 실패:", err);
+    return { ok: false, message: OFFLINE_MESSAGE };
+  }
+}
+
+/** 새 게임을 실제로 시작할 때 호출해 횟수 1을 씁니다. 이어하기는 부르지 않습니다. */
+export async function consumeNewBattleStart(): Promise<BattleStartResult> {
+  try {
+    const res = await fetch(QUIZ_BATTLE_URL, { method: "POST", cache: "no-store" });
+    if (!res.ok) {
+      return { ok: false, message: OFFLINE_MESSAGE };
+    }
+    const body = (await res.json()) as { ok?: boolean; message?: string | null };
+    return body.ok ? { ok: true } : { ok: false, message: body.message ?? OFFLINE_MESSAGE };
+  } catch (err) {
+    console.warn("시도 횟수 기록 실패:", err);
+    return { ok: false, message: OFFLINE_MESSAGE };
+  }
+}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DAILY_ATTEMPTS, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { applyAction, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
+import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, startBattle, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -394,4 +394,15 @@ test('예전 기록(새 항목 없음)도 그대로 읽힌다', () => {
   assert.equal(view.exp, 730);
   assert.equal(view.stats.grass, 12);
   assert.equal(view.expGifts.ready, 1);
+});
+
+test('포켓로그 시도 횟수: 하루 1번, 다음 날 다시 1번', () => {
+  const state = initialState();
+  assert.equal(battleStartsLeft(state, '2026-09-27'), 1);
+  assert.equal(startBattle(state, '2026-09-27'), true);
+  assert.equal(battleStartsLeft(state, '2026-09-27'), 0);
+  assert.equal(startBattle(state, '2026-09-27'), false);
+  assert.equal(battleStartsLeft(state, '2026-09-28'), 1);
+  assert.equal(startBattle(state, '2026-09-28'), true);
+  assert.deepEqual(state.battle, { date: '2026-09-28', starts: 1 });
 });
