@@ -124,6 +124,19 @@ npm run dev                             # http://localhost:5173 , 보호자: /pa
 
 ## Cloudflare 배포 (인터넷에 올리기)
 
+### 자동으로 올리기 (추천)
+
+작업본(`claude/vibrant-bell-ru08mi`)에 새 버전이 올라오면 GitHub가 검사 → 만들기 → Cloudflare에 올리기 → 올라간 버전 확인까지 스스로 합니다(`.github/workflows/deploy.yml`). 맥에서 따로 할 일이 없습니다.
+
+처음 한 번만 Cloudflare 열쇠(API 토큰)를 GitHub에 넣어 둡니다.
+1. Cloudflare → 오른쪽 위 사람 아이콘 → My Profile → API Tokens → Create Token → "Edit Cloudflare Workers" 템플릿 → Use template
+2. Permissions에 `Account` · `D1` · `Edit` 한 줄을 추가 → Account Resources는 내 계정 → Continue → Create Token → 나온 토큰 복사
+3. GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret → 이름 `CLOUDFLARE_API_TOKEN`, 값에 토큰 붙여 넣기 → Add secret
+
+보호자 비밀번호(`PARENT_PASSWORD`)는 이미 Cloudflare에 저장되어 있어 그대로 유지됩니다.
+
+### 맥에서 직접 올리기 (예비 방법)
+
 맥 터미널에서 게임 폴더로 이동한 뒤 아래 한 줄이면 됩니다. 처음이든, 코드를 고친 뒤 다시 올리든 같은 명령입니다.
 
 ```sh
