@@ -7,6 +7,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin } from "#constants/app-constants";
 import { getDailyRunStarters, startDailyEventChallenges } from "#data/daily-run";
 import { modifierTypes } from "#data/data-lists";
@@ -102,6 +103,10 @@ export class TitlePhase extends Phase {
             ui.clearText();
             this.end();
           };
+          if (QUIZ_RULES.classicOnly) {
+            setModeAndEnd(GameModes.CLASSIC); // 클래식만 (SPEC 4번): 모드 고르기 없이 바로 시작
+            return true;
+          }
           const newGameOptions: OptionSelectItem[] = [];
           newGameOptions.push({
             label: GameMode.getModeName(GameModes.CLASSIC),

@@ -2,6 +2,7 @@ import type { BattleScene } from "#app/battle-scene";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import {
   BOOSTED_RARE_EGGMOVE_RATES,
   EGG_PITY_EPIC_THRESHOLD,
@@ -284,6 +285,9 @@ export class Egg {
 
   // Doesn't need to be called if the egg got pulled by a gacha machiene
   public addEggToGameData(): void {
+    if (QUIZ_RULES.eggsDisabled) {
+      return; // 알 시스템 제거 (SPEC 4번): 알을 받지 않음
+    }
     globalScene.gameData.eggs.push(this);
   }
 

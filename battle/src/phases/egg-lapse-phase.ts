@@ -2,6 +2,7 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import type { Egg } from "#data/egg";
 import { EGG_SEED } from "#data/egg";
 import { EggHatchData } from "#data/egg-hatch-data";
@@ -24,6 +25,11 @@ export class EggLapsePhase extends Phase {
 
   start() {
     super.start();
+
+    if (QUIZ_RULES.eggsDisabled) {
+      this.end(); // 알 시스템 제거 (SPEC 4번)
+      return;
+    }
 
     const eggsToHatch: Egg[] = globalScene.gameData.eggs.filter((egg: Egg) => {
       return activeOverrides.EGG_IMMEDIATE_HATCH_OVERRIDE ? true : --egg.hatchWaves < 1;

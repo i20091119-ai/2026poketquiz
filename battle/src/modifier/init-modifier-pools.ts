@@ -27,7 +27,12 @@ import {
   wildModifierPool,
 } from "#modifiers/modifier-pools";
 import type { initModifierTypes } from "#modifiers/modifier-type";
-import { AddPokeballModifierType, WeightedModifierType } from "#modifiers/modifier-type";
+import {
+  AddPokeballModifierType,
+  AddVoucherModifierType,
+  FusePokemonModifierType,
+  WeightedModifierType,
+} from "#modifiers/modifier-type";
 import type { WeightedModifierTypeWeightFunc } from "#types/modifier-types";
 
 /**
@@ -804,7 +809,7 @@ export function initModifierPools() {
   initTrainerModifierPool();
   initEnemyBuffModifierPool();
   initDailyStarterModifierPool();
-  removeBallRewards();
+  removeDisabledRewards();
 }
 
 /**
@@ -860,14 +865,25 @@ function hasMaximumBalls(ballType: PokeballType): boolean {
 }
 
 /**
- * 포획 금지(SPEC 2번): 상점 보상 목록에서 볼을 뺍니다.
- * 볼이 나올 자리는 같은 등급의 다른 아이템이 가중치대로 채웁니다.
+ * 퀴즈 앱 연동판에서 뺀 보상 (quiz-rules.ts):
+ * - 포획 금지(SPEC 2번): 볼
+ * - 알 시스템 제거(SPEC 4번): 알 교환권, 유전자쐐기
+ * 빠진 자리는 같은 등급의 다른 아이템이 가중치대로 채웁니다.
  */
-function removeBallRewards() {
-  if (!QUIZ_RULES.captureDisabled) {
-    return;
-  }
-  for (const tier of Object.keys(modifierPool) as unknown as ModifierTier[]) {
-    modifierPool[tier] = modifierPool[tier].filter(m => !(m.modifierType instanceof AddPokeballModifierType));
+function removeDisabledRewards() {
+  const disabled = (m: WeightedModifierType): boolean =>
+    (QUIZ_RULES.captureDisabled && m.modifierType instanceof AddPokeballModifierType)
+    || (QUIZ_RULES.eggsDisabled
+      && (m.modifierType instanceof AddVoucherModifierType || m.modifierType instanceof FusePokemonModifierType));
+  for (const pool of [
+    modifierPool,
+    wildModifierPool,
+    trainerModifierPool,
+    enemyBuffModifierPool,
+    dailyStarterModifierPool,
+  ]) {
+    for (const tier of Object.keys(pool) as unknown as ModifierTier[]) {
+      pool[tier] = pool[tier].filter(m => !disabled(m));
+    }
   }
 }

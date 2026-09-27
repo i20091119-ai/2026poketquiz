@@ -2,6 +2,7 @@ import { pokerogueApi } from "#api/api";
 import { loggedInUser, updateUserInfo } from "#app/account";
 import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { bypassLogin, isApp, isBeta, isDev } from "#constants/app-constants";
 import { AdminMode, getAdminModeName } from "#enums/admin-mode";
@@ -67,6 +68,7 @@ export class MenuUiHandler extends OptionSelectUiHandler {
         excluded: globalScene.phaseManager.getCurrentPhase().is("SelectModifierPhase"),
         options: [MenuOptions.EGG_GACHA, MenuOptions.EGG_LIST],
       },
+      { excluded: QUIZ_RULES.eggsDisabled, options: [MenuOptions.EGG_GACHA, MenuOptions.EGG_LIST] }, // 알 시스템 제거
       { excluded: bypassLogin, options: [MenuOptions.LOG_OUT] },
       { excluded: !globalScene.currentBattle, options: [MenuOptions.SAVE_AND_QUIT] },
     ];
