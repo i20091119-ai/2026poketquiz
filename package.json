@@ -16,7 +16,8 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "data:pokedex": "node scripts/build-pokedex.mjs",
-    "online": "node scripts/online.mjs"
+    "online": "node scripts/online.mjs",
+    "build:battle": "node scripts/build-battle.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

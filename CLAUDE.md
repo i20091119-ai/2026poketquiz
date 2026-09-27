@@ -54,6 +54,15 @@
 - **문제은행:** 보호자가 주차별로 만들어 구글 시트 링크나 CSV로 올립니다. AI 자동 생성은 연결 자리만 있고 비어 있습니다(`lib/ai-generator.ts`, 사용할 AI 미정).
 - **그림:** 아이템 7종은 부모님이 그린 그림, 랜덤상자는 부모님 그림, 볼 5종과 속성 아이콘 18종은 포켓몬 공식 그림(PokeAPI)입니다. 나머지(배경, 로고)는 임시 그림이고, 부모님이 새 그림을 주면 `public/assets/`에 넣습니다. 포켓몬 이미지는 포켓몬코리아 공식 도감에서 불러옵니다.
 
+## 포켓로그(battle/) — 게임용 작업본 `claude/battle-pokerogue`
+
+- `battle/`는 포켓로그 포크(`i20091119-ai/pokerogue-westjun` beta)를 git subtree(--squash)로 가져온 별도 프로젝트입니다. 사양서는 `battle/SPEC.md`. 퀴즈 앱의 lint·tsconfig에서는 제외되어 있습니다.
+- 퀴즈 앱의 `/battle/` 주소에서 열립니다. `npm run build:battle`(`scripts/build-battle.mjs`)이 pnpm으로 만들어 `dist/client/battle/`에 넣습니다 (node 24 필요, 로그인 없이 브라우저 저장 모드 `VITE_BYPASS_LOGIN=1`).
+- 그림·소리(원본 submodule `assets`, 3만 2천 개·817MB)와 번역(`locales`)은 빌드 때 고정 커밋(`lib/battle-assets.ts`, `scripts/build-battle.mjs`)으로 받아 정적 파일로 함께 올립니다 (Cloudflare 유료 요금제, 파일 수 한도 10만 개). 배경음악 170곡은 ffmpeg로 모노 64k로 다시 압축해 스마트폰에서 가볍게 받게 합니다. 혹시 빠진 파일은 `app/battle/[...path]/route.ts`가 원본 저장소에서 가져옵니다.
+- 앱 정보 파일(manifest.webmanifest)의 시작 주소를 `/battle/`로 고쳐 스마트폰 "홈 화면에 추가"가 포켓로그로 열리게 합니다.
+- 게임 작업본은 `.github/workflows/deploy-preview.yml`이 **미리보기 사이트**(Worker `poke-quiz-preview`, 기록 저장소 `poke-quiz-preview-db`)에 올립니다. 퀴즈 작업본에 합치면 진짜 게임의 자동 올리기(`deploy.yml`)가 `/battle`까지 함께 올립니다. 포켓로그 항목은 사양서 순서대로 게임 작업본에서 만들고, 원본 규칙을 바꿔야 하는 것이 나오면 부모님께 먼저 묻습니다.
+- 헤드리스 크로미움에는 mp4 코덱이 없어 로컬 Playwright에서는 로딩 화면(evo_bg.mp4)에서 멈춥니다. 실제 확인은 미리보기 사이트에서 합니다.
+
 ## 인터넷에 올리기
 
 **자동:** 작업본에 저장해서 올리면 GitHub 자동 작업(`.github/workflows/deploy.yml`)이 검사·만들기·Cloudflare 올리기·버전 확인까지 합니다. GitHub 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`이 있어야 합니다. Cloudflare 계정은 `wrangler.jsonc`의 `account_id`(부모 본인 계정)이고, 기록 저장소 번호는 자동 작업이 채웁니다. 보호자 비밀번호는 Cloudflare 화면(Workers → poke-quiz → Settings → Variables and Secrets)에서 부모가 직접 넣습니다. 옛 계정(애 엄마 로그인)의 기록은 `data/restore.sql`로 한 번 옮깁니다. 결과는 GitHub Actions 기록으로 확인합니다(부모님께 맥 명령을 안내할 필요 없음).

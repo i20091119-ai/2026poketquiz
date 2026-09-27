@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 포켓로그 포크(별도 프로젝트, 자체 검사 도구 사용)
+    "battle/**",
   ]),
   {
     // vinext로 올린 버전에서 next/link 페이지 이동이 동작하지 않아, 페이지 사이는 일반 <a> 링크로 이동합니다.
