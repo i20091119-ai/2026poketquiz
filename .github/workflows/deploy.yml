@@ -52,8 +52,12 @@ jobs:
       - name: 열쇠 권한과 기록 저장소 확인
         if: steps.token.outputs.ready == 'true'
         run: |
-          npx wrangler whoami
-          npx wrangler d1 list || echo "::warning::열쇠에 D1(기록 저장소) 권한이 없어요."
+          npx wrangler whoami | tee whoami.txt
+          # 열쇠가 볼 수 있는 계정마다 기록 저장소 목록을 적어, 게임 저장소(poke-quiz-db)가 어느 계정에 있는지 찾습니다.
+          for acct in $(grep -oE '[0-9a-f]{32}' whoami.txt | sort -u); do
+            echo "== 계정 $acct =="
+            CLOUDFLARE_ACCOUNT_ID=$acct npx wrangler d1 list || echo "::warning::계정 $acct 의 기록 저장소를 읽지 못했어요."
+          done
 
       - name: 기록 저장소 표 맞추기
         if: steps.token.outputs.ready == 'true'
