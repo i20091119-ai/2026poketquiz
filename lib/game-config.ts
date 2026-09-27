@@ -173,3 +173,6 @@ export const DUPLICATE_BONUS = 5;
 export const BATTLE_STARTS_PER_DAY = 1;
 /** 포켓로그 가족 비밀번호의 최소 글자 수 (보호자 공간에서 정함) */
 export const BATTLE_PASSWORD_MIN = 4;
+/** 보호자 화면에 보여 줄 포켓로그 기록 일수, 한 번 보고에 인정하는 최대 초(1분마다 보고) */
+export const BATTLE_LOG_DAYS = 14;
+export const BATTLE_REPORT_MAX_SECONDS = 120;

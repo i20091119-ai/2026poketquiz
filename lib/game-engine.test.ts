@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DAILY_ATTEMPTS, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, startBattle, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
+import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -405,4 +405,18 @@ test('포켓로그 시도 횟수: 하루 1번, 다음 날 다시 1번', () => {
   assert.equal(battleStartsLeft(state, '2026-09-28'), 1);
   assert.equal(startBattle(state, '2026-09-28'), true);
   assert.deepEqual(state.battle, { date: '2026-09-28', starts: 1 });
+});
+
+test('포켓로그 기록: 날짜별 최고 웨이브·플레이 시간·새 게임 횟수, 오래된 날은 지움', () => {
+  const state = initialState();
+  startBattle(state, '2026-09-27');
+  recordBattleProgress(state, '2026-09-27', 3, 60);
+  recordBattleProgress(state, '2026-09-27', 12, 60);
+  recordBattleProgress(state, '2026-09-27', 5, 999); // 낮은 웨이브는 무시, 초는 한도까지만
+  assert.deepEqual(state.battleLog!['2026-09-27'], { maxWave: 12, seconds: 240, starts: 1 });
+  for (let d = 1; d <= 20; d++) recordBattleProgress(state, `2026-10-${String(d).padStart(2, '0')}`, 1, 10);
+  const list = battleLogList(state);
+  assert.equal(list.length, 14);
+  assert.equal(list[0].date, '2026-10-20');
+  assert.ok(!state.battleLog!['2026-09-27']);
 });

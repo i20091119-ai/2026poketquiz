@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
+  BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -63,7 +63,10 @@ export type GameState = {
   banks: Record<string, BankProgress>;
   /** 포켓로그(/battle) 새 게임 시도: 날짜(한국 시간)와 그날 시작한 횟수 */
   battle?: { date: string; starts: number };
+  /** 포켓로그 날짜별 기록: 최고 웨이브, 플레이한 초, 새 게임 횟수 (최근 BATTLE_LOG_DAYS 일만 보관) */
+  battleLog?: Record<string, BattleDay>;
 };
+export type BattleDay = { maxWave: number; seconds: number; starts: number };
 
 export class GameError extends Error {}
 function fail(message: string): never { throw new GameError(message); }
@@ -492,8 +495,32 @@ export function startBattle(state: GameState, today: string): boolean {
   if (battleStartsLeft(state, today) < 1) return false;
   const starts = state.battle?.date === today ? state.battle.starts : 0;
   state.battle = { date: today, starts: starts + 1 };
+  battleDay(state, today).starts += 1;
   return true;
 }
+
+/** 오늘 기록 칸 (없으면 만들고, 오래된 날은 지움) */
+function battleDay(state: GameState, today: string): BattleDay {
+  state.battleLog ??= {};
+  state.battleLog[today] ??= { maxWave: 0, seconds: 0, starts: 0 };
+  for (const date of Object.keys(state.battleLog).sort().slice(0, -BATTLE_LOG_DAYS)) delete state.battleLog[date];
+  return state.battleLog[today];
+}
+
+/**
+ * 게임이 1분마다 보내는 진행 보고: 지금 웨이브와 그동안 플레이한 초.
+ * 웨이브는 그날의 최고값만, 초는 한 번에 BATTLE_REPORT_MAX_SECONDS 까지만 인정합니다.
+ */
+export function recordBattleProgress(state: GameState, today: string, wave: number, seconds: number): BattleDay {
+  const day = battleDay(state, today);
+  if (Number.isInteger(wave) && wave > day.maxWave && wave <= 10000) day.maxWave = wave;
+  if (Number.isFinite(seconds) && seconds > 0) day.seconds += Math.min(Math.round(seconds), BATTLE_REPORT_MAX_SECONDS);
+  return day;
+}
+
+/** 보호자 화면용: 최근 날짜부터 */
+export const battleLogList = (state: GameState) =>
+  Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
 
 // ---------- 아이 화면에 보낼 정보 ----------
 export function childView(state: GameState, bank: ActiveBank | null, today: string) {

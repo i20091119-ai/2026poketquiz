@@ -4,6 +4,7 @@
  * (SPEC.md 1번)
  */
 import { defaultStarterSpecies } from "#app/constants";
+import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 
@@ -97,4 +98,68 @@ export async function consumeNewBattleStart(): Promise<BattleStartResult> {
     console.warn("시도 횟수 기록 실패:", err);
     return { ok: false, message: OFFLINE_MESSAGE };
   }
+}
+
+// ---- 진행 보고 (보호자 화면의 날짜별 기록) ----
+export const QUIZ_PROGRESS_URL = "/api/battle/progress";
+const REPORT_EVERY_MS = 60_000;
+
+/**
+ * 1분마다(그리고 화면을 벗어날 때) "지금 웨이브, 그동안 플레이한 초"를 퀴즈 앱에 보냅니다.
+ * 화면이 보이고 판이 진행 중일 때만 시간을 셉니다. 게임 시작 때 한 번 부릅니다.
+ */
+export function startProgressReporting(): void {
+  let lastTick = Date.now();
+  let lastWave = 0;
+
+  const currentWave = (): number => {
+    try {
+      return globalScene?.currentBattle?.waveIndex ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+  const send = (useBeacon = false) => {
+    const now = Date.now();
+    const seconds = Math.round((now - lastTick) / 1000);
+    lastTick = now;
+    const wave = currentWave();
+    if (wave <= 0 || seconds <= 0) {
+      return;
+    }
+    lastWave = wave;
+    const body = JSON.stringify({ wave, seconds });
+    if (useBeacon && navigator.sendBeacon) {
+      navigator.sendBeacon(QUIZ_PROGRESS_URL, new Blob([body], { type: "application/json" }));
+      return;
+    }
+    fetch(QUIZ_PROGRESS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  };
+
+  setInterval(() => {
+    if (document.visibilityState !== "visible") {
+      lastTick = Date.now(); // 보이지 않는 동안은 세지 않음
+      return;
+    }
+    send();
+  }, REPORT_EVERY_MS);
+  // 웨이브가 바뀌면 바로 알림 (최고 웨이브가 늦게 잡히지 않게)
+  setInterval(() => {
+    if (document.visibilityState === "visible" && currentWave() > lastWave) {
+      send();
+    }
+  }, 5_000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      send(true);
+    } else {
+      lastTick = Date.now();
+    }
+  });
+  window.addEventListener("pagehide", () => send(true));
 }
