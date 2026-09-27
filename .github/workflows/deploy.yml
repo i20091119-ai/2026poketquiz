@@ -36,9 +36,6 @@ jobs:
           npm run typecheck
           npm test
 
-      - name: 만들기
-        run: npm run build
-
       - name: 열쇠(토큰) 확인
         id: token
         run: |
@@ -49,7 +46,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 기록 저장소 준비 (없으면 만들고 번호 채우기)
+      - name: 기록 저장소 준비 (없으면 만들고 번호 채우기 — 만들기 전에 해야 설정에 반영됨)
         if: steps.token.outputs.ready == 'true'
         run: |
           find_db() { npx wrangler d1 list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const i=s.indexOf("[");const l=i<0?[]:JSON.parse(s.slice(i));const d=l.find(x=>x.name==="poke-quiz-db");if(d)console.log(d.uuid)})'; }
@@ -62,6 +59,9 @@ jobs:
           [ -n "$uuid" ] || { echo "::error::기록 저장소 번호를 찾지 못했어요."; exit 1; }
           echo "기록 저장소 번호: $uuid"
           sed -i "s/\"database_id\": \"[^\"]*\"/\"database_id\": \"$uuid\"/" wrangler.jsonc
+
+      - name: 만들기
+        run: npm run build
 
       - name: 기록 저장소 표 맞추기
         if: steps.token.outputs.ready == 'true'
