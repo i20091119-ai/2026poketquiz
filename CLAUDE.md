@@ -17,6 +17,7 @@
 아이(초1)가 퀴즈를 풀어 속성 스탯을 모으고, 포켓몬을 진화시키며 도감을 채우는 학습 게임입니다.
 - **아이 화면:** `/`
 - **보호자 공간:** `/parent` (비밀번호 로그인)
+- **인터넷 주소:** https://poke-quiz.gnmc-swteacher.workers.dev (부모 본인 Cloudflare 계정. 옛 주소 poke-quiz.qhfk8292.workers.dev 는 애 엄마 계정의 것으로 더 이상 쓰지 않음)
 - **실행 환경:** Cloudflare Workers + D1(기록 저장소). Next.js(vinext)로 만들었습니다.
 - **작업본:** GitHub `i20091119-ai/2026poketquiz`의 `claude/vibrant-bell-ru08mi` 브랜치
 - 자세한 규칙과 실행·배포 방법은 `README.md`에 있습니다.
