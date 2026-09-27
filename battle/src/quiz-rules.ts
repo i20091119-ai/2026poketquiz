@@ -5,4 +5,6 @@
 export const QUIZ_RULES = {
   /** SPEC 2번: 전투 중 볼 명령 제거, 포획 처리 차단, 상점 보상에서 볼 제외 */
   captureDisabled: true,
+  /** SPEC 3번: 포켓몬을 주는 돌발 이벤트 4종은 파티 포켓몬 중 하나의 이로치를 줌 (quiz-gifts.ts) */
+  giftShinyFromParty: true,
 } as const;

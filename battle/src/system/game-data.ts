@@ -1547,7 +1547,7 @@ export class GameData {
 
   /**
    * 퀴즈 앱 연동(SPEC.md 1번): 스타터 해제 범위를 매 실행마다 퀴즈 앱 보유 목록(`defaultStarterSpecies`) 기준으로 다시 맞춥니다.
-   * - 목록에 있는 스타터: 기본 속성으로 해제 (저장된 추가 속성은 유지)
+   * - 목록에 있는 스타터: 기본 속성으로만 해제 (판 안에서 얻은 이로치·진화형은 남기지 않음)
    * - 목록에 없는 스타터: 잠금 (저장된 도감 데이터로 해제 범위가 늘지 않게)
    */
   private applyQuizStarterUnlocks(): void {
@@ -1559,7 +1559,8 @@ export class GameData {
       }
       if (defaultStarterSpecies.includes(speciesId)) {
         dexEntry.seenAttr |= DEFAULT_STARTER_ATTR;
-        dexEntry.caughtAttr |= DEFAULT_STARTER_ATTR;
+        // 기본 속성으로만 해제. 판 안에서 얻은 이로치·진화형은 다음 실행에 남기지 않음 (SPEC 3·6번)
+        dexEntry.caughtAttr = DEFAULT_STARTER_ATTR;
         if (!dexEntry.natureAttr) {
           dexEntry.natureAttr = 1 << (Nature.HARDY + 1);
         }

@@ -2,6 +2,7 @@ import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { NON_LEGEND_PARADOX_POKEMON, NON_LEGEND_ULTRA_BEASTS } from "#balance/special-species-groups";
 import type { PokemonSpecies } from "#data/pokemon-species";
 import { AbilityId } from "#enums/ability-id";
@@ -10,7 +11,6 @@ import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
 import { PokeballType } from "#enums/pokeball";
 import { SpeciesId } from "#enums/species-id";
-import type { EnemyPokemon } from "#field/pokemon";
 import { PlayerPokemon } from "#field/pokemon";
 import { showEncounterDialogue } from "#mystery-encounters/encounter-dialogue-utils";
 import {
@@ -27,7 +27,6 @@ import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
 import { MoneyRequirement } from "#mystery-encounters/mystery-encounter-requirements";
-import { PokemonData } from "#system/pokemon-data";
 import { randSeedInt, randSeedItem } from "#utils/common";
 
 /** the i18n namespace for this encounter */
@@ -214,7 +213,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
       .withOptionPhase(async () => {
         const encounter = globalScene.currentBattle.mysteryEncounter!;
         const price = encounter.misc.price;
-        const purchasedPokemon = encounter.misc.pokemon as PlayerPokemon;
+        const _purchasedPokemon = encounter.misc.pokemon as PlayerPokemon;
 
         // Update money
         updatePlayerMoney(-price, true, false);
@@ -224,9 +223,7 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         await transitionMysteryEncounterIntroVisuals();
 
         // "Catch" purchased pokemon
-        const data = new PokemonData(purchasedPokemon);
-        data.player = false;
-        await catchPokemon(data.toPokemon() as EnemyPokemon, null, PokeballType.POKEBALL, true, true);
+        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, true, true); // SPEC 3번: 파티 포켓몬의 이로치 지급
 
         leaveEncounterWithoutBattle(true);
       })
