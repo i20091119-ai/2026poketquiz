@@ -133,7 +133,9 @@ npm run dev                             # http://localhost:5173 , 보호자: /pa
 2. Permissions에 `Account` · `D1` · `Edit` 한 줄을 추가 → Account Resources는 내 계정 → Continue → Create Token → 나온 토큰 복사
 3. GitHub 저장소 → Settings → Secrets and variables → Actions → New repository secret → 이름 `CLOUDFLARE_API_TOKEN`, 값에 토큰 붙여 넣기 → Add secret
 
-보호자 비밀번호(`PARENT_PASSWORD`)는 이미 Cloudflare에 저장되어 있어 그대로 유지됩니다.
+보호자 비밀번호(`PARENT_PASSWORD`)는 Cloudflare 화면에서 정합니다: Workers & Pages → poke-quiz → Settings → Variables and Secrets → Add → Type을 Secret으로, 이름 `PARENT_PASSWORD`.
+
+자동 작업이 하는 일: 기록 저장소 `poke-quiz-db`가 없으면 만들고 번호를 채움 → 표 맞추기 → `data/restore.sql`이 있고 아직 안 옮겼으면 옛 기록 옮기기(한 번만, `settings.restored_from`으로 표시) → 올리기 → 올라간 버전 확인. 게임 주소는 Actions 실행 결과의 Summary에 적힙니다.
 
 ### 맥에서 직접 올리기 (예비 방법)
 

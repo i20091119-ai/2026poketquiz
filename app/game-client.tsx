@@ -11,7 +11,7 @@ import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
-import { SITE_URL, type Subject } from '@/lib/game-config';
+import { type Subject } from '@/lib/game-config';
 import type { Action, Ball, ChildView, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 
@@ -158,7 +158,7 @@ export default function Game() {
 
         <footer>
           <span>포켓몬 배움 탐험대</span>
-          <a href={`${SITE_URL}/parent`} target="_blank" rel="noreferrer" onClick={openParent(`${SITE_URL}/parent`)}><Settings size={14} /> 보호자 공간 ↗</a>
+          <a href="/parent" target="_blank" rel="noreferrer" onClick={openParent('/parent')}><Settings size={14} /> 보호자 공간 ↗</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
           <span className="version">버전 {__APP_VERSION__}</span>
         </footer>

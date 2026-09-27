@@ -49,30 +49,52 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 열쇠 권한과 기록 저장소 확인
+      - name: 기록 저장소 준비 (없으면 만들고 번호 채우기)
         if: steps.token.outputs.ready == 'true'
         run: |
-          npx wrangler whoami | tee whoami.txt
-          # 열쇠가 볼 수 있는 계정마다 기록 저장소 목록을 적어, 게임 저장소(poke-quiz-db)가 어느 계정에 있는지 찾습니다.
-          for acct in $(grep -oE '[0-9a-f]{32}' whoami.txt | sort -u); do
-            echo "== 계정 $acct =="
-            CLOUDFLARE_ACCOUNT_ID=$acct npx wrangler d1 list || echo "::warning::계정 $acct 의 기록 저장소를 읽지 못했어요."
-          done
+          find_db() { npx wrangler d1 list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const i=s.indexOf("[");const l=i<0?[]:JSON.parse(s.slice(i));const d=l.find(x=>x.name==="poke-quiz-db");if(d)console.log(d.uuid)})'; }
+          uuid=$(find_db)
+          if [ -z "$uuid" ]; then
+            echo "기록 저장소가 없어서 새로 만들어요."
+            npx wrangler d1 create poke-quiz-db
+            uuid=$(find_db)
+          fi
+          [ -n "$uuid" ] || { echo "::error::기록 저장소 번호를 찾지 못했어요."; exit 1; }
+          echo "기록 저장소 번호: $uuid"
+          sed -i "s/\"database_id\": \"[^\"]*\"/\"database_id\": \"$uuid\"/" wrangler.jsonc
 
       - name: 기록 저장소 표 맞추기
         if: steps.token.outputs.ready == 'true'
         run: npx wrangler d1 migrations apply DB --remote
 
+      - name: 옛 기록 옮기기 (data/restore.sql 이 있고 아직 안 옮겼을 때 한 번만)
+        if: steps.token.outputs.ready == 'true'
+        run: |
+          [ -f data/restore.sql ] || { echo "옮길 기록 파일이 없어요. 건너뜁니다."; exit 0; }
+          done_flag=$(npx wrangler d1 execute DB --remote --json --command "SELECT value FROM settings WHERE key='restored_from'" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const i=s.indexOf("[");const r=i<0?[]:JSON.parse(s.slice(i));console.log((r[0]?.results?.[0]?.value)||"")})')
+          if [ -n "$done_flag" ]; then echo "이미 옮겼어요 ($done_flag). 건너뜁니다."; exit 0; fi
+          npx wrangler d1 execute DB --remote --file data/restore.sql
+          npx wrangler d1 execute DB --remote --command "INSERT OR REPLACE INTO settings (key, value) VALUES ('restored_from', '$(git rev-parse --short HEAD)')"
+          echo "옛 기록을 옮겼어요."
+
       - name: 인터넷에 올리기
         if: steps.token.outputs.ready == 'true'
-        run: npx wrangler deploy
+        id: deploy
+        run: |
+          npx wrangler deploy | tee deploy.txt
+          url=$(grep -oE 'https://[A-Za-z0-9.-]+\.workers\.dev' deploy.txt | head -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### 게임 주소: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "보호자 공간: $url/parent" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 올라간 버전 확인
         if: steps.token.outputs.ready == 'true'
         run: |
+          url="${{ steps.deploy.outputs.url }}"
+          [ -n "$url" ] || { echo "::error::게임 주소를 읽지 못했어요."; exit 1; }
           want=$(git rev-parse --short HEAD)
           for i in 1 2 3 4 5 6; do
-            got=$(curl -fsS -D - -o /dev/null https://poke-quiz.qhfk8292.workers.dev/api/game | tr -d '\r' | awk -F': ' 'tolower($1)=="x-app-version"{print $2}')
+            got=$(curl -fsS -D - -o /dev/null "$url/api/game" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-app-version"{print $2}')
             echo "사이트 버전: ${got:-없음} / 올린 버전: $want"
             [ "$got" = "$want" ] && exit 0
             sleep 10

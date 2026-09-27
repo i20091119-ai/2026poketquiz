@@ -31,9 +31,6 @@ export const TYPE_INFO: Record<TypeKey, { label: string; color: string }> = {
   ice: { label: '얼음', color: '#3dcef3' },
 };
 
-/** 인터넷에 올린 게임 주소. 보호자 공간 버튼이 이 주소의 /parent 를 새 창으로 엽니다. */
-export const SITE_URL = 'https://poke-quiz.qhfk8292.workers.dev';
-
 /** 받침에 따라 을/를 붙이기 (예: 사과열매를, 상처약을) */
 export const eulReul = (word: string) => {
   const code = word.charCodeAt(word.length - 1) - 0xac00;

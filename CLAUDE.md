@@ -55,7 +55,7 @@
 
 ## 인터넷에 올리기
 
-**자동:** 작업본에 저장해서 올리면 GitHub 자동 작업(`.github/workflows/deploy.yml`)이 검사·만들기·Cloudflare 올리기·버전 확인까지 합니다. GitHub 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`이 있어야 합니다. 결과는 GitHub Actions 기록으로 확인합니다(부모님께 맥 명령을 안내할 필요 없음).
+**자동:** 작업본에 저장해서 올리면 GitHub 자동 작업(`.github/workflows/deploy.yml`)이 검사·만들기·Cloudflare 올리기·버전 확인까지 합니다. GitHub 저장소 Secrets에 `CLOUDFLARE_API_TOKEN`이 있어야 합니다. Cloudflare 계정은 `wrangler.jsonc`의 `account_id`(부모 본인 계정)이고, 기록 저장소 번호는 자동 작업이 채웁니다. 보호자 비밀번호는 Cloudflare 화면(Workers → poke-quiz → Settings → Variables and Secrets)에서 부모가 직접 넣습니다. 옛 계정(애 엄마 로그인)의 기록은 `data/restore.sql`로 한 번 옮깁니다. 결과는 GitHub Actions 기록으로 확인합니다(부모님께 맥 명령을 안내할 필요 없음).
 
 **예비 방법:** 맥 터미널에서 게임 폴더로 이동한 뒤 `npm run online`을 실행합니다(`scripts/online.mjs`). 로그인, 저장소, 표, 올리기, 비밀번호까지 알아서 진행하고, 이미 된 단계는 건너뜁니다. 코드를 고친 뒤 다시 올릴 때도 같은 명령 하나면 됩니다(새 버전 받기를 스스로 함). 열려 있던 게임 화면은 새 버전을 알아채면 스스로 한 번 새로고침합니다. 화면 맨 아래 "버전"으로 올라간 버전을 확인할 수 있습니다.
 

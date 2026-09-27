@@ -58,8 +58,9 @@ function reloadIfOutdated(res: Response) {
 }
 
 /** 보호자 공간을 새 창으로 엽니다. 게임 화면이 링크 누르기를 가로채도 열리도록 직접 창을 띄웁니다. */
-export const openParent = (url: string) => (e: { preventDefault: () => void }) => {
+export const openParent = (path: string) => (e: { preventDefault: () => void }) => {
   e.preventDefault();
+  const url = new URL(path, window.location.href).href; // 지금 열려 있는 주소 기준 (주소가 바뀌어도 그대로 동작)
   const win = window.open(url, '_blank');
   if (win) win.opener = null;
   else window.location.assign(url); // 새 창이 막히면 이 창에서 이동
