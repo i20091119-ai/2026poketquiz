@@ -443,7 +443,7 @@ export function getRunValueLimit(): number {
       valueLimit.value = 15;
       break;
     default:
-      valueLimit.value = 10;
+      valueLimit.value = 15; // 퀴즈 앱 연동(SPEC.md 1번): 클래식 스타터 포인트 한도 10 → 15
   }
 
   applyChallenges(ChallengeType.STARTER_POINTS, valueLimit);

@@ -1,5 +1,6 @@
 import "#app/polyfills"; // All polyfills MUST be loaded first for side effects
 import "#init/init-manifest"; // initializes the manifest, must be done *before* i18n is initialized due to being used for caching
+import "#init/init-quiz-starters"; // 퀴즈 앱 보유 포켓몬 목록 (스타터 해제용) — 게임 시작 전에 받아 둡니다
 import "#app/i18n"; // Initializes i18n on import
 
 import { InvertPostFX } from "#app/pipelines/invert";

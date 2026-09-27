@@ -1,4 +1,3 @@
-import { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 
 /** The maximum size of the player's party */
@@ -22,37 +21,11 @@ export const CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES: [number, number] = [10, 180
 export const TYPE_BOOST_ITEM_BOOST_PERCENT = 20;
 
 /**
- * The default species that a new player can choose from
+ * The default species that a new player can choose from.
+ * 퀴즈 앱 연동: 원본의 고정 목록(이상해씨~꾸왁스 27종) 대신, 퀴즈 앱에서 얻은 포켓몬의 스타터만 들어갑니다.
+ * 게임 시작 때 `applyQuizStarters()`(quiz-link.ts)가 채우며, 그 전까지는 비어 있습니다.
  */
-export const defaultStarterSpecies: readonly StarterSpeciesId[] = [
-  SpeciesId.BULBASAUR,
-  SpeciesId.CHARMANDER,
-  SpeciesId.SQUIRTLE,
-  SpeciesId.CHIKORITA,
-  SpeciesId.CYNDAQUIL,
-  SpeciesId.TOTODILE,
-  SpeciesId.TREECKO,
-  SpeciesId.TORCHIC,
-  SpeciesId.MUDKIP,
-  SpeciesId.TURTWIG,
-  SpeciesId.CHIMCHAR,
-  SpeciesId.PIPLUP,
-  SpeciesId.SNIVY,
-  SpeciesId.TEPIG,
-  SpeciesId.OSHAWOTT,
-  SpeciesId.CHESPIN,
-  SpeciesId.FENNEKIN,
-  SpeciesId.FROAKIE,
-  SpeciesId.ROWLET,
-  SpeciesId.LITTEN,
-  SpeciesId.POPPLIO,
-  SpeciesId.GROOKEY,
-  SpeciesId.SCORBUNNY,
-  SpeciesId.SOBBLE,
-  SpeciesId.SPRIGATITO,
-  SpeciesId.FUECOCO,
-  SpeciesId.QUAXLY,
-];
+export const defaultStarterSpecies: StarterSpeciesId[] = [];
 
 export const saveKey = "x0i2O7WRiANTqPmZ"; // Temporary; secure encryption is not yet necessary
 

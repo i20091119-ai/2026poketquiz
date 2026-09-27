@@ -61,6 +61,7 @@
 - 그림·소리(원본 submodule `assets`, 3만 2천 개·817MB)와 번역(`locales`)은 빌드 때 고정 커밋(`lib/battle-assets.ts`, `scripts/build-battle.mjs`)으로 받아 정적 파일로 함께 올립니다 (Cloudflare 유료 요금제, 파일 수 한도 10만 개). 배경음악 170곡은 ffmpeg로 모노 64k로 다시 압축해 스마트폰에서 가볍게 받게 합니다. 혹시 빠진 파일은 `app/battle/[...path]/route.ts`가 원본 저장소에서 가져옵니다.
 - 앱 정보 파일(manifest.webmanifest)의 시작 주소를 `/battle/`로 고쳐 스마트폰 "홈 화면에 추가"가 포켓로그로 열리게 합니다.
 - 게임 작업본은 `.github/workflows/deploy-preview.yml`이 **미리보기 사이트**(Worker `poke-quiz-preview`, 기록 저장소 `poke-quiz-preview-db`)에 올립니다. 퀴즈 작업본에 합치면 진짜 게임의 자동 올리기(`deploy.yml`)가 `/battle`까지 함께 올립니다. 포켓로그 항목은 사양서 순서대로 게임 작업본에서 만들고, 원본 규칙을 바꿔야 하는 것이 나오면 부모님께 먼저 묻습니다.
+- **사양서 진행 상황:** 1번(출전 포켓몬) 완료 — 퀴즈 앱 `GET /api/my-pokemon`(보유 포켓몬 전국도감 번호) → 포켓로그 `src/quiz-link.ts`가 스타터(진화 전 첫 모습)로 바꿔 `defaultStarterSpecies`를 채우고, `game-data.ts`가 실행마다 해제 범위를 이 목록으로 다시 맞춤. 스타터 포인트 한도 15. 퀴즈에서 진화시킨 포켓몬은 진화 전 첫 모습으로 출전(11번 미정 항목의 임시 결정).
 - 헤드리스 크로미움에는 mp4 코덱이 없어 로컬 Playwright에서는 로딩 화면(evo_bg.mp4)에서 멈춥니다. 실제 확인은 미리보기 사이트에서 합니다.
 
 ## 인터넷에 올리기

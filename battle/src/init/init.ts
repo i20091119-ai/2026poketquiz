@@ -3,6 +3,7 @@ import "#app/extensions"; // Setup Phaser extension methods/etc
 import { initAbilities } from "#abilities/init-abilities";
 import { initGlobalAudioManager } from "#app/global-audio-manager";
 import { initSettingsManager } from "#app/global-settings-manager";
+import { applyQuizStarters } from "#app/quiz-link";
 import { initChallenges } from "#data/challenge";
 import { initTrainerTypeDialogue } from "#data/dialogue";
 import { initSpeciesDataRegistry } from "#data/species-data-registry";
@@ -24,6 +25,7 @@ export async function initializeGame(): Promise<void> {
   initBiomeBgmLoopPoints();
   await initSettingsManager();
   initSpeciesDataRegistry();
+  applyQuizStarters(); // 퀴즈 앱 보유 포켓몬 → 스타터 목록 (종 데이터가 준비된 뒤)
   await initGlobalAudioManager();
   initModifierTypes();
   initModifierPools();
