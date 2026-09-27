@@ -13,6 +13,7 @@ type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
+  battle: { log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number };
   child: { exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
   active: null | {
     id: number; title: string;
@@ -149,6 +150,26 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
           </>}
         </section>
       )}
+
+      <section className="panel parent-section">
+        <h2>포켓로그 기록</h2>
+        <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음.</p>
+        {overview.battle.log.length === 0
+          ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
+          : <table className="battle-log">
+              <thead><tr><th>날짜</th><th>최고 웨이브</th><th>플레이 시간</th><th>새 게임</th></tr></thead>
+              <tbody>
+                {overview.battle.log.map(d => (
+                  <tr key={d.date}>
+                    <td>{d.date}</td>
+                    <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
+                    <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
+                    <td>{d.starts ? `${d.starts}번` : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>}
+      </section>
 
       <section className="panel parent-section">
         <h2>포켓로그(전투 게임) 비밀번호</h2>
