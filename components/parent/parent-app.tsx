@@ -4,7 +4,7 @@ import { ArrowLeft, Copy, Download, LogOut, Pencil, Plus, Send, Sparkles, Trash2
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
-import { CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
+import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
 import type { Question } from '@/lib/game-engine';
 import { species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { aiRequestText } from '@/lib/question-import';
@@ -154,10 +154,10 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <h2>포켓로그(전투 게임) 비밀번호</h2>
         <p>{overview.battlePasswordSet
           ? '비밀번호가 정해져 있어요. 가족 기기에서 포켓로그(/battle)를 열 때 한 번 넣으면 1년 동안 다시 묻지 않아요. 바꾸면 모든 기기에서 다시 넣어야 해요.'
-          : '아직 안 정했어요. 정하기 전까지 포켓로그는 열리지 않아요. 아이가 외우기 쉬운 것으로 4자 이상 정해 주세요.'}</p>
+          : '아직 안 정했어요. 정하기 전까지 포켓로그는 열리지 않아요. 아이가 외우기 쉬운 것으로 ' + BATTLE_PASSWORD_MIN + '자 이상 정해 주세요.'}</p>
         <div className="inline-form">
-          <input type="text" value={battlePassword} onChange={e => setBattlePassword(e.target.value)} placeholder={overview.battlePasswordSet ? '새 비밀번호 (바꿀 때만)' : '비밀번호 (4자 이상)'} />
-          <button className="secondary" disabled={busy || battlePassword.trim().length < 4}
+          <input type="text" value={battlePassword} onChange={e => setBattlePassword(e.target.value)} placeholder={overview.battlePasswordSet ? '새 비밀번호 (바꿀 때만)' : `비밀번호 (${BATTLE_PASSWORD_MIN}자 이상)`} />
+          <button className="secondary" disabled={busy || battlePassword.trim().length < BATTLE_PASSWORD_MIN}
             onClick={async () => { if (await call({ action: 'setBattlePassword', password: battlePassword })) { setBattlePassword(''); await reload(); } }}>
             {overview.battlePasswordSet ? '바꾸기' : '정하기'}
           </button>

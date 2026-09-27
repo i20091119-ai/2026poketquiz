@@ -171,3 +171,5 @@ export const DUPLICATE_BONUS = 5;
 // ---- 포켓로그(/battle) 시도 횟수 ----
 /** 하루(한국 시간 자정 기준)에 새 게임을 시작할 수 있는 횟수. 이어하기는 횟수를 쓰지 않습니다. */
 export const BATTLE_STARTS_PER_DAY = 1;
+/** 포켓로그 가족 비밀번호의 최소 글자 수 (보호자 공간에서 정함) */
+export const BATTLE_PASSWORD_MIN = 4;

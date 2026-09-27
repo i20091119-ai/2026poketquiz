@@ -1,6 +1,6 @@
-// 포켓로그(battle/)의 그림·소리 파일 3만 2천 개는 Cloudflare 정적 파일 한도(2만 개)를 넘어서
-// 게임 코드만 우리 사이트에 올리고, 그림·소리는 원본 에셋 저장소에서 그때그때 가져와 Cloudflare 캐시에 둡니다.
-// (원본에서는 git submodule `assets`. 번역 파일 `locales`는 수가 적어 우리 사이트에 함께 올립니다.)
+// 포켓로그(battle/)의 그림·소리 파일(원본 submodule `assets`)은 빌드 때 아래 커밋으로 받아
+// 우리 사이트에 정적 파일로 함께 올립니다 (scripts/build-battle.mjs). 이 파일의 주소는 혹시 빠진 파일이
+// 있을 때 app/battle/[[...path]]/route.ts 가 원본 저장소에서 가져오는 예비 경로에만 쓰입니다.
 
 /**
  * 원본 에셋 저장소(pagefaultgames/pokerogue-assets)의 고정 커밋.
