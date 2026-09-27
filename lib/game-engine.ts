@@ -551,6 +551,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     explore,
     allMastered: bank ? allMastered(state, bank) : false,
     masterClaimed: prog?.masterClaimed ?? false,
+    /** 포켓로그(/battle): 오늘 남은 새 게임 횟수 */
+    battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY },
   };
 }
 export type ChildView = ReturnType<typeof childView>;
