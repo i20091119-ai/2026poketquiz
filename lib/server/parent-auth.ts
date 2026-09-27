@@ -6,12 +6,12 @@ const COOKIE = 'pq_parent';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30일
 
 const encoder = new TextEncoder();
-async function sign(value: string, secret: string) {
+export async function sign(value: string, secret: string) {
   const key = await crypto.subtle.importKey('raw', encoder.encode('poke-quiz:' + secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, c => (c === '+' ? '-' : c === '/' ? '_' : ''));
 }
-function sameText(a: string, b: string) {
+export function sameText(a: string, b: string) {
   const x = encoder.encode(a), y = encoder.encode(b);
   let diff = x.length ^ y.length;
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);

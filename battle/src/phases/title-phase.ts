@@ -1,5 +1,6 @@
 import { pokerogueApi } from "#api/api";
 import { loggedInUser } from "#app/account";
+import { defaultStarterSpecies } from "#app/constants";
 import { GameMode, getGameMode } from "#app/game-mode";
 import { audioManager } from "#app/global-audio-manager";
 import { timedEventManager } from "#app/global-event-manager";
@@ -7,6 +8,8 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
+import { canStartNewBattle } from "#app/quiz-link";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin } from "#constants/app-constants";
 import { getDailyRunStarters, startDailyEventChallenges } from "#data/daily-run";
 import { modifierTypes } from "#data/data-lists";
@@ -102,6 +105,42 @@ export class TitlePhase extends Phase {
             ui.clearText();
             this.end();
           };
+          if (QUIZ_RULES.classicOnly) {
+            // 클래식만 (SPEC 4번): 모드 고르기 없이 바로 시작. 그 전에 오늘 시도 횟수를 확인 (SPEC 7번)
+            if (defaultStarterSpecies.length === 0) {
+              // 퀴즈에서 얻은 포켓몬이 없으면 고를 스타터가 없으므로 안내만 하고 돌아갑니다 (SPEC 1번)
+              ui.setMode(UiMode.MESSAGE);
+              ui.showText(
+                "아직 퀴즈에서 얻은 포켓몬이 없어요. 퀴즈 앱에서 첫 파트너를 고르고 오면 여기서 그 포켓몬으로 시작할 수 있어요!",
+                null,
+                () => {
+                  globalScene.phaseManager.toTitleScreen();
+                  super.end();
+                },
+                null,
+                true,
+              );
+              return true;
+            }
+            void canStartNewBattle().then(result => {
+              if (result.ok) {
+                setModeAndEnd(GameModes.CLASSIC);
+                return;
+              }
+              ui.setMode(UiMode.MESSAGE);
+              ui.showText(
+                result.message ?? "",
+                null,
+                () => {
+                  globalScene.phaseManager.toTitleScreen();
+                  super.end();
+                },
+                null,
+                true,
+              );
+            });
+            return true;
+          }
           const newGameOptions: OptionSelectItem[] = [];
           newGameOptions.push({
             label: GameMode.getModeName(GameModes.CLASSIC),

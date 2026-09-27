@@ -1,6 +1,7 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { EncounterBattleAnim } from "#data/battle-anims";
 import { modifierTypes } from "#data/data-lists";
 import { BattlerIndex } from "#enums/battler-index";
@@ -308,7 +309,7 @@ export const DancingLessonsEncounter: MysteryEncounter = MysteryEncounterBuilder
         }
 
         await hideOricorioPokemon();
-        await catchPokemon(oricorio, null, PokeballType.POKEBALL, false);
+        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, false); // SPEC 3번: 파티 포켓몬의 이로치 지급
         leaveEncounterWithoutBattle(true);
       })
       .build(),

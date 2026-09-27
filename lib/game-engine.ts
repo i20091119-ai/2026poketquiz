@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
+  BALLS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -61,6 +61,8 @@ export type GameState = {
     claimed: boolean;
   } | null;
   banks: Record<string, BankProgress>;
+  /** 포켓로그(/battle) 새 게임 시도: 날짜(한국 시간)와 그날 시작한 횟수 */
+  battle?: { date: string; starts: number };
 };
 
 export class GameError extends Error {}
@@ -477,6 +479,20 @@ export const expGiftsReady = (state: GameState) => Math.floor(state.exp / EXP_GI
 export function expGiftProgress(state: GameState) {
   const now = state.exp % EXP_GIFT.every;
   return { now, left: EXP_GIFT.every - now, every: EXP_GIFT.every };
+}
+
+// ---------- 포켓로그(/battle) 시도 횟수 ----------
+/** 오늘 남은 새 게임 횟수 */
+export function battleStartsLeft(state: GameState, today: string): number {
+  const used = state.battle?.date === today ? state.battle.starts : 0;
+  return Math.max(0, BATTLE_STARTS_PER_DAY - used);
+}
+/** 새 게임을 시작합니다(횟수 1 차감). 남은 횟수가 없으면 false. 이어하기는 이 함수를 거치지 않습니다. */
+export function startBattle(state: GameState, today: string): boolean {
+  if (battleStartsLeft(state, today) < 1) return false;
+  const starts = state.battle?.date === today ? state.battle.starts : 0;
+  state.battle = { date: today, starts: starts + 1 };
+  return true;
 }
 
 // ---------- 아이 화면에 보낼 정보 ----------

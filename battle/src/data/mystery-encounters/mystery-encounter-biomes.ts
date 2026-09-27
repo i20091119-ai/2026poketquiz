@@ -1,3 +1,4 @@
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { BiomeId } from "#enums/biome-id";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
 import { ATrainersTestEncounter } from "#mystery-encounters/a-trainers-test-encounter";
@@ -324,4 +325,14 @@ export function initMysteryEncounters() {
   });
 
   //console.debug("All Mystery Encounters by Biome:\n" + encounterBiomeTableLog);
+
+  // 포획 금지(SPEC 2번 확장, 부모님 결정): 볼을 던져 잡는 사파리존 이벤트는 나오지 않게 합니다.
+  if (QUIZ_RULES.captureDisabled) {
+    for (const [biome, types] of mysteryEncountersByBiome) {
+      mysteryEncountersByBiome.set(
+        biome,
+        types.filter(t => t !== MysteryEncounterType.SAFARI_ZONE),
+      );
+    }
+  }
 }

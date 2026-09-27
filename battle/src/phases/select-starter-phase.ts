@@ -3,6 +3,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
+import { consumeNewBattleStart } from "#app/quiz-link";
 import { SpeciesFormChangeMoveLearnedTrigger } from "#data/form-change-triggers";
 import { Gender } from "#data/gender";
 import { ChallengeType } from "#enums/challenge-type";
@@ -29,7 +30,24 @@ export class SelectStarterPhase extends Phase {
           return;
         }
         globalScene.sessionSlotId = slotId;
-        this.initBattle(starters);
+        // 새 게임 시작 = 오늘 시도 횟수 1 사용 (SPEC 7번). 못 쓰면 제목 화면으로
+        void consumeNewBattleStart().then(result => {
+          if (result.ok) {
+            this.initBattle(starters);
+            return;
+          }
+          globalScene.ui.setMode(UiMode.MESSAGE);
+          globalScene.ui.showText(
+            result.message ?? "",
+            null,
+            () => {
+              globalScene.phaseManager.toTitleScreen();
+              this.end();
+            },
+            null,
+            true,
+          );
+        });
       });
     });
   }

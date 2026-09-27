@@ -86,6 +86,10 @@ const ErrorMessages = {
   GAME_OUT_OF_DATE: i18next.t("gameData:gameOutOfDate"),
 } as const;
 
+/** 기본 스타터가 처음부터 갖는 도감 속성 (색 보통, 암수, 기본 모습) */
+const DEFAULT_STARTER_ATTR =
+  DexAttr.NON_SHINY | DexAttr.MALE | DexAttr.FEMALE | DexAttr.DEFAULT_VARIANT | DexAttr.DEFAULT_FORM;
+
 export class GameData {
   public trainerId: number;
   public secretId: number;
@@ -391,6 +395,7 @@ export class GameData {
     this.dexData = Object.assign(this.dexData, systemData.dexData);
     this.consolidateDexData(this.dexData);
     this.defaultDexData = null;
+    this.applyQuizStarterUnlocks();
 
     // Ensure that the player gender in settings matches the player gender in system data
     if (systemData.gender !== PlayerGender.UNSET && systemData.gender !== settings.general.playerGender) {
@@ -1511,8 +1516,7 @@ export class GameData {
       };
     }
 
-    const defaultStarterAttr =
-      DexAttr.NON_SHINY | DexAttr.MALE | DexAttr.FEMALE | DexAttr.DEFAULT_VARIANT | DexAttr.DEFAULT_FORM;
+    const defaultStarterAttr = DEFAULT_STARTER_ATTR;
 
     const defaultStarterNatures: Nature[] = [];
 
@@ -1539,6 +1543,37 @@ export class GameData {
 
     this.defaultDexData = { ...data };
     this.dexData = data;
+  }
+
+  /**
+   * 퀴즈 앱 연동(SPEC.md 1번): 스타터 해제 범위를 매 실행마다 퀴즈 앱 보유 목록(`defaultStarterSpecies`) 기준으로 다시 맞춥니다.
+   * - 목록에 있는 스타터: 기본 속성으로만 해제 (판 안에서 얻은 이로치·진화형은 남기지 않음)
+   * - 목록에 없는 스타터: 잠금 (저장된 도감 데이터로 해제 범위가 늘지 않게)
+   */
+  private applyQuizStarterUnlocks(): void {
+    for (const speciesId of speciesDataRegistry.getAllStarters()) {
+      const dexEntry = this.dexData[speciesId];
+      const starterEntry = this.starterData[speciesId];
+      if (!dexEntry) {
+        continue;
+      }
+      if (defaultStarterSpecies.includes(speciesId)) {
+        dexEntry.seenAttr |= DEFAULT_STARTER_ATTR;
+        // 기본 속성으로만 해제. 판 안에서 얻은 이로치·진화형은 다음 실행에 남기지 않음 (SPEC 3·6번)
+        dexEntry.caughtAttr = DEFAULT_STARTER_ATTR;
+        if (!dexEntry.natureAttr) {
+          dexEntry.natureAttr = 1 << (Nature.HARDY + 1);
+        }
+        if (dexEntry.ivs.every(iv => iv === 0)) {
+          dexEntry.ivs = [15, 15, 15, 15, 15, 15];
+        }
+        if (starterEntry) {
+          starterEntry.abilityAttr |= AbilityAttr.ABILITY_1;
+        }
+      } else {
+        dexEntry.caughtAttr = 0n;
+      }
+    }
   }
 
   private initStarterData(): void {

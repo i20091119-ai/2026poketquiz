@@ -1,0 +1,22 @@
+{
+  "serverErrorGenerateSalt": "비밀번호를 안전하게 처리하지 못했습니다.",
+  "serverErrorGenerateToken": "인증 토큰을 만들지 못했습니다.",
+  "serverErrorAddSession": "세션을 만들지 못했습니다.",
+  "serverErrorGenerateUuid": "사용자 ID를 만들지 못했습니다.",
+  "serverErrorRemoveSessions": "활성 세션을 갱신하지 못했습니다.",
+  "serverErrorUpdateAccount": "계정 정보를 갱신하지 못했습니다.",
+  "pleaseTryAgainLater": "잠시 후 다시 시도해 주세요.",
+  "resetPassword": "비밀번호 재설정",
+  "resetCode": "재설정 코드",
+  "resetCodeFor": "{{username}}의 재설정 코드",
+  "noResetCode": "재설정 코드가 없습니다.",
+  "resetCodeDescription": "이 코드로 비밀번호를 되찾을 수 있습니다.",
+  "resetCodeWarning": "이 코드는 절대 다른 사람에게 알려 주지 마세요.",
+  "usernameResetCodeMismatch": "사용자 이름과 재설정 코드가 맞지 않습니다.",
+  "resetCodeLoginDescription": "사용자 이름을 선택하면 코드를 보이거나 숨길 수 있습니다.\n이 코드는 절대 다른 사람에게 알려 주지 마세요.",
+  "resetPasswordText": "재설정 코드가 없으면 디스코드 서버에서 문의해 주세요.",
+  "resetPasswordSuccess": "비밀번호를 재설정했습니다. 새 비밀번호로 로그인할 수 있습니다.\n이전 재설정 코드는 더 이상 쓸 수 없으니 로그인 후 새로 받으세요.",
+  "show": "보이기",
+  "hide": "숨기기",
+  "close": "닫기"
+}

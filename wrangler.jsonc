@@ -6,6 +6,22 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
+  // 정적 파일 설정. 포켓로그 비밀번호 문(app/battle/[[...path]]/route.ts)은 게임을 켜는 데 꼭 필요한 파일
+  // (게임 코드, 시작 목록, 준비 페이지, 서비스 워커)만 Worker 가 먼저 받아 지킵니다.
+  // 그림·소리·번역 수만 개는 검문 없이 정적으로 바로 나가야 로딩이 빠릅니다.
+  // 첫 화면(index.html)은 정적으로 열리고, 그 안의 확인 스크립트가 문이 잠겨 있으면 로그인 화면으로 보냅니다.
+  "assets": {
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/battle/login",
+      "/battle/asset-manifest.json",
+      "/battle/assets/*",
+      "/battle/service-worker.js",
+      "/battle/prefetch-manifest.json",
+      "/battle/prepare",
+      "/battle/prepare.html"
+    ]
+  },
   "d1_databases": [
     {
       "binding": "DB",

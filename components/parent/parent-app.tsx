@@ -12,7 +12,7 @@ import { aiRequestText } from '@/lib/question-import';
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
-  loggedIn: true; grade: string; aiConfigured: boolean; banks: BankSummary[];
+  loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
   child: { exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
   active: null | {
     id: number; title: string;
@@ -116,6 +116,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
   overview: Overview; busy: boolean; error: string; call: Call; onOpenBank: (id: number, issues?: ImportResult['issues']) => void; reload: () => Promise<void>;
 }) {
   const [grade, setGrade] = useState(overview.grade);
+  const [battlePassword, setBattlePassword] = useState('');
   const [creating, setCreating] = useState(false);
   const { child, active } = overview;
   return (
@@ -148,6 +149,23 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
           </>}
         </section>
       )}
+
+      <section className="panel parent-section">
+        <h2>포켓로그(전투 게임) 비밀번호</h2>
+        <p>{overview.battlePasswordSet
+          ? '비밀번호가 정해져 있어요. 가족 기기에서 포켓로그(/battle)를 열 때 한 번 넣으면 1년 동안 다시 묻지 않아요. 바꾸면 모든 기기에서 다시 넣어야 해요.'
+          : '아직 안 정했어요. 정하기 전까지 포켓로그는 열리지 않아요. 아이가 외우기 쉬운 것으로 4자 이상 정해 주세요.'}</p>
+        <div className="inline-form">
+          <input type="text" value={battlePassword} onChange={e => setBattlePassword(e.target.value)} placeholder={overview.battlePasswordSet ? '새 비밀번호 (바꿀 때만)' : '비밀번호 (4자 이상)'} />
+          <button className="secondary" disabled={busy || battlePassword.trim().length < 4}
+            onClick={async () => { if (await call({ action: 'setBattlePassword', password: battlePassword })) { setBattlePassword(''); await reload(); } }}>
+            {overview.battlePasswordSet ? '바꾸기' : '정하기'}
+          </button>
+          {overview.battlePasswordSet && <button className="secondary danger" disabled={busy}
+            onClick={async () => { if (window.confirm('포켓로그 비밀번호를 지울까요? 다시 정하기 전까지 포켓로그가 열리지 않아요.') && await call({ action: 'clearBattlePassword' })) await reload(); }}>지우기</button>}
+        </div>
+        <p className="muted">게임 주소: <a href="/battle/" target="_blank" rel="noreferrer">/battle/</a> · 미리 받아 두기: <a href="/battle/prepare" target="_blank" rel="noreferrer">/battle/prepare</a></p>
+      </section>
 
       <section className="panel parent-section">
         <h2>기본 학년</h2>

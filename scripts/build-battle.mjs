@@ -14,6 +14,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const battle = path.join(root, 'battle');
 const locales = path.join(battle, 'locales');
 const out = path.join(root, 'dist', 'client', 'battle');
+const extras = path.join(root, 'battle-extras'); // 우리가 만든 서비스 워커·게임 준비 페이지
 const assets = path.join(battle, 'assets');
 const LOCALES_REPO = 'https://github.com/pagefaultgames/pokerogue-locales.git';
 const ASSETS_REPO = 'https://github.com/pagefaultgames/pokerogue-assets.git';
@@ -45,6 +46,27 @@ function fetchInto(dir, repo, commit, label) {
 // 1. 번역 파일과 그림·소리 파일
 if (!existsSync(path.join(locales, 'en'))) fetchInto(locales, LOCALES_REPO, LOCALES_COMMIT, '번역 파일');
 if (!existsSync(path.join(assets, 'images'))) fetchInto(assets, ASSETS_REPO, BATTLE_ASSETS_COMMIT, '그림·소리 파일');
+
+// 1-1. 한국어 번역에서 빠진 문장 채우기 (SPEC 10번): battle-extras/locales-ko 의 내용을 ko 번역 위에 덮어씁니다.
+const koOverrides = path.join(extras, 'locales-ko');
+const deepMerge = (target, source) => {
+  for (const [k, v] of Object.entries(source)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) target[k] = deepMerge(target[k] && typeof target[k] === 'object' ? target[k] : {}, v);
+    else target[k] = v;
+  }
+  return target;
+};
+let filled = 0;
+for (const d of readdirSync(koOverrides, { withFileTypes: true, recursive: true })) {
+  if (!d.isFile() || !d.name.endsWith('.json')) continue;
+  const rel = path.relative(koOverrides, path.join(d.parentPath ?? d.path, d.name));
+  const target = path.join(locales, 'ko', rel);
+  const current = existsSync(target) ? JSON.parse(readFileSync(target, 'utf8')) : {};
+  const override = JSON.parse(readFileSync(path.join(koOverrides, rel), 'utf8'));
+  writeFileSync(target, JSON.stringify(deepMerge(current, override), null, 2) + '\n');
+  filled++;
+}
+console.log(`한국어 번역 보완 파일 ${filled}개를 적용했어요.`);
 
 // 1-2. 배경음악 압축 (한 번 하면 표시 파일을 남겨 다시 하지 않음)
 const bgmDir = path.join(assets, 'audio', 'bgm');
@@ -87,5 +109,22 @@ if (existsSync(manifestPath)) {
   const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
   writeFileSync(manifestPath, JSON.stringify({ ...m, scope: '/battle/', start_url: '/battle/' }));
 }
-const count = dir => readdirSync(dir, { withFileTypes: true, recursive: true }).filter(d => d.isFile()).length;
-console.log(`✅ battle/ 완료: dist/client/battle 에 파일 ${count(out)}개`);
+// 4. 데이터 절약(SPEC 8번): 우리 서비스 워커와 "게임 준비하기" 페이지를 넣고, 미리 받을 파일 목록을 만듭니다.
+//    (원본의 service-worker.js 는 빈 파일이라 우리 것으로 덮어씁니다)
+const version = (() => { try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return String(Date.now()); } })();
+writeFileSync(path.join(out, 'service-worker.js'), readFileSync(path.join(extras, 'service-worker.js'), 'utf8').replace('__BATTLE_VERSION__', version));
+cpSync(path.join(extras, 'prepare.html'), path.join(out, 'prepare.html'));
+// 비밀번호 문(SPEC 9번): 첫 화면은 정적으로 바로 열리므로, 문이 잠겨 있으면(401/403) 로그인 화면으로 보내는 확인 스크립트를 넣습니다.
+const indexPath = path.join(out, 'index.html');
+const gateScript = '<script>fetch("./asset-manifest.json",{cache:"no-store",credentials:"same-origin"}).then(function(r){if(r.status===401||r.status===403){location.replace("./login")}}).catch(function(){})</script>';
+writeFileSync(indexPath, readFileSync(indexPath, 'utf8').replace('<head>', '<head>' + gateScript));
+const SKIP = new Set(['index.html', 'asset-manifest.json', 'prefetch-manifest.json', 'prepare.html', 'service-worker.js']);
+const files = readdirSync(out, { withFileTypes: true, recursive: true })
+  .filter(d => d.isFile())
+  .map(d => path.relative(out, path.join(d.parentPath ?? d.path, d.name)).split(path.sep).join('/'))
+  .filter(p => !SKIP.has(p) && !p.startsWith('.'))
+  .sort()
+  .map(p => [p, statSync(path.join(out, p)).size]);
+writeFileSync(path.join(out, 'prefetch-manifest.json'), JSON.stringify({ version, files }));
+const totalMb = (files.reduce((a, [, s]) => a + s, 0) / 1048576).toFixed(0);
+console.log(`✅ battle/ 완료: dist/client/battle 에 파일 ${files.length + SKIP.size}개, 미리 받을 파일 ${files.length}개 (${totalMb}MB), 버전 ${version}`);

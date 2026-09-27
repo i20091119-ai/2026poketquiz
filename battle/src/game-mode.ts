@@ -3,6 +3,7 @@ import { CHALLENGE_MODE_MYSTERY_ENCOUNTER_WAVES, CLASSIC_MODE_MYSTERY_ENCOUNTER_
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { allChallenges, type Challenge, copyChallenge } from "#data/challenge";
 import {
   getDailyEventSeedBoss,
@@ -304,6 +305,14 @@ export class GameMode implements GameModeConfig {
       case GameModes.DAILY:
         return waveIndex === 50;
     }
+  }
+
+  /**
+   * 퀴즈 앱 연동판(SPEC 5번): 클래식에서 이 웨이브를 이기면 게임 클리어로 처리합니다.
+   * `isWaveFinal`(200)은 지역·보스 구성에 두루 쓰이므로 손대지 않고, 클리어 판정만 따로 둡니다.
+   */
+  isWaveClear(waveIndex: number): boolean {
+    return this.isClassic && waveIndex === QUIZ_RULES.finalWave;
   }
 
   /**

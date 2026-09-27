@@ -1,0 +1,4 @@
+{
+  "prevoRelearnMove": "이 기술은 레벨 {{level}}부터 다시 배울 수 있습니다.",
+  "tmMove": "기술머신 TM{{number}} ({{tier}})으로 배울 수 있습니다"
+}
