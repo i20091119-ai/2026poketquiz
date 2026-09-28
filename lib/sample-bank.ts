@@ -6,12 +6,12 @@ type Row = [QuestionInput['subject'], QuestionInput['type'], string, string[], n
 
 /** 샘플 문제의 영역: 과목별로 문제 내용에 맞춰 붙입니다 (보호자 화면 영역별 보기·약점 영역 자동 조절용) */
 function sampleArea(subject: QuestionInput['subject'], prompt: string): string {
-  if (subject === '수학') return prompt.includes('−') ? '뺄셈' : '덧셈';
+  if (subject === '수학') return '수·계산';
   if (subject === '국어') return '받침·맞춤법';
-  if (subject === '영어') return /알파벳/.test(prompt) ? '알파벳' : /숫자/.test(prompt) ? '숫자' : /인사/.test(prompt) ? '인사·표현' : '낱말(동물·음식·색)';
-  if (subject === '한자') return /人|學/.test(prompt) ? '사람·가족(人·父·母)' : '자연(山·水·木·火)';
-  if (subject === '상식') return /식물|은행나무/.test(prompt) ? '식물' : /물고기|나비|꿀벌/.test(prompt) ? '동물' : '날씨·계절';
-  return '선사 시대';
+  if (subject === '영어') return /알파벳/.test(prompt) ? '알파벳' : /인사/.test(prompt) ? '문장 만들기' : '기본 단어';
+  if (subject === '한자') return /人/.test(prompt) ? '사람·가족' : /學/.test(prompt) ? '학교·나라' : '요일·자연';
+  if (subject === '상식') return /식물|은행나무|물고기|나비|꿀벌/.test(prompt) ? '동식물' : '날씨·계절';
+  return '선사·고조선';
 }
 
 const rows: Row[] = [

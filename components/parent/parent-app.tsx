@@ -5,7 +5,7 @@ import { ArrowLeft, BookPlus, Copy, Download, FlaskConical, LogOut, Pencil, Plus
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
-import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
+import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
 import type { ActivityDay, AreaReport, Question } from '@/lib/game-engine';
 import { species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { aiRequestText } from '@/lib/question-import';
@@ -644,7 +644,10 @@ function QuestionForm({ initial, busy, onSave }: { initial: Question; busy: bool
       </div>
     ))}
     <label>해설<textarea rows={3} value={q.explanation} onChange={e => setQ({ ...q, explanation: e.target.value })} /></label>
-    <label>영역 <small className="muted">(예: 덧셈, 받침·맞춤법 — 비우면 &lsquo;기타&rsquo;)</small><input maxLength={30} value={q.area ?? ''} onChange={e => setQ({ ...q, area: e.target.value })} /></label>
+    <label>영역 <small className="muted">(비우면 &lsquo;기타&rsquo;)</small>
+      <input maxLength={30} list={`areas-${q.subject}`} value={q.area ?? ''} onChange={e => setQ({ ...q, area: e.target.value })} />
+      <datalist id={`areas-${q.subject}`}>{SUBJECT_AREAS[q.subject].map(a => <option key={a} value={a} />)}</datalist>
+    </label>
     <button className="primary" disabled={busy} onClick={() => onSave(q)}>저장</button>
   </>;
 }

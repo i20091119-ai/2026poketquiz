@@ -1,5 +1,5 @@
 // 구글 시트(CSV)로 문제를 가져오고 검증합니다.
-import { CHOICE_COUNT, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS, type Subject, type TypeKey } from './game-config.ts';
+import { CHOICE_COUNT, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS, type Subject, type TypeKey } from './game-config.ts';
 import type { Question } from './game-engine.ts';
 
 export type QuestionInput = Omit<Question, 'id'>;
@@ -137,7 +137,7 @@ export function rowsToQuestions(rows: string[][]) {
 /** 부모가 AI 대화창에 붙여 넣어 시트용 문제를 만들 때 쓰는 요청문 */
 export function aiRequestText(grade: string, keywords: Partial<Record<Subject, string>>, perSubject: number) {
   const lines = SUBJECTS.filter(s => keywords[s]?.trim()).map(s =>
-    `- ${s}: ${keywords[s]!.trim()} (속성은 ${SUBJECT_TYPES[s].map(t => TYPE_INFO[t].label).join('/')} 중 내용과 가장 어울리는 것)`);
+    `- ${s}: ${keywords[s]!.trim()} (속성은 ${SUBJECT_TYPES[s].map(t => TYPE_INFO[t].label).join('/')} 중 내용과 가장 어울리는 것, 영역은 ${SUBJECT_AREAS[s].join('/')} 중 하나를 글자 그대로)`);
   return [
     `${grade} 어린이를 위한 학습 퀴즈를 과목별로 ${perSubject}개씩 만들어 주세요.`,
     '과목과 범위:',
