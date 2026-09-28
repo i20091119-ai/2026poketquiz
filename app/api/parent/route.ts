@@ -1,7 +1,7 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
 import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GIFT_SIZES, GRADES, SUBJECTS, type GiftLimits, type Subject } from '@/lib/game-config';
-import { activityList, areaReport, battleLogList, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -57,6 +57,8 @@ async function overview(request: Request) {
       /** 쉬는 시간 규칙, 오늘만 열어 주기 여부, 지금 막혀 있는지 */
       rest: { rules: restRules, openToday: restOpen === today, now: { blocked: gate.rest.blocked, name: gate.rest.name, until: gate.rest.until }, timeUp: gate.timeUp },
     },
+    /** 도전 이벤트 진행 상황과 부활권 */
+    events: eventsReport(state, bank, today),
     /** 보호자 선물: 기록(최근 것부터), 오늘·이번 주 보낸 수, 한도, 아직 안 본 답장 수 */
     gifts: { list: giftList(state), counts: giftCounts(state, today), limits: giftLimits, newReplies: unseenReplies(state), today },
     /** 최근 4주 날짜별 활동 (퀴즈 시간·푼 문제·포켓로그 시간) — 주간 그래프용 */
@@ -331,6 +333,20 @@ export async function POST(request: Request) {
         if (text && parseHm(text) === null) throw new ParentError('시각은 07:30 처럼 적어 주세요.');
         await setSimClock(text || null);
         return json({ message: text ? `시험용 기록의 지금 시각을 ${text}(으)로 정했어요. 아이 화면·포켓로그의 쉬는 시간 판단에 이 시각을 써요.` : '시험용 기록의 시각을 진짜 시각으로 되돌렸어요.' });
+      }
+      // 시뮬레이션 전용 도우미 (시험용 기록에만)
+      case 'simGiveRevive': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        await mutateState(state => { state.reviveTickets = (state.reviveTickets ?? 0) + 1; return { result: null, changed: true }; }, SIM_PLAYER);
+        return json({ message: '시험용 기록에 부활권 1장을 넣었어요.' });
+      }
+      case 'simStreak': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const { today } = await simClock();
+        const days = Math.max(0, Math.min(9, Number(body.days) || 0));
+        const { result } = await mutateState(state => { const ok = simSetStreak(state, today, days); return { result: ok, changed: ok }; }, SIM_PLAYER);
+        if (!result) throw new ParentError('시험용 기록에서 "일일미션 10일 연속" 이벤트를 먼저 수락해 주세요.');
+        return json({ message: `연속 기록을 어제까지 ${days}일로 맞췄어요. 오늘 일일미션을 다 풀면 ${days + 1}일째가 돼요.` });
       }
       case 'simStop':
         await setSimClock(null);

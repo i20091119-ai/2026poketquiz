@@ -7,7 +7,7 @@ import type { Ball, BoxItem } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 
-export type RewardKind = 'daily' | 'explore' | 'master' | 'exp';
+export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event';
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
 export type CatchResult = { caught: number; tier: number; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
@@ -16,6 +16,7 @@ const COPY: Record<RewardKind, { title: string; description: string; closed: str
   explore: { title: '아이템 3개 중 하나를 골라!', description: '열매나 상처약이 들어 있어. 가방에 넣었다가 포켓몬에게 먹여 줘.', closed: ASSETS.boxClosed, label: '선물' },
   exp: { title: '경험치 선물! 볼 3개 중 하나를 골라!', description: '볼 안에 어떤 포켓몬이 있을까?', closed: ASSETS.ball.poke, label: '볼' },
   master: { title: '탐험 마스터! 볼 3개 중 하나를 골라!', description: '절반의 확률로 전설이나 희귀한 포켓몬이 나와.', closed: ASSETS.ball.master, label: '볼' },
+  event: { title: '10일 연속 성공! 랜덤박스 3개 중 하나를 골라!', description: '희귀 포켓몬 볼이나 배틀 추가권이 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
 };
 
 /* eslint-disable @next/next/no-img-element */
@@ -31,10 +32,15 @@ function ItemView({ item }: { item: BoxItem }) {
     <b>{POTIONS[item.potion].label}</b>
     <small>{potionEffect(item.potion)}</small>
   </>;
+  if (item.kind === 'ticket') return <>
+    <span className="ticket-icon" aria-hidden>🎟️</span>
+    <b>배틀 추가권</b>
+    <small>포켓로그 새 게임 한 번 더</small>
+  </>;
   return <>
     <img src={ASSETS.ball[item.ball]} alt={BALLS[item.ball].label} />
     <b>{BALLS[item.ball].label}</b>
-    <small>눌러서 포켓몬을 만나자</small>
+    <small>{item.ball === 'rare' ? '강하고 희귀한 포켓몬이 나와!' : '눌러서 포켓몬을 만나자'}</small>
   </>;
 }
 
@@ -90,7 +96,7 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
         </div>
         {done && (pickedBall && ballIds.length
           ? <button className="primary" onClick={() => onOpenBalls(ballIds)}>볼 열어 보기!</button>
-          : <button className="primary" onClick={close}>{pickedBall ? '좋아! 볼은 가방에 넣었어' : '좋아! 가방에 넣었어'}</button>)}
+          : <button className="primary" onClick={close}>{pickedBall ? '좋아! 볼은 가방에 넣었어' : picked.some(i => items[i]?.kind === 'ticket') ? '좋아! 배틀 탭에서 쓸 수 있어' : '좋아! 가방에 넣었어'}</button>)}
       </DialogContent>
     </Dialog>
   );

@@ -615,3 +615,32 @@ select { width: auto; min-width: 120px; }
 }
 /* 보호자 공간 아래 탭 묶음 (아이 화면의 두 번째 탭 묶음처럼 점선으로 나눔) */
 .parent-lower { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 2px dashed #dbe5d9; }
+/* 도전 이벤트 */
+.event-list { display: flex; flex-direction: column; gap: 16px; }
+.event-card { display: flex; flex-direction: column; gap: 12px; border-color: #f0dcae; background: linear-gradient(180deg, #fffcf3, #fff); }
+.event-head { display: flex; align-items: center; gap: 12px; }
+.event-head h3 { margin: 2px 0 0; font-size: 21px; }
+.event-emoji { font-size: 38px; line-height: 1; }
+.event-desc { margin: 0; font-size: 16px; line-height: 1.6; color: #3f5147; }
+.event-big { margin: 0; font-size: 22px; font-weight: 800; color: #b3541e; text-align: center; }
+.event-done { margin: 0; font-size: 19px; font-weight: 800; color: #17674e; text-align: center; }
+.event-reward { display: flex; align-items: center; gap: 12px; background: #fff6e0; border: 1px dashed #e8c77a; border-radius: 14px; padding: 10px 14px; }
+.event-reward img { width: 48px; height: 48px; object-fit: contain; }
+.event-reward b { display: block; font-size: 16px; }
+.event-reward small { color: #7a6a4b; font-size: 13px; }
+.subject-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.subject-cell { border: 2px solid #dfe8dd; border-radius: 14px; padding: 10px 6px; background: #fff; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 64px; justify-content: center; color: #6a7b70; font-size: 13px; }
+.subject-cell b { font-size: 16px; color: #1f2d27; }
+.subject-cell.done { background: #eaf6e3; color: #17674e; }
+.subject-cell.go { background: #fff8dc; color: #b3541e; font-weight: 800; animation: glow 1.6s ease-in-out infinite; }
+.streak-cells { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.streak-cell { border: 2px solid #e3e9de; border-radius: 12px; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #fff; color: #17674e; font-weight: 800; font-size: 13px; }
+.streak-cell small { color: #8a9a86; font-weight: 700; font-size: 11px; }
+.streak-cell.on { background: #e8f3d9; border-color: #9bd08a; }
+.streak-cell.today { border-color: #e5a100; background: #fff8dc; color: #b3541e; }
+.revive-card { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; border-color: #f6c6cf; background: #fff5f7; }
+.revive-card > div { flex: 1; min-width: 180px; }
+.revive-card b { font-size: 17px; }
+.revive-card p { margin: 4px 0 0; font-size: 14px; color: #6b4a52; }
+.revive-card .primary.small { background: #e5484d; box-shadow: 0 3px 0 #b3341f; }
+.ticket-icon { font-size: 64px; line-height: 90px; height: 90px; }

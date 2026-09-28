@@ -1,22 +1,30 @@
-import { applyAction, childView, ensureDaily, GameError, secureRandom, type Action } from '@/lib/game-engine';
+import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, json, mutateState } from '@/lib/server/store';
+import { activeBank, json, latestDefeat, mutateState } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
 
 /** 아이 화면 배틀 탭용: 지금 포켓로그를 할 수 있는지 (쉬는 시간·시간 제한) */
 async function battleInfo(player: Player, state: GameState) {
-  const gate: BattleGate = await battleGate(player, state);
-  return { blocked: gate.blocked, message: gate.message, restName: gate.rest.name, until: gate.rest.until, timeUp: gate.timeUp, openToday: gate.openToday };
+  const [gate, run]: [BattleGate, Awaited<ReturnType<typeof latestDefeat>>] = await Promise.all([battleGate(player, state), latestDefeat(player.id)]);
+  return {
+    blocked: gate.blocked, message: gate.message, restName: gate.rest.name, until: gate.rest.until, timeUp: gate.timeUp, openToday: gate.openToday,
+    /** 부활권으로 되살릴 수 있는 가장 최근 게임 오버 판 (없으면 null) */
+    reviveRun: run,
+  };
 }
 
 export async function GET(request: Request) {
   try {
     const [bank, player] = await Promise.all([activeBank(), playerOf(request)]);
     const { today } = player;
-    const { state } = await mutateState(state => ({ result: null, changed: ensureDaily(state, bank, today, secureRandom) }), player.id);
+    const { state } = await mutateState(state => {
+      const a = ensureDaily(state, bank, today, secureRandom);
+      const b = syncEvents(state, bank, today); // 도전 이벤트 진도 (연속 기록 끊김·올클리어 완료)
+      return { result: null, changed: a || b };
+    }, player.id);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
     return json({ view: childView(state, bank, today), sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
@@ -37,10 +45,11 @@ export async function POST(request: Request) {
 
     const [bank, player] = await Promise.all([activeBank(), playerOf(request)]);
     const { today } = player;
-    const { state, result } = await mutateState(state => ({
-      result: applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom }),
-      changed: true,
-    }), player.id);
+    const { state, result } = await mutateState(state => {
+      const result = applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom });
+      syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
+      return { result, changed: true };
+    }, player.id);
     return json({ view: childView(state, bank, today), result, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     if (error instanceof GameError) return json({ error: error.message }, 400);

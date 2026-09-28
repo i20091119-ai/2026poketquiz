@@ -1,0 +1,34 @@
+// 포켓로그가 게임 오버(또는 클리어)한 판을 올립니다. 원본 "플레이 기록"은 기기 브라우저에만 있어서, 부활권으로 되살릴 수 있게 서버에도 둡니다.
+//   POST { runs: [{ id, wave, victory, data }] } → 저장 (같은 판은 한 번만)
+import { isBattleAllowed } from '@/lib/server/battle-auth';
+import { playerOf } from '@/lib/server/player';
+import { json, saveRuns, type RunInput } from '@/lib/server/store';
+
+export const dynamic = 'force-dynamic';
+
+const MAX_BODY = 4_000_000;
+const MAX_RUN = 1_500_000;
+
+export async function POST(request: Request) {
+  try {
+    if (!(await isBattleAllowed(request))) return json({ error: '포켓로그 비밀번호를 먼저 넣어 주세요.' }, 401);
+    const origin = request.headers.get('origin');
+    if (origin && origin !== new URL(request.url).origin) return json({ error: '게임 화면에서 다시 시도해 주세요.' }, 403);
+    const text = await request.text();
+    if (text.length > MAX_BODY) return json({ error: '판 저장이 너무 커요.' }, 413);
+    let body: { runs?: unknown };
+    try { body = JSON.parse(text); } catch { return json({ error: '요청을 읽지 못했어요.' }, 400); }
+    const runs: RunInput[] = (Array.isArray(body?.runs) ? body.runs : []).slice(0, 30).flatMap((r: Record<string, unknown>) => {
+      const id = String(r?.id ?? ''), wave = Number(r?.wave), data = typeof r?.data === 'string' ? r.data : '';
+      if (!/^\d{10,16}$/.test(id) || !Number.isInteger(wave) || wave < 1 || wave > 10000 || !data || data.length > MAX_RUN) return [];
+      try { JSON.parse(data); } catch { return []; }
+      return [{ id, wave, victory: r?.victory === true, data }];
+    });
+    const player = await playerOf(request);
+    const added = runs.length ? await saveRuns(player.id, runs) : 0;
+    return json({ ok: true, added });
+  } catch (error) {
+    console.error('포켓로그 판 저장 실패', error);
+    return json({ error: '판을 저장하지 못했어요.' }, 503);
+  }
+}

@@ -1,5 +1,6 @@
 "use client";
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { hasBattleInProgress } from '@/lib/battle-save';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
@@ -122,13 +123,28 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
   );
 }
 
+/** 다른 탭에서 기기 저장이 바뀌면 다시 읽음 */
+const subscribeStorage = (cb: () => void) => { window.addEventListener('storage', cb); return () => window.removeEventListener('storage', cb); };
+
 /** 서버가 알려 주는 "지금 포켓로그를 할 수 있는지" (쉬는 시간·하루 시간 제한) */
-export type BattleGateView = { blocked: boolean; message: string | null; restName: string | null; until: string | null; timeUp: boolean; openToday: boolean };
+export type BattleGateView = {
+  blocked: boolean; message: string | null; restName: string | null; until: string | null; timeUp: boolean; openToday: boolean;
+  /** 부활권으로 되살릴 수 있는 가장 최근 게임 오버 판 */
+  reviveRun: { id: string; wave: number } | null;
+};
 
 /** [배틀] 탭: 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만(+배틀 추가권), 이어하기는 자유. 쉬는 시간에는 둘 다 잠깁니다. */
-export function BattleTab({ left, perDay, tickets, gate }: { left: number; perDay: number; tickets: number; gate: BattleGateView | null }) {
+export function BattleTab({ left, perDay, tickets, gate, reviveTickets, busy, onRevive }: {
+  left: number; perDay: number; tickets: number; gate: BattleGateView | null;
+  /** 부활권 수와 되살리기 (진행 중인 판이 없을 때만) */
+  reviveTickets: number; busy: boolean; onRevive: (runId: string) => void;
+}) {
   const blocked = !!gate?.blocked;
+  // 진행 중인 판은 이 기기 브라우저에만 저장돼 있어서 화면에서 확인합니다 (처음 그릴 때는 서버와 같게 false)
+  const inProgress = useSyncExternalStore(subscribeStorage, hasBattleInProgress, () => false);
+  const run = gate?.reviveRun ?? null;
   return (
+    <>
     <section className={'panel battle-card' + (blocked ? ' resting' : '')}>
       <div>
         <h3>⚔️ 포켓로그 배틀</h3>
@@ -143,17 +159,25 @@ export function BattleTab({ left, perDay, tickets, gate }: { left: number; perDa
         <a className="text-button" href="/battle/prepare" onClick={goTo('/battle/prepare')}>와이파이에서 미리 받아 두기</a>
       </div>
     </section>
-  );
-}
-
-/** [이벤트] 탭: 아직 내용이 없어요. */
-export function EventTab() {
-  return (
-    <section className="panel coming-soon">
-      <span className="pill">EVENT</span>
-      <h3>🎁 이벤트는 곧 열려요!</h3>
-      <p>새로운 이벤트를 준비하고 있어. 조금만 기다려 줘.</p>
-    </section>
+    {reviveTickets > 0 && (
+      <section className="panel revive-card">
+        <span className="event-emoji">💖</span>
+        <div>
+          <b>부활권 {reviveTickets}장</b>
+          {inProgress
+            ? <p>진행 중인 판이 있어. 그 판에서 지면 그 자리에서 &lsquo;부활권을 쓸까?&rsquo;가 나와.</p>
+            : run
+              ? <p>지난번에 진 판을 그 웨이브에서 다시 살려서 이어 할 수 있어. 포켓몬 체력은 가득!</p>
+              : <p>포켓로그에서 지면 그 자리에서 &lsquo;부활권을 쓸까?&rsquo;가 나와.</p>}
+        </div>
+        {!inProgress && run && (
+          <button className="primary small" disabled={busy || blocked} onClick={() => onRevive(run.id)}>
+            {blocked ? '🔒 지금은 쉬는 시간' : `부활권으로 ${run.wave}웨이브 판 되살리기`}
+          </button>
+        )}
+      </section>
+    )}
+    </>
   );
 }
 

@@ -4,7 +4,9 @@ import { Backpack, BookOpen, Compass, Gift, PartyPopper, Settings, Sun, Swords }
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
-import { BattleTab, EventTab, HomePanel, StarterPicker, type BattleGateView } from '@/components/game/home';
+import { BattleTab, HomePanel, StarterPicker, type BattleGateView } from '@/components/game/home';
+import { AllClearDialog, EventTab } from '@/components/game/events';
+import { writeRevivedSession } from '@/lib/battle-save';
 import { GiftOpenDialog, GiftPopup, GiftTab, ReplyDialog, type GiftOpenResult } from '@/components/game/gifts';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
@@ -160,6 +162,21 @@ export default function Game() {
     return <main><SimBanner sim={sim} /><Header /><div className="workspace">{error ? <ErrorBar message={error} onRetry={() => void refresh()} /> : <section className="panel empty">불러오는 중…</section>}</div></main>;
   }
   const unopenedGifts = view.gifts.filter(g => !g.opened).length;
+  // 이벤트 탭 빨간 숫자: 아직 수락 안 한 도전 + 열 수 있는 상자
+  const ev = view.events;
+  const eventAlerts = (!ev.allClear.hidden && !ev.allClear.accepted ? 1 : 0) + (!ev.streak.hidden && !ev.streak.accepted ? 1 : 0)
+    + (ev.streak.completedAt && !ev.streak.hidden ? 1 : 0);
+  /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
+  async function reviveFromHistory(runId: string) {
+    if (busy) return;
+    setBusy(true); setError('');
+    try {
+      const r = await postJson<{ ok: boolean; message?: string; data?: string }>('/api/battle/revive', { mode: 'history', runId });
+      if (!r.ok || !r.data) { setNotice(r.message ?? '되살리지 못했어.'); return; }
+      writeRevivedSession(r.data);
+      goTo('/battle/')({ preventDefault() {} });
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
   /** 볼을 다 연 뒤 답장 창으로 이어 갑니다 */
   const closeBall = () => setBallQueue(q => {
     const rest = q.slice(1);
@@ -213,11 +230,17 @@ export default function Game() {
           <Tabs className="tabs-secondary" value={tab2} onValueChange={setTab2}>
             <TabsList className="nav">
               <TabsTrigger value="battle"><Swords />배틀</TabsTrigger>
-              <TabsTrigger value="event"><PartyPopper />이벤트</TabsTrigger>
+              <TabsTrigger value="event"><PartyPopper />이벤트{eventAlerts > 0 && <span className="tab-count">{eventAlerts}</span>}</TabsTrigger>
               <TabsTrigger value="gift"><Gift />선물{unopenedGifts > 0 && <span className="tab-count">{unopenedGifts}</span>}</TabsTrigger>
             </TabsList>
-            <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate} /></TabsContent>
-            <TabsContent value="event"><EventTab /></TabsContent>
+            <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate}
+              reviveTickets={view.events.reviveTickets} busy={busy} onRevive={runId => void reviveFromHistory(runId)} /></TabsContent>
+            <TabsContent value="event">
+              <EventTab events={view.events} busy={busy}
+                onAccept={async id => { const r = await act<{ message: string }>({ type: 'acceptEvent', event: id }); if (r) setNotice(r.message); }}
+                onExplore={s => { setTab('explore'); window.scrollTo({ top: 0, behavior: 'smooth' }); void loadExplore(s); }}
+                onOpenBox={() => setReward({ kind: 'event' })} />
+            </TabsContent>
             <TabsContent value="gift"><GiftTab gifts={view.gifts} busy={busy} onOpen={g => setOpening(g)} onReply={g => setReplying(g)} /></TabsContent>
           </Tabs>
         </>}
@@ -254,6 +277,7 @@ export default function Game() {
           if (reward.kind === 'daily') return act<RewardResult>({ type: 'dailyBox', pick });
           if (reward.kind === 'explore') return act<RewardResult>({ type: 'exploreReward', subject: reward.subject!, pick });
           if (reward.kind === 'exp') return act<RewardResult>({ type: 'expGift', pick });
+          if (reward.kind === 'event') return act<RewardResult>({ type: 'eventBox', pick });
           return act<RewardResult>({ type: 'masterReward', pick });
         }}
         onClose={() => setReward(null)}
@@ -267,6 +291,9 @@ export default function Game() {
         onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
         onClose={closeBall}
       />
+
+      <AllClearDialog open={!!view.events.allClear.completedAt && !view.events.allClear.celebrated && !quiz && !reward}
+        onClose={() => void act({ type: 'eventSeen', event: 'allClear' })} />
 
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (

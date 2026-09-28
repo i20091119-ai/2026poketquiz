@@ -28,6 +28,12 @@ type Overview = {
     /** 쉬는 시간 규칙과 지금 상태 */
     rest: { rules: RestRule[]; openToday: boolean; now: { blocked: boolean; name: string | null; until: string | null }; timeUp: boolean };
   };
+  /** 도전 이벤트 */
+  events: {
+    allClear: { accepted: boolean; acceptedAt: string | null; mastered: Subject[]; completedAt: string | null };
+    streak: { accepted: boolean; acceptedAt: string | null; count: number; best: number; completedAt: string | null; boxOpened: boolean };
+    reviveTickets: number;
+  };
   /** 보호자 선물 */
   gifts: { list: PublicGift[]; counts: GiftLimits; limits: GiftLimits; newReplies: number; today: string };
   /** 최근 28일 날짜별 활동 (오래된 날부터) */
@@ -249,6 +255,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
                 </tbody>
               </table>}
         </section>
+        <EventsSection events={overview.events} />
       </>}
 
       {tab === 'banks' && <>
@@ -351,6 +358,34 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
     </>
+  );
+}
+
+// ---------------- 도전 이벤트 ----------------
+function EventsSection({ events }: { events: Overview['events'] }) {
+  const { allClear: a, streak: st } = events;
+  return (
+    <section className="panel parent-section">
+      <h2>도전 이벤트</h2>
+      <table className="battle-log">
+        <thead><tr><th>이벤트</th><th>수락</th><th>진도</th><th>완료</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>도전! 전 과목 올클리어<br /><small className="muted">보상: 부활권 1장</small></td>
+            <td>{a.accepted ? a.acceptedAt : '아직'}</td>
+            <td>{a.accepted ? `${a.mastered.length} / ${SUBJECTS.length}과목${a.mastered.length < SUBJECTS.length ? ` (남은 과목: ${SUBJECTS.filter(s => !a.mastered.includes(s)).join(', ')})` : ''}` : '-'}</td>
+            <td>{a.completedAt ?? '-'}</td>
+          </tr>
+          <tr>
+            <td>일일미션 10일 연속<br /><small className="muted">보상: 랜덤박스 1개</small></td>
+            <td>{st.accepted ? st.acceptedAt : '아직'}</td>
+            <td>{st.accepted ? `지금 ${st.count}일 연속 · 최고 ${st.best}일` : '-'}</td>
+            <td>{st.completedAt ? `${st.completedAt}${st.boxOpened ? ' · 상자 엶' : ' · 상자 아직'}` : '-'}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="muted">남은 부활권 {events.reviveTickets}장. 아이가 이벤트 탭에서 &lsquo;도전할래!&rsquo;를 눌러야 시작돼요.</p>
+    </section>
   );
 }
 
@@ -622,6 +657,11 @@ function DevMenu({ part, sim, busy, call, reload }: { part: 'version' | 'sim'; s
           {sim.clockFixed && <button className="text-button" disabled={busy} onClick={async () => { if (await call({ action: 'simSetClock', clock: '' })) await reload(); }}>진짜 시각으로</button>}
         </div>
         <p className="muted">시각을 바꾸면 아이 화면 배틀 탭과 포켓로그가 그 시각 기준으로 쉬는 시간을 판단해요 (예: 23:00으로 정하면 잠자는 시간이라 잠김).</p>
+        <div className="button-row">
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveRevive' })) await reload(); }}>시험용 부활권 +1</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simStreak', days: 9 })) await reload(); }}>연속 기록 9일로 맞추기</button>
+        </div>
+        <p className="muted">도전 이벤트 확인용이에요. &lsquo;연속 기록 9일로 맞추기&rsquo; 뒤 오늘 일일미션을 다 풀면 10일 연속이 돼요(이벤트를 먼저 수락해야 해요). 끊김은 &lsquo;다음 날로 넘기기&rsquo;를 두 번 누르면 확인돼요.</p>
         <p className="muted">‘다음 날로 넘기기’를 누른 뒤 아이 화면을 새로고침하면 일일미션과 포켓로그 새 게임 횟수가 새 날 기준으로 다시 시작해요. 아이 화면 맨 위의 보라색 띠를 누르면 여기로 돌아와요.</p>
       </> : <>
         <div className="button-row">
