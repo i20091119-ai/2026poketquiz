@@ -179,7 +179,7 @@ export const BATTLE_REPORT_MAX_SECONDS = 120;
 /**
  * 일일미션 → 포켓로그 사탕 (battle/SPEC.md 11번 성장 요소).
  * 오늘의 미션을 다 풀면(틀린 것 포함) 파트너 포켓몬(의 진화 전 첫 모습)에게 포켓로그 사탕을 보냅니다. 모두 맞히면 더 많이.
- * 사탕은 게임 안에서 패시브 특성 해제·스타터 비용 낮추기에 씁니다 (싼 포켓몬 패시브 40개 → 만점 8일 정도).
+ * 사탕은 게임 안에서 패시브 특성 해제·스타터 비용 낮추기에 씁니다 (싼 포켓몬 패시브 40개 → 만점 2주 정도).
  * 게임 안에서 원래 방식(친밀도·클리어)으로 모이는 사탕은 그대로 더해집니다.
  */
-export const DAILY_CANDY = { finished: 3, perfect: 5 };
+export const DAILY_CANDY = { finished: 1, perfect: 3 };
