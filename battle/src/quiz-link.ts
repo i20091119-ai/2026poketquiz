@@ -6,6 +6,9 @@
 import { defaultStarterSpecies } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { QUIZ_RULES } from "#app/quiz-rules";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import type { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 
 /** 퀴즈 앱 서버 주소. 게임이 퀴즈 앱의 /battle/ 아래에서 열리므로 같은 주소를 씁니다. */
@@ -58,6 +61,47 @@ export function applyQuizStarters(): void {
   }
   defaultStarterSpecies.splice(0, defaultStarterSpecies.length, ...starters);
   console.log(`퀴즈 앱 보유 포켓몬 ${quizOwnedSpecies.length}마리 → 스타터 ${starters.size}종`);
+}
+
+/** 진화 단계 깊이 (스타터 0, 1단계 진화 1, …) */
+function evolutionDepth(speciesId: SpeciesId): number {
+  let depth = 0;
+  let current: SpeciesId | null = speciesId;
+  while (current != null && depth < 5) {
+    const prev = speciesDataRegistry.getSpeciesData(current).prevolution;
+    if (prev == null) {
+      break;
+    }
+    current = prev;
+    depth++;
+  }
+  return depth;
+}
+
+/**
+ * 고른 스타터로 실제 출전할 종. 퀴즈에서 그 스타터 계열의 진화형을 갖고 있으면 가장 많이 진화한 모습을 돌려줍니다.
+ * (부모님 결정: 진화한 포켓몬은 진화한 모습으로, 레벨은 시작 레벨 그대로)
+ */
+export function quizStartingSpecies(starterId: StarterSpeciesId): PokemonSpecies {
+  let best: SpeciesId = starterId;
+  let bestDepth = 0;
+  if (QUIZ_RULES.startEvolved) {
+    for (const id of quizOwnedSpecies) {
+      try {
+        if (speciesDataRegistry.getStarter(id as SpeciesId) !== starterId) {
+          continue;
+        }
+        const depth = evolutionDepth(id as SpeciesId);
+        if (depth > bestDepth) {
+          best = id as SpeciesId;
+          bestDepth = depth;
+        }
+      } catch {
+        // 포켓로그에 없는 번호는 건너뜀
+      }
+    }
+  }
+  return speciesDataRegistry.getSpecies(best);
 }
 
 // ---- 하루 시도 횟수 (SPEC 7번) — 퀴즈 앱 서버가 관리합니다 ----

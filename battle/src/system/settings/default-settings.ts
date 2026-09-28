@@ -34,7 +34,7 @@ const defaultGeneralSettings: GeneralSettings = {
   enableTutorials: import.meta.env.VITE_BYPASS_TUTORIAL !== "1",
   enableVibration: false,
   expGainsSpeed: ExpGainsSpeed.DEFAULT,
-  gameSpeed: GameSpeed.NORMAL,
+  gameSpeed: GameSpeed.FAST, // 퀴즈 앱 연동판: 아이 스마트폰에서 답답하지 않게 기본 속도를 한 단계 올림 (설정에서 바꿀 수 있음)
   hideIvScanner: false,
   hpBarSpeed: HpBarSpeed.DEFAULT,
   levelMoveConfirmation: true,
