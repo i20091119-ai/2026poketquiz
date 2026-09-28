@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
+import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -514,4 +514,12 @@ test('포켓로그 최고 레벨: 계열별로 가장 높은 레벨만 남고, �
   assert.deepEqual(state.battleLevels, { 906: 12, 81: 15 });
   const bank = makeBank(3);
   assert.equal(childView(state, bank, '2026-09-26').battleLevels[81], 15);
+});
+
+test('포켓로그 이벤트 이로치는 도감에 한 번씩만 남고 아이 화면에 보인다', () => {
+  const state = initialState();
+  assert.equal(recordShiny(state, [25, 25, 0, 99999, 6]), 2);
+  assert.equal(recordShiny(state, [25]), 0);
+  assert.deepEqual(state.shiny, [25, 6]);
+  assert.deepEqual(childView(state, makeBank(3), '2026-09-26').shiny, [25, 6]);
 });

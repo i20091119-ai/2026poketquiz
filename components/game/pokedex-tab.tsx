@@ -14,6 +14,7 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
 }) {
   const [showDex, setShowDex] = useState(false);
   const dex = useMemo(() => [...view.dex].sort((a, b) => a - b), [view.dex]);
+  const shiny = useMemo(() => [...view.shiny].sort((a, b) => a - b), [view.shiny]);
   return (
     <>
       <section className="panel dex-summary">
@@ -21,6 +22,7 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
           <span className="pill">POKÉDEX</span>
           <h2>포켓몬 도감 {view.dex.length} / {TOTAL_SPECIES}</h2>
           <Progress value={(view.dex.length / TOTAL_SPECIES) * 100} />
+          {shiny.length > 0 && <p className="shiny-count">✨ 이로치(색이 다른 포켓몬) {shiny.length}마리 — 포켓로그 이벤트에서 얻었어요</p>}
         </div>
         <button className="secondary" onClick={() => setShowDex(v => !v)}>{showDex ? '내 포켓몬 보기' : '만난 포켓몬 전체 보기'}</button>
       </section>
@@ -35,12 +37,20 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
               <span>{species(id).name}</span>
             </div>
           ))}
+          {shiny.map(id => (
+            <div className="dex-cell is-shiny" key={'s' + id}>
+              <PokemonImage id={id} shiny />
+              <small>{dexNo(id)} ✨</small>
+              <span>이로치 {species(id).name}</span>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="pokemon-grid">
           {view.owned.map(p => (
             <OwnedCard key={p.uid} pokemon={p} view={view} busy={busy} onPartner={onPartner} onEvolve={onEvolve} />
           ))}
+          {shiny.map(id => <ShinyCard key={'s' + id} id={id} view={view} />)}
         </div>
       )}
     </>
@@ -50,6 +60,22 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
 /** 포켓로그에서 이 포켓몬(계열)이 도달한 최고 레벨. 새 판은 레벨 5부터 다시 시작하지만 최고 기록은 남습니다. */
 function BattleLevel({ level }: { level?: number }) {
   return <p className="battle-level">{level ? <>⚔️ 포켓로그 최고 <b>Lv.{level}</b></> : <span className="muted">⚔️ 포켓로그 기록 없음</span>}</p>;
+}
+
+/** 포켓로그 이벤트에서 받은 이로치. 기본 색 포켓몬과 별개로 모이며, 포켓로그에서 이로치로 출전할 수 있습니다. */
+function ShinyCard({ id, view }: { id: number; view: ChildView }) {
+  const s = species(id);
+  return (
+    <section className="panel pokemon-card is-shiny">
+      <small>{dexNo(s.id)}</small>
+      <span className="shiny-tag">✨ 이로치</span>
+      <PokemonImage id={s.id} shiny />
+      <h3>이로치 {s.name}</h3>
+      <div className="type-row">{s.types.map(t => <TypeBadge key={t} type={t} small />)}</div>
+      <BattleLevel level={view.battleLevels[rootOf(s.id)]} />
+      <p className="muted shiny-note">포켓로그 이벤트에서 받은 색이 다른 포켓몬이에요. 포켓로그에서 스타터를 고를 때 이 색으로 출전할 수 있어요.</p>
+    </section>
+  );
 }
 
 function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {

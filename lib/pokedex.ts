@@ -56,6 +56,11 @@ export function pokemonImages(id: number): string[] {
   ];
 }
 
+/** 이로치(색이 다른 포켓몬) 공식 일러스트 후보: PokeAPI 저장소의 shiny 그림 */
+export function shinyImages(id: number): string[] {
+  return [`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${id}.png`];
+}
+
 /** 진화 계열의 첫 모습(포켓로그의 스타터에 해당). 예: 자포코일 → 코일 */
 export function rootOf(id: number): number {
   let cur = id;

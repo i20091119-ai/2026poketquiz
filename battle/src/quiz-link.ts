@@ -290,6 +290,50 @@ export async function applyQuizCandyGifts(): Promise<void> {
   }
 }
 
+// ---- 이벤트 이로치 → 퀴즈 도감 (SPEC 3번) ----
+export const QUIZ_SHINY_URL = "/api/battle/shiny";
+const SHINY_PENDING_KEY = "quizShinyPending";
+
+function pendingShinies(): number[] {
+  try {
+    return JSON.parse(localStorage.getItem(SHINY_PENDING_KEY) ?? "[]") as number[];
+  } catch {
+    return [];
+  }
+}
+
+/** 아직 퀴즈 앱에 알리지 못한 이로치를 보냅니다. 성공하면 목록을 비웁니다. */
+export async function flushQuizShinies(): Promise<void> {
+  const ids = pendingShinies();
+  if (ids.length === 0) {
+    return;
+  }
+  try {
+    const res = await fetch(QUIZ_SHINY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ species: ids }),
+    });
+    if (res.ok) {
+      localStorage.removeItem(SHINY_PENDING_KEY);
+    } else {
+      console.warn("이로치를 퀴즈 도감에 알리지 못했어요:", res.status);
+    }
+  } catch (err) {
+    console.warn("이로치를 퀴즈 도감에 알리지 못했어요:", err);
+  }
+}
+
+/** 이벤트에서 이로치를 받으면 퀴즈 도감에도 남기도록 알립니다 (실패하면 기기에 적어 두고 다음에 다시 보냄). */
+export function reportQuizShiny(speciesId: number): void {
+  const ids = pendingShinies();
+  if (!ids.includes(speciesId)) {
+    ids.push(speciesId);
+  }
+  localStorage.setItem(SHINY_PENDING_KEY, JSON.stringify(ids.slice(-50)));
+  flushQuizShinies().catch(() => {});
+}
+
 // ---- 진행 보고 (보호자 화면의 날짜별 기록) ----
 export const QUIZ_PROGRESS_URL = "/api/battle/progress";
 const REPORT_EVERY_MS = 60_000;

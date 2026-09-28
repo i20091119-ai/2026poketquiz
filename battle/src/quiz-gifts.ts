@@ -4,6 +4,7 @@
  */
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { reportQuizShiny } from "#app/quiz-link";
 import { DexAttr } from "#enums/dex-attr";
 import { TrainerSlot } from "#enums/trainer-slot";
 import type { EnemyPokemon } from "#field/pokemon";
@@ -32,8 +33,10 @@ export function makeShinyGiftFromParty(): EnemyPokemon {
 /**
  * 이벤트로 받은 이로치는 유일하게 "내 것"으로 남깁니다(부모님 결정):
  * 그 포켓몬의 스타터(진화 전 첫 모습) 도감에 이로치·색 비트를 켜 두어, 다음 판부터 스타터 고를 때 이로치로 시작할 수 있습니다.
+ * 퀴즈 도감에도 "이로치 ○○"로 따로 남깁니다 (색깔별로 모으는 재미, 부모님 결정).
  */
 export function keepShinyGiftForever(gift: EnemyPokemon): void {
+  reportQuizShiny(gift.species.speciesId);
   const starterId = speciesDataRegistry.getStarter(gift.species.speciesId);
   const dexEntry = globalScene.gameData.dexData[starterId];
   if (!dexEntry) {
