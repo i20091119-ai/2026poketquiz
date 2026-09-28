@@ -596,3 +596,18 @@ select { width: auto; min-width: 120px; }
   .master-card img { margin: auto; }
   .heading-row { flex-direction: column; align-items: flex-start; }
 }
+/* 보호자 공간 탭 정리: 큰 탭 한 줄 + 작은 탭 한 줄 */
+.parent-intro.compact { gap: 10px; }
+.parent-intro.compact h2 { margin: 4px 0 0; font-size: 22px; }
+.parent-intro.compact .heading-row { flex-wrap: wrap; }
+.parent-intro.compact .reply-badge .text-button { padding: 0; }
+.parent-tabs { display: flex; gap: 6px; border-bottom: 2px solid #dbe5d9; overflow-x: auto; margin-top: 4px; }
+.parent-tab { flex: none; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 12px 14px; font-size: 16px; font-weight: 700; color: #68796e; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.parent-tab.on { color: #17674e; border-bottom-color: #17674e; font-weight: 800; }
+.parent-subtabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px; }
+.rest-editor.standalone { border-top: 0; padding-top: 0; }
+.parent-section > .stat-board:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+@media (max-width: 560px) {
+  .parent-tabs { gap: 0; }
+  .parent-tab { flex: 1; justify-content: center; padding: 10px 4px; font-size: 13.5px; }
+}

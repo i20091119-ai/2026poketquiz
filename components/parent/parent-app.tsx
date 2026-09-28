@@ -141,6 +141,19 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 }
 
 // ---------------- 대시보드 ----------------
+/** 보호자 공간 큰 탭 3개와 각 탭 안의 작은 탭 */
+const MAIN_TABS = [
+  { key: 'study', label: '📚 학습·문제은행', subs: [{ key: 'report', label: '학습 현황' }, { key: 'banks', label: '문제은행' }] },
+  { key: 'play', label: '🎁 선물·배틀', subs: [{ key: 'gift', label: '선물 보내기' }, { key: 'battleLog', label: '포켓로그 기록' }, { key: 'battleSet', label: '포켓로그 설정' }] },
+  { key: 'dev', label: '🛠️ 업데이트·개발', subs: [{ key: 'version', label: '업데이트 내용' }, { key: 'sim', label: '시뮬레이션' }] },
+] as const;
+type MainTab = typeof MAIN_TABS[number]['key'];
+const TAB_KEY = 'pq-parent-tab';
+function loadTabs(): { main: MainTab; sub: Record<string, string> } {
+  const fallback = { main: 'study' as MainTab, sub: {} as Record<string, string> };
+  try { const v = JSON.parse(localStorage.getItem(TAB_KEY) ?? 'null'); return v && MAIN_TABS.some(t => t.key === v.main) ? { main: v.main, sub: v.sub ?? {} } : fallback; } catch { return fallback; }
+}
+
 function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
   overview: Overview; busy: boolean; error: string; call: Call; onOpenBank: (id: number, issues?: ImportResult['issues']) => void; reload: () => Promise<void>;
 }) {
@@ -148,141 +161,182 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
   const [battlePassword, setBattlePassword] = useState('');
   const [battleLimit, setBattleLimit] = useState(overview.battle.limit);
   const [creating, setCreating] = useState(false);
+  // 고른 탭은 이 기기에 기억해 두었다가 다음에 열 때 그대로 보여 줍니다
+  const [tabs, setTabs] = useState(loadTabs);
+  const go = (main: MainTab, sub?: string) => setTabs(t => {
+    const next = { main, sub: sub ? { ...t.sub, [main]: sub } : t.sub };
+    try { localStorage.setItem(TAB_KEY, JSON.stringify(next)); } catch { /* 저장 못 해도 진행 */ }
+    return next;
+  });
+  const mainInfo = MAIN_TABS.find(t => t.key === tabs.main)!;
+  const sub = mainInfo.subs.some(x => x.key === tabs.sub[tabs.main]) ? tabs.sub[tabs.main] : mainInfo.subs[0].key;
   const { child, active } = overview;
+  const newReplies = overview.gifts.newReplies;
+
   return (
     <>
-      <section className="panel parent-intro">
-        <span className="pill">{overview.sim.active ? '🧪 시뮬레이션 중 · 아래는 시험용 기록' : '아이 현황'}</span>
-        {overview.gifts.newReplies > 0 && (
+      {/* 맨 위: 아이 현황 한 줄 요약 (어느 탭에서든 보임) */}
+      <section className="panel parent-intro compact">
+        <div className="heading-row">
+          <div>
+            <span className="pill">{overview.sim.active ? '🧪 시뮬레이션 중 · 아래는 시험용 기록' : '아이 현황'}</span>
+            <h2>{child.partner ? `${species(child.partner).name}와 모험 중` : '아직 파트너를 고르지 않았어요'}</h2>
+          </div>
+          <div className="parent-summary">
+            <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (스탯으로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
+            <span>보유 포켓몬 {child.owned}마리</span>
+            <span>도감 {child.dex} / {TOTAL_SPECIES}</span>
+          </div>
+        </div>
+        {newReplies > 0 && (
           <div className="reply-badge">
-            <b>💌 새 답장 {overview.gifts.newReplies}개</b> — 아래 &lsquo;선물 보내기&rsquo; 칸의 기록에서 볼 수 있어요.
-            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'markRepliesSeen' })) await reload(); }}>확인했어요</button>
+            <b>💌 새 답장 {newReplies}개</b>
+            <button className="secondary small" onClick={() => go('play', 'gift')}>보러 가기</button>
+            <button className="text-button" disabled={busy} onClick={async () => { if (await call({ action: 'markRepliesSeen' })) await reload(); }}>확인했어요</button>
           </div>
         )}
-        <h2>{child.partner ? `${species(child.partner).name}와 모험 중` : '아직 파트너를 고르지 않았어요'}</h2>
-        <div className="parent-summary">
-          <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (스탯으로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
-          <span>보유 포켓몬 {child.owned}마리</span>
-          <span>도감 {child.dex} / {TOTAL_SPECIES}</span>
-        </div>
-        <StatBoard stats={child.stats} />
       </section>
 
-      <ActivitySection days={overview.activity} />
+      {/* 큰 탭 한 줄 */}
+      <div className="parent-tabs" role="tablist">
+        {MAIN_TABS.map(t => (
+          <button key={t.key} role="tab" aria-selected={tabs.main === t.key} className={'parent-tab' + (tabs.main === t.key ? ' on' : '')} onClick={() => go(t.key)}>
+            {t.label}{t.key === 'play' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}
+          </button>
+        ))}
+      </div>
+      {/* 작은 탭 한 줄 */}
+      <div className="parent-subtabs">
+        {mainInfo.subs.map(x => <button key={x.key} className={'chip' + (sub === x.key ? ' on' : '')} onClick={() => go(tabs.main, x.key)}>{x.label}</button>)}
+      </div>
 
-      {active && (
+      {tabs.main === 'study' && sub === 'report' && <>
+        <section className="panel parent-section"><StatBoard stats={child.stats} /></section>
+        <ActivitySection days={overview.activity} />
+        {active ? (
+          <section className="panel parent-section">
+            <h2>공개 중인 문제은행: {active.title}</h2>
+            <div className="progress-table">
+              {active.subjects.map(s => (
+                <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘{s.review ? ` · 틀려서 다시 풀 문제 ${s.review}` : ''}</span>
+                  <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div></div>
+              ))}
+            </div>
+            <AreaBoard report={active.areas} />
+          </section>
+        ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
+      </>}
+
+      {tabs.main === 'study' && sub === 'banks' && <>
         <section className="panel parent-section">
-          <h2>공개 중인 문제은행: {active.title}</h2>
-          <div className="progress-table">
-            {active.subjects.map(s => (
-              <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘{s.review ? ` · 틀려서 다시 풀 문제 ${s.review}` : ''}</span>
-                <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div></div>
-            ))}
+          <div className="heading-row">
+            <div><h2>주차별 문제은행</h2><p>공개한 문제은행 하나가 아이의 일일미션과 탐험에 쓰여요.</p></div>
+            <div className="button-row">
+              {overview.preparedBanks.length > 0 && <button className="secondary small" disabled={busy}
+                onClick={async () => { if (await call({ action: 'importPreparedBanks' })) await reload(); }}>
+                <BookPlus size={16} /> 연습 문제은행 {overview.preparedBanks.length}개 불러오기</button>}
+              <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 구글 시트로 문제은행 추가</button>
+            </div>
           </div>
-          <AreaBoard report={active.areas} />
+          {overview.preparedBanks.length > 0 && <p className="muted">미리 만들어 둔 초1 연습 문제은행(과목당 24문제, 영역 표시 포함)을 &lsquo;검토 중&rsquo; 상태로 가져와요. 내용을 보고 고친 뒤 공개하면 돼요.</p>}
+          <div className="bank-list">
+            {overview.banks.map(b => (
+              <button key={b.id} className={'bank-row ' + b.status} onClick={() => onOpenBank(b.id)}>
+                <b>{b.title}</b>
+                <span>{b.grade} · {b.question_count}문제 · {STATUS_LABEL[b.status]}</span>
+                <Pencil size={16} />
+              </button>
+            ))}
+            {!overview.banks.length && <p>아직 문제은행이 없어요.</p>}
+          </div>
+        </section>
+        <section className="panel parent-section">
+          <h2>기본 학년</h2>
+          <p>새 문제은행을 만들 때 기본으로 쓰는 학년이에요. AI 요청문에도 들어가요.</p>
+          <div className="inline-form">
+            <select value={grade} onChange={e => setGrade(e.target.value)}>{GRADES.map(g => <option key={g}>{g}</option>)}</select>
+            <button className="secondary" disabled={busy || grade === overview.grade} onClick={async () => { if (await call({ action: 'setGrade', grade })) await reload(); }}>저장</button>
+          </div>
+        </section>
+      </>}
+
+      {tabs.main === 'play' && sub === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
+
+      {tabs.main === 'play' && sub === 'battleLog' && (
+        <section className="panel parent-section">
+          <h2>포켓로그 기록</h2>
+          <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음{overview.battle.tickets ? ` · 배틀 추가권 ${overview.battle.tickets}장` : ''}.</p>
+          <p className="muted">🍬 일일미션 사탕: 다 풀면 {overview.battle.candy.rule.finished}개, 모두 맞히면 {overview.battle.candy.rule.perfect}개를 파트너에게 보내요. 지금까지 {overview.battle.candy.sent}개{overview.battle.candy.pending ? ` (게임이 아직 안 가져간 ${overview.battle.candy.pending}개)` : ''}. 사탕은 포켓로그 안에서 패시브 특성 해제·스타터 비용 낮추기에 써요.</p>
+          {overview.battle.log.length === 0
+            ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
+            : <table className="battle-log">
+                <thead><tr><th>날짜</th><th>최고 웨이브</th><th>플레이 시간</th><th>새 게임</th></tr></thead>
+                <tbody>
+                  {overview.battle.log.map(d => (
+                    <tr key={d.date}>
+                      <td>{d.date}</td>
+                      <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
+                      <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
+                      <td>{d.starts ? `${d.starts}번` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
         </section>
       )}
 
-      <section className="panel parent-section">
-        <h2>포켓로그 기록</h2>
-        <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음{overview.battle.tickets ? ` · 배틀 추가권 ${overview.battle.tickets}장` : ''}.</p>
-        <p className="muted">🍬 일일미션 사탕: 다 풀면 {overview.battle.candy.rule.finished}개, 모두 맞히면 {overview.battle.candy.rule.perfect}개를 파트너에게 보내요. 지금까지 {overview.battle.candy.sent}개{overview.battle.candy.pending ? ` (게임이 아직 안 가져간 ${overview.battle.candy.pending}개)` : ''}. 사탕은 포켓로그 안에서 패시브 특성 해제·스타터 비용 낮추기에 써요.</p>
-        {overview.battle.log.length === 0
-          ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
-          : <table className="battle-log">
-              <thead><tr><th>날짜</th><th>최고 웨이브</th><th>플레이 시간</th><th>새 게임</th></tr></thead>
-              <tbody>
-                {overview.battle.log.map(d => (
-                  <tr key={d.date}>
-                    <td>{d.date}</td>
-                    <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
-                    <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
-                    <td>{d.starts ? `${d.starts}번` : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>}
-      </section>
-
-      <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />
-
-      <section className="panel parent-section">
-        <h2>포켓로그(전투 게임) 비밀번호</h2>
-        <p>{overview.battlePasswordSet
-          ? '비밀번호가 정해져 있어요. 가족 기기에서 포켓로그(/battle)를 열 때 한 번 넣으면 1년 동안 다시 묻지 않아요. 바꾸면 모든 기기에서 다시 넣어야 해요.'
-          : '아직 안 정했어요. 정하기 전까지 포켓로그는 열리지 않아요. 아이가 외우기 쉬운 것으로 ' + BATTLE_PASSWORD_MIN + '자 이상 정해 주세요.'}</p>
-        <div className="inline-form">
-          <input type="text" value={battlePassword} onChange={e => setBattlePassword(e.target.value)} placeholder={overview.battlePasswordSet ? '새 비밀번호 (바꿀 때만)' : `비밀번호 (${BATTLE_PASSWORD_MIN}자 이상)`} />
-          <button className="secondary" disabled={busy || battlePassword.trim().length < BATTLE_PASSWORD_MIN}
-            onClick={async () => { if (await call({ action: 'setBattlePassword', password: battlePassword })) { setBattlePassword(''); await reload(); } }}>
-            {overview.battlePasswordSet ? '바꾸기' : '정하기'}
-          </button>
-          {overview.battlePasswordSet && <button className="secondary danger" disabled={busy}
-            onClick={async () => { if (window.confirm('포켓로그 비밀번호를 지울까요? 다시 정하기 전까지 포켓로그가 열리지 않아요.') && await call({ action: 'clearBattlePassword' })) await reload(); }}>지우기</button>}
-        </div>
-        <p className="muted">게임 주소: <a href="/battle/" target="_blank" rel="noreferrer">/battle/</a> · 미리 받아 두기: <a href="/battle/prepare" target="_blank" rel="noreferrer">/battle/prepare</a></p>
-        <h3>하루 플레이 시간 제한</h3>
-        <p className="muted">정해 두면 그날 포켓로그를 그 시간만큼 한 뒤에는 게임 화면에 &lsquo;오늘은 여기까지&rsquo; 안내가 뜨고 퀴즈로 돌아가요. 하던 판은 내일 이어서 할 수 있어요. 지금은 <b>{overview.battle.limit ? `${overview.battle.limit}분` : '제한 없음'}</b>.</p>
-        <div className="inline-form">
-          <select value={battleLimit} onChange={e => setBattleLimit(Number(e.target.value))}>
-            {overview.battle.limitOptions.map(m => <option key={m} value={m}>{m ? `하루 ${m}분` : '제한 없음'}</option>)}
-          </select>
-          <button className="secondary" disabled={busy || battleLimit === overview.battle.limit} onClick={async () => { if (await call({ action: 'setBattleLimit', minutes: battleLimit })) await reload(); }}>저장</button>
-        </div>
-        <h3>배틀 중 진화 허용</h3>
-        <p className="muted">꺼 두면(기본) 포켓로그 판 안에서 레벨이 올라도 진화하지 않고, 진화의 돌 같은 진화 아이템도 보상에 나오지 않아요. 포켓몬 진화는 퀴즈 스탯으로만 해요. 지금은 <b>{overview.battle.evolution ? '허용' : '막음'}</b>.</p>
-        <div className="inline-form">
-          <button className="secondary" disabled={busy}
-            onClick={async () => { if (await call({ action: 'setBattleEvolution', allowed: !overview.battle.evolution })) await reload(); }}>
-            {overview.battle.evolution ? '진화 막기' : '진화 허용하기'}
-          </button>
-        </div>
-        <RestEditor rest={overview.battle.rest} busy={busy} call={call} reload={reload} />
-      </section>
-
-      <section className="panel parent-section">
-        <h2>기본 학년</h2>
-        <p>새 문제은행을 만들 때 기본으로 쓰는 학년이에요. AI 요청문에도 들어가요.</p>
-        <div className="inline-form">
-          <select value={grade} onChange={e => setGrade(e.target.value)}>{GRADES.map(g => <option key={g}>{g}</option>)}</select>
-          <button className="secondary" disabled={busy || grade === overview.grade} onClick={async () => { if (await call({ action: 'setGrade', grade })) await reload(); }}>저장</button>
-        </div>
-      </section>
-
-      <section className="panel parent-section">
-        <div className="heading-row">
-          <div><h2>주차별 문제은행</h2><p>공개한 문제은행 하나가 아이의 일일미션과 탐험에 쓰여요.</p></div>
-          <div className="button-row">
-            {overview.preparedBanks.length > 0 && <button className="secondary small" disabled={busy}
-              onClick={async () => { if (await call({ action: 'importPreparedBanks' })) await reload(); }}>
-              <BookPlus size={16} /> 연습 문제은행 {overview.preparedBanks.length}개 불러오기</button>}
-            <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 구글 시트로 문제은행 추가</button>
+      {tabs.main === 'play' && sub === 'battleSet' && <>
+        <section className="panel parent-section">
+          <RestEditor rest={overview.battle.rest} busy={busy} call={call} reload={reload} />
+        </section>
+        <section className="panel parent-section">
+          <h2>하루 플레이 시간 제한</h2>
+          <p className="muted">정해 두면 그날 포켓로그를 그 시간만큼 한 뒤에는 게임 화면에 &lsquo;오늘은 여기까지&rsquo; 안내가 뜨고 퀴즈로 돌아가요. 하던 판은 내일 이어서 할 수 있어요. 지금은 <b>{overview.battle.limit ? `${overview.battle.limit}분` : '제한 없음'}</b>.</p>
+          <div className="inline-form">
+            <select value={battleLimit} onChange={e => setBattleLimit(Number(e.target.value))}>
+              {overview.battle.limitOptions.map(m => <option key={m} value={m}>{m ? `하루 ${m}분` : '제한 없음'}</option>)}
+            </select>
+            <button className="secondary" disabled={busy || battleLimit === overview.battle.limit} onClick={async () => { if (await call({ action: 'setBattleLimit', minutes: battleLimit })) await reload(); }}>저장</button>
           </div>
-        </div>
-        {overview.preparedBanks.length > 0 && <p className="muted">미리 만들어 둔 초1 연습 문제은행(과목당 24문제, 영역 표시 포함)을 &lsquo;검토 중&rsquo; 상태로 가져와요. 내용을 보고 고친 뒤 공개하면 돼요.</p>}
-        <div className="bank-list">
-          {overview.banks.map(b => (
-            <button key={b.id} className={'bank-row ' + b.status} onClick={() => onOpenBank(b.id)}>
-              <b>{b.title}</b>
-              <span>{b.grade} · {b.question_count}문제 · {STATUS_LABEL[b.status]}</span>
-              <Pencil size={16} />
+          <h2>배틀 중 진화 허용</h2>
+          <p className="muted">꺼 두면(기본) 포켓로그 판 안에서 레벨이 올라도 진화하지 않고, 진화의 돌 같은 진화 아이템도 보상에 나오지 않아요. 포켓몬 진화는 퀴즈 스탯으로만 해요. 지금은 <b>{overview.battle.evolution ? '허용' : '막음'}</b>.</p>
+          <div className="inline-form">
+            <button className="secondary" disabled={busy}
+              onClick={async () => { if (await call({ action: 'setBattleEvolution', allowed: !overview.battle.evolution })) await reload(); }}>
+              {overview.battle.evolution ? '진화 막기' : '진화 허용하기'}
             </button>
-          ))}
-          {!overview.banks.length && <p>아직 문제은행이 없어요.</p>}
-        </div>
-      </section>
+          </div>
+        </section>
+        <section className="panel parent-section">
+          <h2>포켓로그(전투 게임) 비밀번호</h2>
+          <p>{overview.battlePasswordSet
+            ? '비밀번호가 정해져 있어요. 가족 기기에서 포켓로그(/battle)를 열 때 한 번 넣으면 1년 동안 다시 묻지 않아요. 바꾸면 모든 기기에서 다시 넣어야 해요.'
+            : '아직 안 정했어요. 정하기 전까지 포켓로그는 열리지 않아요. 아이가 외우기 쉬운 것으로 ' + BATTLE_PASSWORD_MIN + '자 이상 정해 주세요.'}</p>
+          <div className="inline-form">
+            <input type="text" value={battlePassword} onChange={e => setBattlePassword(e.target.value)} placeholder={overview.battlePasswordSet ? '새 비밀번호 (바꿀 때만)' : `비밀번호 (${BATTLE_PASSWORD_MIN}자 이상)`} />
+            <button className="secondary" disabled={busy || battlePassword.trim().length < BATTLE_PASSWORD_MIN}
+              onClick={async () => { if (await call({ action: 'setBattlePassword', password: battlePassword })) { setBattlePassword(''); await reload(); } }}>
+              {overview.battlePasswordSet ? '바꾸기' : '정하기'}
+            </button>
+            {overview.battlePasswordSet && <button className="secondary danger" disabled={busy}
+              onClick={async () => { if (window.confirm('포켓로그 비밀번호를 지울까요? 다시 정하기 전까지 포켓로그가 열리지 않아요.') && await call({ action: 'clearBattlePassword' })) await reload(); }}>지우기</button>}
+          </div>
+          <p className="muted">게임 주소: <a href="/battle/" target="_blank" rel="noreferrer">/battle/</a> · 미리 받아 두기: <a href="/battle/prepare" target="_blank" rel="noreferrer">/battle/prepare</a></p>
+        </section>
+      </>}
 
-      <DevMenu sim={overview.sim} busy={busy} call={call} reload={reload} />
-
-      {/* 이 칸은 항상 맨 아래에 둡니다. 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
-      <section className="panel parent-section danger-zone">
-        <h2>아이 게임 처음부터 다시 하기</h2>
-        <p>파트너, 포켓몬, 스탯, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
-        <div><button className="secondary danger" disabled={busy} onClick={async () => {
-          if (!window.confirm('정말 아이 게임 기록을 모두 지우고 처음부터 시작할까요? 되돌릴 수 없어요.')) return;
-          if (await call({ action: 'resetChild' })) await reload();
-        }}>초기화하기</button></div>
-      </section>
+      {tabs.main === 'dev' && <>
+        <DevMenu part={sub === 'sim' ? 'sim' : 'version'} sim={overview.sim} busy={busy} call={call} reload={reload} />
+        {/* 이 칸은 항상 맨 아래에 둡니다 (업데이트·개발 탭의 마지막). 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
+        <section className="panel parent-section danger-zone">
+          <h2>아이 게임 처음부터 다시 하기</h2>
+          <p>파트너, 포켓몬, 스탯, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
+          <div><button className="secondary danger" disabled={busy} onClick={async () => {
+            if (!window.confirm('정말 아이 게임 기록을 모두 지우고 처음부터 시작할까요? 되돌릴 수 없어요.')) return;
+            if (await call({ action: 'resetChild' })) await reload();
+          }}>초기화하기</button></div>
+        </section>
+      </>}
 
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
@@ -393,8 +447,8 @@ function RestEditor({ rest, busy, call, reload }: { rest: Overview['battle']['re
   const save = async () => { if (await call({ action: 'setBattleRest', rules })) { setDirty(false); await reload(); } };
   const status = rest.now.blocked ? `지금은 '${rest.now.name}'이라 배틀이 잠겨 있어요${rest.now.until ? ` (${rest.now.until}까지)` : ''}.` : rest.openToday ? '오늘은 쉬는 시간 없이 열려 있어요.' : '지금은 배틀할 수 있는 시간이에요.';
   return (
-    <div className="rest-editor">
-      <h3>배틀 쉬는 시간</h3>
+    <div className="rest-editor standalone">
+      <h2>배틀 쉬는 시간</h2>
       <p className="muted">이 시간에는 포켓로그 새 게임도 이어하기도 잠겨요(퀴즈는 그대로). 게임 중이면 10분 전에 안내하고, 시간이 되면 그 전투를 마친 뒤 저장하고 퀴즈로 돌아와요. 끝 시각이 시작보다 빠르면 다음 날 그 시각까지예요. 판단은 서버의 한국 시간 기준. <b>{status}</b></p>
       <div className="rest-list">
         {rules.map((r, i) => (
@@ -523,7 +577,7 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
 
 // ---------------- 개발자 메뉴 ----------------
 /** 버전 표시와 시뮬레이션(아이 기록을 건드리지 않는 시험용 기록으로 앱 전체를 해 보기) */
-function DevMenu({ sim, busy, call, reload }: { sim: Overview['sim']; busy: boolean; call: Call; reload: () => Promise<void> }) {
+function DevMenu({ part, sim, busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const childScreen = '/';
   const start = async (source: 'copy' | 'empty') => {
     if (source === 'copy' && !window.confirm('지금 아이 기록을 시험용으로 복사해서 시뮬레이션을 시작할까요? 아이의 진짜 기록은 바뀌지 않아요.')) return;
@@ -533,14 +587,13 @@ function DevMenu({ sim, busy, call, reload }: { sim: Overview['sim']; busy: bool
   const [clock, setClock] = useState(sim.clock);
   return (
     <section className="panel parent-section dev-menu">
-      <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 개발자 메뉴</h2>
-
-      <h3>① 버전</h3>
+      {part === 'version' ? <>
+      <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 업데이트 내용</h2>
       <p>버전 <b>{versionLabel(__BUILD_DATE__)}</b> <span className="muted">· 저장 번호 {__APP_VERSION__}</span></p>
       <p className="muted">버전 {APP_VERSION}에서 바뀐 것</p>
       <ul className="changes">{CHANGES.map(c => <li key={c}>{c}</li>)}</ul>
-
-      <h3>② 시뮬레이션</h3>
+      </> : <>
+      <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 시뮬레이션</h2>
       <p>보호자가 아이처럼 앱 전체(일일미션, 탐험, 도감, 가방, 포켓로그 배틀)를 해 볼 수 있어요. <b>아이의 진짜 기록은 절대 바뀌지 않고</b>, 이 브라우저에서만 시험용 기록을 써요. 포켓로그 시도 횟수와 기록도 시험용으로 따로 세요.</p>
       {sim.active ? <>
         <div className="sim-state">
@@ -566,6 +619,7 @@ function DevMenu({ sim, busy, call, reload }: { sim: Overview['sim']; busy: bool
           <button className="secondary" disabled={busy} onClick={() => void start('empty')}>빈 기록으로 시작</button>
         </div>
         <p className="muted">시작하면 아이 화면으로 이동하고, 화면 맨 위에 ‘시뮬레이션 중’ 띠가 보여요. 끝낼 때는 띠를 눌러 여기로 돌아와 ‘시뮬레이션 끝내기’를 누르면 돼요. 끝내는 걸 잊어도 7일 뒤엔 저절로 풀려요.</p>
+      </>}
       </>}
     </section>
   );
