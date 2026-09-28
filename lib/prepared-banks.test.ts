@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { SUBJECTS, SUBJECT_TYPES } from './game-config.ts';
+import { SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES } from './game-config.ts';
 import { parseCsv, rowsToQuestions } from './question-import.ts';
 
 // 미리 만들어 둔 연습 문제은행(data/banks/bank1~3.csv)이 형식에 맞고 서로 겹치지 않는지
@@ -16,10 +16,10 @@ test('연습 문제은행 3개: 형식 오류 없음, 과목당 24문제, 영역
       assert.equal(qs.length, 24, `bank${n} ${s} 문제 수`);
       // 속성은 과목 속성 3개에 고르게
       for (const t of SUBJECT_TYPES[s]) assert.ok(qs.filter(q => q.type === t).length >= 6, `bank${n} ${s} 속성 ${t} 부족`);
-      assert.ok(new Set(qs.map(q => q.area)).size >= 4, `bank${n} ${s} 영역 종류`);
+      assert.equal(new Set(qs.map(q => q.area)).size, SUBJECT_AREAS[s].length, `bank${n} ${s} 영역이 모두 들어 있음`);
     }
     for (const q of questions) {
-      assert.ok(q.area, `영역 비어 있음: ${q.prompt}`);
+      assert.ok((SUBJECT_AREAS[q.subject] as readonly string[]).includes(q.area), `확정 영역이 아님: [${q.subject}] ${q.area} — ${q.prompt}`);
       assert.ok(q.explanation.length > 0, `해설 없음: ${q.prompt}`);
       assert.ok(!seen.has(q.subject + q.prompt), `문제 문장 겹침: ${q.prompt}`);
       seen.add(q.subject + q.prompt);
