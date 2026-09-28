@@ -280,6 +280,8 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .dot.on { background: #3fa129; border-color: #3fa129; }
 .dot.miss { background: #e0764a; border-color: #e0764a; }
 .mission-footer { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #5f775f; margin: 12px 0 6px; }
+.candy-note { margin: 0 0 6px; font-size: 14px; color: #7a4b1e; background: #fff6e8; border: 1px solid #f3dcc0; border-radius: 10px; padding: 8px 12px; }
+.candy-note small { color: #a3866a; }
 .review-note { display: flex; align-items: center; gap: 5px; font-size: 13px; color: #a2573b; margin: 4px 0 0; }
 .review-note.later { color: #6a7b70; }
 .mastered { color: #b98500; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }

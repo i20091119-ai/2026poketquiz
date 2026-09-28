@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAILY_ATTEMPTS, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
+import { DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { applyAction, battleStartsLeft, candySummary, childView, claimCandy, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -427,4 +427,25 @@ test('시뮬레이션 날짜 넘기기: 월말·연말을 넘어가도 하루씩
   assert.equal(shiftDate('2026-12-31', 1), '2027-01-01');
   assert.equal(shiftDate('2028-02-28', 2), '2028-03-01');
   assert.equal(shiftDate('이상한 값', 1), '이상한 값');
+});
+
+test('일일미션 사탕: 다 풀면 파트너에게 3개, 모두 맞히면 5개, 하루 한 번, 게임이 가져가면 목록에서 빠진다', () => {
+  const bank = makeBank(8);
+  for (const [correctCount, amount] of [[18, DAILY_CANDY.perfect], [17, DAILY_CANDY.finished], [10, DAILY_CANDY.finished]] as const) {
+    const state = started(bank);
+    assert.equal(candySummary(state, '2026-09-26').today, null);
+    playDaily(state, bank, ctx(bank), (_, i) => i < correctCount);
+    const c = candySummary(state, '2026-09-26');
+    assert.equal(c.today?.amount, amount, `${correctCount}개 맞힘`);
+    assert.equal(c.today?.species, state.owned[0].species);
+    assert.equal(c.pending, amount);
+    assert.equal(c.sent, amount);
+    assert.equal(state.candy!.pending.length, 1);
+    // 게임이 가져가면 목록에서 빠지고, 보낸 총량은 남는다
+    assert.equal(claimCandy(state, [state.candy!.pending[0].id, '없는번호']), 1);
+    assert.equal(candySummary(state, '2026-09-26').pending, 0);
+    assert.equal(candySummary(state, '2026-09-26').sent, amount);
+    // 다음 날은 아직 안 줌
+    assert.equal(candySummary(state, '2026-09-27').today, null);
+  }
 });
