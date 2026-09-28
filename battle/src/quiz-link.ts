@@ -104,6 +104,22 @@ export function quizStartingSpecies(starterId: StarterSpeciesId): PokemonSpecies
   return speciesDataRegistry.getSpecies(best);
 }
 
+// ---- 판 안 진화 허용 (보호자 공간 스위치, 기본 꺼짐) ----
+const EVOLUTION_KEY = "quizEvolutionAllowed";
+const quizOptions = { evolutionAllowed: localStorage.getItem(EVOLUTION_KEY) === "1" };
+
+/** 보호자가 "배틀 중 진화 허용"을 켰는지. 서버 응답을 못 받으면 마지막으로 받아 둔 값(처음엔 꺼짐). */
+export function isBattleEvolutionAllowed(): boolean {
+  return QUIZ_RULES.evolutionSwitch ? quizOptions.evolutionAllowed : true;
+}
+function noteEvolutionSetting(value: unknown): void {
+  if (typeof value !== "boolean") {
+    return;
+  }
+  quizOptions.evolutionAllowed = value;
+  localStorage.setItem(EVOLUTION_KEY, value ? "1" : "0");
+}
+
 // ---- 하루 시도 횟수 (SPEC 7번) — 퀴즈 앱 서버가 관리합니다 ----
 export const QUIZ_BATTLE_URL = "/api/battle";
 const OFFLINE_MESSAGE = "퀴즈 앱 서버에 연결되지 않아 새 게임을 시작할 수 없어요. 인터넷을 확인하고 다시 해 주세요.";
@@ -121,7 +137,13 @@ export async function canStartNewBattle(): Promise<BattleStartResult> {
     if (!res.ok) {
       return { ok: false, message: OFFLINE_MESSAGE };
     }
-    const body = (await res.json()) as { left?: number; message?: string | null; timeUp?: boolean };
+    const body = (await res.json()) as {
+      left?: number;
+      message?: string | null;
+      timeUp?: boolean;
+      evolution?: boolean;
+    };
+    noteEvolutionSetting(body.evolution);
     if (body.timeUp) {
       showTimeUpOverlay(body.message ?? TIME_UP_FALLBACK);
       return { ok: false, message: body.message ?? TIME_UP_FALLBACK };
@@ -319,7 +341,8 @@ export function startProgressReporting(): void {
       keepalive: true,
     })
       .then(res => (res.ok ? res.json() : null))
-      .then((data: { timeUp?: boolean; message?: string | null } | null) => {
+      .then((data: { timeUp?: boolean; message?: string | null; evolution?: boolean } | null) => {
+        noteEvolutionSetting(data?.evolution);
         if (data?.timeUp) {
           showTimeUpOverlay(data.message ?? TIME_UP_FALLBACK);
         }
