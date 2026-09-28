@@ -1,9 +1,10 @@
 // 포켓로그가 1분마다 보내는 진행 보고 (지금 웨이브, 그동안 플레이한 초). 보호자 화면의 날짜별 기록이 됩니다.
-import { battleTimeUp, recordBattleLevels, recordBattleProgress } from '@/lib/game-engine';
-import { TIME_UP_MESSAGE } from '../route';
+// 응답으로 시간 제한·쉬는 시간 상태를 돌려주어, 게임이 안내를 띄우거나 전투를 마친 뒤 저장하고 나가게 합니다.
+import { recordBattleLevels, recordBattleProgress } from '@/lib/game-engine';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
+import { battleGate, gateForGame } from '@/lib/server/battle-gate';
 import { playerOf } from '@/lib/server/player';
-import { getBattleEvolutionAllowed, getBattleLimitMinutes, json, mutateState } from '@/lib/server/store';
+import { getBattleEvolutionAllowed, json, mutateState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +18,15 @@ export async function POST(request: Request) {
     const wave = Number(body?.wave ?? 0), seconds = Number(body?.seconds ?? 0);
     const player = await playerOf(request);
     const today = player.today;
-    const [limit, evolution] = await Promise.all([getBattleLimitMinutes(), getBattleEvolutionAllowed()]);
+    const evolution = await getBattleEvolutionAllowed();
     const party = Array.isArray(body?.party) ? (body.party as { starter?: unknown; level?: unknown }[]).slice(0, 6) : [];
     const { state, result } = await mutateState(state => {
       recordBattleLevels(state, party.map(p => ({ starter: Number(p?.starter), level: Number(p?.level) })));
       return { result: recordBattleProgress(state, today, wave, seconds), changed: true };
     }, player.id);
-    const timeUp = battleTimeUp(state, today, limit);
-    // timeUp 이면 게임이 화면을 가리고 퀴즈로 돌아가게 합니다 (하루 시간 제한). evolution: 판 안 진화 허용 설정(게임이 1분마다 다시 받음)
-    return json({ ok: true, today: result, limit, timeUp, evolution, message: timeUp ? TIME_UP_MESSAGE(limit) : null });
+    const gate = await battleGate(player, state);
+    // blocked 면 게임이 이번 전투를 마친 뒤 저장하고 퀴즈로 돌아갑니다 (하루 시간 제한 또는 쉬는 시간). rest.soon 이면 미리 알림.
+    return json({ ok: true, today: result, blocked: gate.blocked, evolution, message: gate.message, ...gateForGame(gate) });
   } catch (error) {
     console.error('포켓로그 진행 기록 실패', error);
     return json({ error: '기록하지 못했어요.' }, 503);

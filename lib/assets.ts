@@ -26,4 +26,6 @@ export const ASSETS = {
     luxury: '/assets/balls/luxury.png',
   } satisfies Record<BallKind, string>,
   type: (t: TypeKey) => `/assets/types/${t}.png`,
+  /** 아이 답장 스티커 (새싹 동글이, 부모님이 주신 샘플 reply-stickers-sample.html 의 그림을 그대로 파일로 뺌) */
+  sticker: (key: string) => `/assets/stickers/${key}.svg`,
 };

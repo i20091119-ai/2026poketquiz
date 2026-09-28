@@ -206,3 +206,57 @@ export const WEAK_AREA = { recent: 5, wrong: 2, maxPerSubjectDaily: 2 };
  * 게임 안에서 원래 방식(친밀도·클리어)으로 모이는 사탕은 그대로 더해집니다.
  */
 export const DAILY_CANDY = { finished: 1, perfect: 3 };
+
+// ---- 보호자 선물 ----
+/** 보내는 사람 */
+export const GIFT_SENDERS = { mom: '엄마', dad: '아빠' } as const;
+export type GiftSender = keyof typeof GIFT_SENDERS;
+/** 미리 골라 둔 이유 (직접 입력도 가능) */
+export const GIFT_REASONS = ['숙제', '독서', '정리정돈', '운동'] as const;
+export const GIFT_REASON_MAX = 20;
+export const GIFT_LETTER_MAX = 60;
+/** 선물 크기별 이름과, 아이가 상자를 열 때 둘 중 하나를 고르는 내용 */
+export const GIFT_SIZES = {
+  small: { label: '작은 선물', emoji: '🎀', options: ['exp', 'berry'] },
+  medium: { label: '보통 선물', emoji: '🎁', options: ['box', 'candy'] },
+  large: { label: '큰 선물', emoji: '🎉', options: ['ball', 'ticket'] },
+} as const satisfies Record<string, { label: string; emoji: string; options: readonly GiftChoice[] }>;
+export type GiftSize = keyof typeof GIFT_SIZES;
+export type GiftChoice = 'exp' | 'berry' | 'box' | 'candy' | 'ball' | 'ticket';
+export const GIFT_EXP = 30;
+export const GIFT_CANDY = 3;
+export const GIFT_BALL: BallKind = 'poke';
+export const GIFT_CHOICE_INFO: Record<GiftChoice, { label: string; description: string }> = {
+  exp: { label: `경험치 +${GIFT_EXP}`, description: '바로 경험치가 올라. 스탯으로 바꿔 쓸 수 있어.' },
+  berry: { label: '원하는 열매 1개', description: '계열(과목)을 골라서 그 열매를 가방에 넣어.' },
+  box: { label: '랜덤상자 1개', description: '열매·상처약·볼 중 하나가 들어 있어.' },
+  candy: { label: `포켓로그 사탕 ${GIFT_CANDY}개`, description: '파트너 포켓몬에게 보내. 포켓로그를 켜면 들어가.' },
+  ball: { label: '몬스터볼 1개', description: '가방에 넣었다가 열어서 새 포켓몬을 만나.' },
+  ticket: { label: '배틀 추가권 1장', description: '포켓로그 새 게임을 한 번 더 할 수 있어. 안 쓰면 남아 있어.' },
+};
+/** 하루(작은·보통)·일주일(큰) 한도 기본값. 보호자 공간에서 바꿀 수 있습니다. */
+export const GIFT_LIMIT_DEFAULT = { small: 2, medium: 1, large: 1 };
+export type GiftLimits = { small: number; medium: number; large: number };
+/** 아이 화면에 두는 선물 기록 수 */
+export const GIFT_HISTORY = 40;
+
+// ---- 아이 답장 ----
+/** 새싹 동글이 스티커 5개 (public/assets/stickers/<key>.svg) */
+export const REPLY_STICKERS = [
+  { key: 'thanks', label: '감사합니다' },
+  { key: 'moved', label: '감동이야' },
+  { key: 'love', label: '사랑해' },
+  { key: 'try', label: '열심히 할게요' },
+  { key: 'yay', label: '신나신나' },
+] as const;
+export type ReplySticker = typeof REPLY_STICKERS[number]['key'];
+export const REPLY_TEXT_MAX = 30;
+
+// ---- 포켓로그 쉬는 시간 ----
+/** 처음 값. 보호자 공간에서 고칩니다. 요일: 0 일 … 6 토. 끝 시각이 시작보다 빠르면 다음 날까지(자정 넘김). */
+export const BATTLE_REST_DEFAULT = [
+  { id: 'work', name: '일과 시간', days: [1, 2, 3, 4, 5], start: '07:30', end: '18:00' },
+  { id: 'sleep', name: '잠자는 시간', days: [0, 1, 2, 3, 4, 5, 6], start: '22:30', end: '07:30' },
+];
+/** 쉬는 시간 몇 분 전에 게임 화면에 미리 알릴지 */
+export const BATTLE_REST_WARN_MINUTES = 10;

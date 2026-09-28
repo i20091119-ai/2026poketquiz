@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate } from './game-engine.ts';
+import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, shinyColor, shinyName, species, TOTAL_SPECIES } from './pokedex.ts';
+import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
 /** 반복 가능한 난수 */
@@ -529,4 +530,65 @@ test('이로치 이름은 색 이름 + 포켓몬 이름이고, 모든 포켓몬�
   assert.equal(shinyColor(384), '블랙');
   assert.equal(shinyColor(130), '레드');
   for (let id = 1; id <= TOTAL_SPECIES; id++) assert.notEqual(shinyColor(id), '이로치', `#${id} 색 이름 없음`);
+});
+
+const at = (today: string): Context => ({ bank: null, today, now: today + 'T00:00:00Z', random: seeded() });
+
+test('보호자 선물: 한도 안에서 보내고, 아이가 열어 고른 것을 받고, 답장은 한 번만', () => {
+  const state = initialState();
+  applyAction(state, { type: 'starter', species: 912 }, at('2026-09-28'));
+  const today = '2026-09-28', now = '2026-09-28T10:00:00.000Z';
+  const g1 = sendGift(state, { from: 'mom', reason: '숙제', size: 'small', letter: '잘했어' }, today, now);
+  sendGift(state, { from: 'dad', reason: '독서', size: 'small' }, today, now);
+  assert.throws(() => sendGift(state, { from: 'mom', reason: '운동', size: 'small' }, today, now), /하루에 2개/);
+  const g2 = sendGift(state, { from: 'mom', reason: '정리정돈', size: 'medium' }, today, now);
+  const g3 = sendGift(state, { from: 'dad', reason: '운동', size: 'large' }, today, now);
+  // 큰 선물은 주 1개: 같은 주 다른 날에도 못 보냄, 다음 주 월요일부터 가능
+  assert.throws(() => sendGift(state, { from: 'dad', reason: '운동', size: 'large' }, '2026-10-04', now), /일주일에 1개/);
+  assert.ok(sendGift(state, { from: 'dad', reason: '운동', size: 'large' }, '2026-10-05', now));
+  assert.deepEqual(giftCounts(state, today), { small: 2, medium: 1, large: 1 });
+  // 열기: 경험치
+  const expBefore = state.exp;
+  const r1 = applyAction(state, { type: 'openGift', id: g1.id, choice: 'exp' }, at(today)) as { gift: { opened: { got: string } | null } };
+  assert.equal(state.exp, expBefore + GIFT_EXP);
+  assert.ok(r1.gift.opened);
+  assert.throws(() => applyAction(state, { type: 'openGift', id: g1.id, choice: 'exp' }, at(today)), /이미 연/);
+  // 크기에 없는 선택은 거부, 열매는 계열 필요
+  assert.throws(() => applyAction(state, { type: 'openGift', id: g2.id, choice: 'exp' }, at(today)), /둘 중 하나/);
+  const r2 = applyAction(state, { type: 'openGift', id: g2.id, choice: 'candy' }, at(today)) as { gift: { opened: { got: string } } };
+  assert.match(r2.gift.opened.got, /사탕 3개/);
+  assert.equal(state.candy?.pending.reduce((s, c) => s + c.amount, 0), GIFT_CANDY);
+  // 큰 선물: 배틀 추가권 → 하루 횟수를 다 쓴 뒤 한 번 더
+  applyAction(state, { type: 'openGift', id: g3.id, choice: 'ticket' }, at(today));
+  assert.equal(battleTickets(state), 1);
+  assert.equal(startBattle(state, today), true); // 하루 1번
+  assert.equal(battleStartsLeft(state, today), 0);
+  assert.equal(battleStartsAvailable(state, today), 1);
+  assert.equal(startBattle(state, today), true); // 추가권 사용
+  assert.equal(battleTickets(state), 0);
+  assert.equal(startBattle(state, today), false);
+  // 답장: 한 번만, 30자 제한
+  applyAction(state, { type: 'replyGift', id: g1.id, sticker: 'thanks', text: 'a'.repeat(50) }, at(today));
+  assert.equal(state.gifts![0].reply?.text.length, REPLY_TEXT_MAX);
+  assert.throws(() => applyAction(state, { type: 'replyGift', id: g1.id, sticker: 'love' }, at(today)), /한 번만/);
+  assert.equal(unseenReplies(state), 1);
+  assert.equal(markRepliesSeen(state), 1);
+  assert.equal(unseenReplies(state), 0);
+  const view = childView(state, makeBank(3), today);
+  assert.equal(view.gifts[0].id, state.gifts![state.gifts!.length - 1].id); // 최근 것부터
+  assert.equal(view.battle.tickets, 0);
+});
+
+test('선물 열매는 고른 계열 열매가 가방에 들어가고, 몬스터볼은 볼 번호를 돌려준다', () => {
+  const state = initialState();
+  applyAction(state, { type: 'starter', species: 906 }, at('2026-09-28'));
+  const a = sendGift(state, { from: 'mom', reason: '숙제', size: 'small' }, '2026-09-28', 'now');
+  assert.throws(() => applyAction(state, { type: 'openGift', id: a.id, choice: 'berry' }, at('2026-09-28')), /계열/);
+  applyAction(state, { type: 'openGift', id: a.id, choice: 'berry', subject: '수학' }, at('2026-09-28'));
+  assert.equal(state.potions[0].kind, 'thunder');
+  const b = sendGift(state, { from: 'mom', reason: '숙제', size: 'large' }, '2026-09-28', 'now');
+  const r = applyAction(state, { type: 'openGift', id: b.id, choice: 'ball' }, at('2026-09-28')) as { ballIds: string[] };
+  assert.equal(r.ballIds.length, 1);
+  assert.equal(state.balls[0].id, r.ballIds[0]);
+  assert.equal(state.balls[0].kind, 'poke');
 });

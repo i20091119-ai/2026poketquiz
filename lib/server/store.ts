@@ -1,6 +1,7 @@
 // D1 저장소 접근. 서버(라우트)에서만 사용합니다.
 import { env } from 'cloudflare:workers';
-import { DEFAULT_GRADE, GRADES, SUBJECTS, type Subject } from '../game-config.ts';
+import { defaultRules, normalizeRules, type RestRule } from '../battle-rest.ts';
+import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SUBJECTS, type GiftLimits, type Subject } from '../game-config.ts';
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
@@ -96,6 +97,41 @@ export async function getBattleEvolutionAllowed(): Promise<boolean> {
 export async function setBattleEvolutionAllowed(allowed: boolean) {
   await db().prepare("INSERT INTO settings (key, value) VALUES ('battle_evolution_allowed', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(allowed ? '1' : '0').run();
 }
+
+// ---------- 설정 공통 (문자열 하나) ----------
+async function getSetting(key: string): Promise<string | null> {
+  const row = await db().prepare('SELECT value FROM settings WHERE key = ?').bind(key).first<{ value: string }>();
+  return row?.value ?? null;
+}
+async function setSetting(key: string, value: string | null) {
+  if (value === null) await db().prepare('DELETE FROM settings WHERE key = ?').bind(key).run();
+  else await db().prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, value).run();
+}
+
+// ---------- 보호자 선물 한도 ----------
+export async function getGiftLimits(): Promise<GiftLimits> {
+  try {
+    const raw = JSON.parse((await getSetting('gift_limits')) ?? 'null') as Partial<GiftLimits> | null;
+    const num = (v: unknown, d: number) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : d);
+    return { small: num(raw?.small, GIFT_LIMIT_DEFAULT.small), medium: num(raw?.medium, GIFT_LIMIT_DEFAULT.medium), large: num(raw?.large, GIFT_LIMIT_DEFAULT.large) };
+  } catch { return { ...GIFT_LIMIT_DEFAULT }; }
+}
+export const setGiftLimits = (limits: GiftLimits) => setSetting('gift_limits', JSON.stringify(limits));
+
+// ---------- 포켓로그 쉬는 시간 ----------
+export async function getBattleRest(): Promise<RestRule[]> {
+  const raw = await getSetting('battle_rest');
+  if (raw === null) return defaultRules();
+  try { return normalizeRules(JSON.parse(raw)); } catch { return defaultRules(); }
+}
+export const setBattleRest = (rules: RestRule[]) => setSetting('battle_rest', JSON.stringify(rules));
+/** "오늘만 열어 주기"를 누른 날짜 (그날이 지나면 저절로 풀림) */
+export const getRestOpenDate = () => getSetting('battle_rest_open');
+export const setRestOpenDate = (date: string | null) => setSetting('battle_rest_open', date);
+
+// ---------- 시뮬레이션 시각 ('HH:MM', 없으면 진짜 시각) ----------
+export const getSimClock = () => getSetting('sim_clock');
+export const setSimClock = (clock: string | null) => setSetting('sim_clock', clock);
 
 // ---------- 포켓로그(/battle) 비밀번호 ----------
 // 비밀번호 자체가 아니라 서명값(해시)만 저장합니다 (lib/server/battle-auth.ts).

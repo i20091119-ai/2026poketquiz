@@ -141,11 +141,14 @@ export async function canStartNewBattle(): Promise<BattleStartResult> {
       left?: number;
       message?: string | null;
       timeUp?: boolean;
+      blocked?: boolean;
+      rest?: RestInfo;
       evolution?: boolean;
     };
     noteEvolutionSetting(body.evolution);
-    if (body.timeUp) {
-      showTimeUpOverlay(body.message ?? TIME_UP_FALLBACK);
+    if (body.blocked || body.timeUp) {
+      // 하루 시간 제한을 다 썼거나 쉬는 시간: 새 게임도 이어하기도 안 됨 → 화면을 덮고 퀴즈로
+      showTimeUpOverlay(body.message ?? TIME_UP_FALLBACK, body.rest?.blocked ? "🌙 지금은 쉬는 시간!" : undefined);
       return { ok: false, message: body.message ?? TIME_UP_FALLBACK };
     }
     return (body.left ?? 0) > 0 ? { ok: true } : { ok: false, message: body.message ?? OFFLINE_MESSAGE };
@@ -170,15 +173,24 @@ export async function consumeNewBattleStart(): Promise<BattleStartResult> {
   }
 }
 
-// ---- 하루 플레이 시간 제한 (보호자 공간에서 정함, 기본 없음) ----
+// ---- 하루 플레이 시간 제한 · 쉬는 시간 (보호자 공간에서 정함) ----
 const TIME_UP_FALLBACK = "오늘 포켓로그 시간을 다 썼어요. 내일 또 하자!";
 let timeUpShown = false;
 
+/** 서버가 알려 주는 쉬는 시간 상태 */
+interface RestInfo {
+  blocked: boolean;
+  name: string | null;
+  until: string | null;
+  message: string | null;
+  soon: { name: string; inMinutes: number; at: string } | null;
+}
+
 /**
- * 시간을 다 썼을 때 게임 화면을 가리는 안내판. 게임은 멈추지 않지만 만질 수 없고, 버튼을 누르면 퀴즈 앱으로 돌아갑니다.
- * (진행 중인 판은 게임이 웨이브마다 저장해 두므로 내일 이어서 할 수 있어요.)
+ * 시간을 다 썼거나 쉬는 시간일 때 게임 화면을 가리는 안내판. 게임은 멈추지 않지만 만질 수 없고, 버튼을 누르면 퀴즈 앱으로 돌아갑니다.
+ * (진행 중인 판은 게임이 웨이브마다 저장해 두므로 다음에 이어서 할 수 있어요.)
  */
-export function showTimeUpOverlay(message: string): void {
+export function showTimeUpOverlay(message: string, heading = "⏰ 오늘은 여기까지!"): void {
   if (timeUpShown) {
     return;
   }
@@ -189,7 +201,7 @@ export function showTimeUpOverlay(message: string): void {
   const box = document.createElement("div");
   box.style.cssText = "max-width:420px";
   const title = document.createElement("div");
-  title.textContent = "⏰ 오늘은 여기까지!";
+  title.textContent = heading;
   title.style.cssText = "font-size:26px;font-weight:800;margin-bottom:12px";
   const text = document.createElement("p");
   text.textContent = message;
@@ -206,6 +218,65 @@ export function showTimeUpOverlay(message: string): void {
     add();
   } else {
     document.addEventListener("DOMContentLoaded", add);
+  }
+}
+
+/** 화면 위쪽에 잠깐 보이는 안내 띠 (쉬는 시간 10분 전 등). 같은 글은 한 번만. */
+const toastShown = new Set<string>();
+export function showQuizToast(text: string, ms = 9000): void {
+  if (toastShown.has(text)) {
+    return;
+  }
+  toastShown.add(text);
+  const bar = document.createElement("div");
+  bar.textContent = text;
+  bar.style.cssText =
+    "position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:2147483645;background:#6d28d9;color:#fff;font-family:system-ui,sans-serif;font-weight:800;font-size:15px;padding:10px 18px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.35);max-width:92vw;text-align:center";
+  const add = () => {
+    document.body.append(bar);
+    setTimeout(() => bar.remove(), ms);
+  };
+  if (document.body) {
+    add();
+  } else {
+    document.addEventListener("DOMContentLoaded", add);
+  }
+}
+
+/** 쉬는 시간(또는 시간 제한)이 되어 "이번 전투가 끝나면 저장하고 나가야" 하는 상태 */
+let quitAfterBattle = false;
+/** 진행 보고 응답의 시간 제한·쉬는 시간 상태를 처리합니다. */
+function handleGateReport(data: {
+  blocked?: boolean;
+  timeUp?: boolean;
+  message?: string | null;
+  rest?: RestInfo | null;
+}): void {
+  const rest = data.rest ?? null;
+  if (data.blocked || data.timeUp) {
+    if (!quitAfterBattle) {
+      quitAfterBattle = true;
+      showQuizToast(`${data.message ?? TIME_UP_FALLBACK} 이번 전투가 끝나면 저장하고 퀴즈로 돌아갈게.`, 12000);
+    }
+    return;
+  }
+  if (rest?.soon) {
+    showQuizToast(
+      `⏰ ${rest.soon.inMinutes}분 뒤(${rest.soon.at})부터 ${rest.soon.name}이야. 그때는 전투를 마치고 저장할게.`,
+    );
+  }
+}
+/** 전투가 끝나 다음 웨이브로 넘어갈 때 부릅니다. 나가야 하면 저장하고 퀴즈 앱으로. */
+function quitIfNeeded(): void {
+  if (!quitAfterBattle) {
+    return;
+  }
+  quitAfterBattle = false;
+  const leave = () => window.location.assign("/");
+  try {
+    globalScene.gameData.saveAll(true, true, true, true).then(leave, leave);
+  } catch {
+    leave();
   }
 }
 
@@ -385,12 +456,23 @@ export function startProgressReporting(): void {
       keepalive: true,
     })
       .then(res => (res.ok ? res.json() : null))
-      .then((data: { timeUp?: boolean; message?: string | null; evolution?: boolean } | null) => {
-        noteEvolutionSetting(data?.evolution);
-        if (data?.timeUp) {
-          showTimeUpOverlay(data.message ?? TIME_UP_FALLBACK);
-        }
-      })
+      .then(
+        (
+          data: {
+            blocked?: boolean;
+            timeUp?: boolean;
+            message?: string | null;
+            rest?: RestInfo | null;
+            evolution?: boolean;
+          } | null,
+        ) => {
+          if (!data) {
+            return;
+          }
+          noteEvolutionSetting(data.evolution);
+          handleGateReport(data); // 시간 제한·쉬는 시간: 미리 알림, 또는 이번 전투 뒤 저장하고 나가기
+        },
+      )
       .catch(() => {});
   };
 
@@ -401,9 +483,10 @@ export function startProgressReporting(): void {
     }
     send();
   }, REPORT_EVERY_MS);
-  // 웨이브가 바뀌면 바로 알림 (최고 웨이브가 늦게 잡히지 않게)
+  // 웨이브가 바뀌면 바로 알림 (최고 웨이브가 늦게 잡히지 않게). 나가야 하는 상태면 전투가 끝난 이 시점에 저장하고 나감
   setInterval(() => {
     if (document.visibilityState === "visible" && currentWave() > lastWave) {
+      quitIfNeeded();
       send();
     }
   }, 5_000);

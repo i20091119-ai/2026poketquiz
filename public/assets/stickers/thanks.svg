@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 150" width="160" height="150">
+  <title>새싹 동글이 – 감사합니다</title>
+  <path transform="translate(26 40)" d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#ffc53d"/><path transform="translate(136 52)" d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#ffc53d"/><path transform="translate(128 22)" d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#7ad3ff"/>
+  <g transform="translate(0 0) rotate(-8 80 95)">
+    <ellipse cx="80" cy="140" rx="38" ry="5" fill="#000" opacity=".08"/>
+    <path d="M80 38 q-4 -14 -18 -16 q2 14 18 16 z" fill="#4caf6a"/>
+    <path d="M80 38 q4 -18 22 -18 q-2 16 -22 18 z" fill="#6cc684"/>
+    <line x1="80" y1="38" x2="80" y2="48" stroke="#3d8f55" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="80" cy="92" r="46" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3.5"/>
+    <ellipse cx="80" cy="106" rx="28" ry="22" fill="#d9f5e6"/>
+    <path d="M58 88 q6 -5 12 0" fill="none" stroke="#1f2d27" stroke-width="3" stroke-linecap="round"/>
+       <path d="M90 88 q6 -5 12 0" fill="none" stroke="#1f2d27" stroke-width="3" stroke-linecap="round"/><ellipse cx="54" cy="98" rx="7" ry="4" fill="#ff9fb0" opacity=".8"/><ellipse cx="106" cy="98" rx="7" ry="4" fill="#ff9fb0" opacity=".8"/><path d="M72 98 q8 8 16 0" fill="none" stroke="#1f2d27" stroke-width="3" stroke-linecap="round"/>
+    <ellipse cx="80" cy="120" rx="12" ry="9" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3"/>
+  </g>
+</svg>

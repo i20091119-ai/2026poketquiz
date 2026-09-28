@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 150" width="160" height="150">
+  <title>새싹 동글이 – 사랑해</title>
+  <path transform="translate(28 30) scale(1.1)" d="M0 4 C-6 -4 -14 2 -8 9 L0 16 L8 9 C14 2 6 -4 0 4 Z" fill="#ff5a7a"/><path transform="translate(128 40) scale(0.9)" d="M0 4 C-6 -4 -14 2 -8 9 L0 16 L8 9 C14 2 6 -4 0 4 Z" fill="#ff86a0"/><path transform="translate(116 14) scale(0.7)" d="M0 4 C-6 -4 -14 2 -8 9 L0 16 L8 9 C14 2 6 -4 0 4 Z" fill="#ff5a7a"/>
+  <g transform="translate(0 0) rotate(0 80 95)">
+    <ellipse cx="80" cy="140" rx="38" ry="5" fill="#000" opacity=".08"/>
+    <path d="M80 38 q-4 -14 -18 -16 q2 14 18 16 z" fill="#4caf6a"/>
+    <path d="M80 38 q4 -18 22 -18 q-2 16 -22 18 z" fill="#6cc684"/>
+    <line x1="80" y1="38" x2="80" y2="48" stroke="#3d8f55" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="80" cy="92" r="46" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3.5"/>
+    <ellipse cx="80" cy="106" rx="28" ry="22" fill="#d9f5e6"/>
+    <circle cx="64" cy="86" r="5" fill="#1f2d27"/><circle cx="96" cy="86" r="5" fill="#1f2d27"/>
+<circle cx="65.5" cy="84.5" r="1.6" fill="#fff"/><circle cx="97.5" cy="84.5" r="1.6" fill="#fff"/><ellipse cx="54" cy="98" rx="7" ry="4" fill="#ff9fb0" opacity=".8"/><ellipse cx="106" cy="98" rx="7" ry="4" fill="#ff9fb0" opacity=".8"/><path d="M72 98 q8 8 16 0" fill="none" stroke="#1f2d27" stroke-width="3" stroke-linecap="round"/>
+    <path transform="translate(80 104) scale(1.9)" d="M0 4 C-6 -4 -14 2 -8 9 L0 16 L8 9 C14 2 6 -4 0 4 Z" fill="#ff5a7a"/><circle cx="58" cy="122" r="8" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3"/><circle cx="102" cy="122" r="8" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3"/>
+  </g>
+</svg>

@@ -1,14 +1,17 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
-import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
-import { activityList, areaReport, battleLogList, battleStartsLeft, candySummary, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
+import { normalizeRules, parseHm } from '@/lib/battle-rest';
+import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GIFT_SIZES, GRADES, SUBJECTS, type GiftLimits, type Subject } from '@/lib/game-config';
+import { activityList, areaReport, battleLogList, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
 import { hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
-import { isSimulating, playerOf, simStartCookie, simStopCookie } from '@/lib/server/player';
+import { isSimulating, playerOf, simClock, simStartCookie, simStopCookie } from '@/lib/server/player';
 import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
-  getBattleEvolutionAllowed, getBattleLimitMinutes, getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setBattleEvolutionAllowed, setBattleLimitMinutes, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
+  getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
+  setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -19,11 +22,12 @@ class ParentError extends Error {}
 
 /** 개발자 메뉴의 시뮬레이션 상태: 이 브라우저가 시뮬레이션 중인지, 시험용 기록의 오늘과 요약 */
 async function simulationInfo(request: Request) {
-  const [active, dayOffset, { state }] = await Promise.all([isSimulating(request), getSimDayOffset(), readState(SIM_PLAYER)]);
-  const today = shiftDate(todayKorea(), dayOffset);
+  const [active, { today, dayOffset, clock, simTime }, { state }] = await Promise.all([isSimulating(request), simClock(), readState(SIM_PLAYER)]);
   const day = state.battleLog?.[today];
   return {
     active, today, dayOffset,
+    /** 시뮬레이션의 지금 시각 'HH:MM' (정해 둔 값이 없으면 진짜 시각) 과 직접 정했는지 */
+    clock: `${String(Math.floor(clock.minutes / 60)).padStart(2, '0')}:${String(clock.minutes % 60).padStart(2, '0')}`, clockFixed: simTime !== null,
     summary: {
       partner: state.owned.find(p => p.uid === state.partner)?.species ?? null,
       exp: state.exp, owned: state.owned.length,
@@ -37,15 +41,24 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed()]);
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(),
+  ]);
   const today = player.today;
+  const gate = await battleGate(player, state);
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
   const wrong = progress?.wrong ?? {};
   return {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
-    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, today), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS, evolution: battleEvolution },
+    battle: {
+      log: battleLogList(state), leftToday: battleStartsLeft(state, today), tickets: battleTickets(state), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS, evolution: battleEvolution,
+      /** 쉬는 시간 규칙, 오늘만 열어 주기 여부, 지금 막혀 있는지 */
+      rest: { rules: restRules, openToday: restOpen === today, now: { blocked: gate.rest.blocked, name: gate.rest.name, until: gate.rest.until }, timeUp: gate.timeUp },
+    },
+    /** 보호자 선물: 기록(최근 것부터), 오늘·이번 주 보낸 수, 한도, 아직 안 본 답장 수 */
+    gifts: { list: giftList(state), counts: giftCounts(state, today), limits: giftLimits, newReplies: unseenReplies(state), today },
     /** 최근 4주 날짜별 활동 (퀴즈 시간·푼 문제·포켓로그 시간) — 주간 그래프용 */
     activity: activityList(state, today, 28),
     /** 준비된 연습 문제은행 중 아직 안 불러온 것 */
@@ -180,6 +193,44 @@ export async function POST(request: Request) {
         return json({ message: allowed ? '배틀 중 진화를 허용했어요. 게임에는 1분 안에 반영돼요.' : '배틀 중 진화를 막았어요. 레벨이 올라도 진화하지 않고, 진화 아이템도 보상에 나오지 않아요.' });
       }
 
+      // ---- 보호자 선물 ----
+      case 'sendGift': {
+        // 시뮬레이션 중인 브라우저에서 보내면 시험용 기록으로만 갑니다 (playerOf)
+        const player = await playerOf(request);
+        const [limits] = await Promise.all([getGiftLimits()]);
+        const input: GiftInput = { from: body.from as GiftInput['from'], reason: String(body.reason ?? ''), size: body.size as GiftInput['size'], letter: String(body.letter ?? '') };
+        const now = new Date().toISOString();
+        const { result } = await mutateState(state => {
+          try { return { result: sendGift(state, input, player.today, now, limits), changed: true }; } catch (e) { if (e instanceof GameError) throw new ParentError(e.message); throw e; }
+        }, player.id);
+        return json({ message: `${GIFT_SIZES[result.size].label}을 보냈어요. 아이가 앱을 열면 팝업으로 알려 줘요.${player.sim ? ' (시뮬레이션: 시험용 기록에만 감)' : ''}`, gift: result.id });
+      }
+      case 'setGiftLimits': {
+        const num = (v: unknown, name: string) => { const n = Number(v); if (!Number.isInteger(n) || n < 0 || n > 20) throw new ParentError(`${name} 한도는 0~20 사이 숫자로 적어 주세요.`); return n; };
+        const limits: GiftLimits = { small: num(body.small, '작은 선물'), medium: num(body.medium, '보통 선물'), large: num(body.large, '큰 선물') };
+        await setGiftLimits(limits);
+        return json({ message: `선물 한도를 저장했어요. 작은 하루 ${limits.small}개 · 보통 하루 ${limits.medium}개 · 큰 일주일 ${limits.large}개.` });
+      }
+      case 'markRepliesSeen': {
+        const player = await playerOf(request);
+        const { result } = await mutateState(state => { const n = markRepliesSeen(state); return { result: n, changed: n > 0 }; }, player.id);
+        return json({ message: result ? `답장 ${result}개를 확인했어요.` : '새 답장이 없어요.' });
+      }
+
+      // ---- 포켓로그 쉬는 시간 ----
+      case 'setBattleRest': {
+        let rules;
+        try { rules = normalizeRules(body.rules); } catch (e) { throw new ParentError((e as Error).message); }
+        await setBattleRest(rules);
+        return json({ message: rules.length ? `쉬는 시간 ${rules.length}개를 저장했어요.` : '쉬는 시간을 모두 지웠어요. 언제든 배틀할 수 있어요.' });
+      }
+      case 'restOpenToday': {
+        const player = await playerOf(request);
+        const open = body.open !== false;
+        await setRestOpenDate(open ? player.today : null);
+        return json({ message: open ? `오늘(${player.today})만 쉬는 시간 없이 열어 줬어요. 자정이 지나면 저절로 원래대로 돌아가요.` : '오늘만 열어 주기를 껐어요. 쉬는 시간 규칙이 다시 적용돼요.' });
+      }
+
       case 'importPreparedBanks': {
         const added = await importPreparedBanks();
         return json({ message: added.length ? `연습 문제은행 ${added.length}개(${added.join(', ')})를 불러왔어요. 검토한 뒤 '아이에게 공개'를 눌러 주세요.` : '준비된 연습 문제은행은 이미 모두 불러왔어요.' });
@@ -260,6 +311,7 @@ export async function POST(request: Request) {
         const state = copy ? (await readState()).state : initialState();
         await overwriteState(SIM_PLAYER, state);
         await setSimDayOffset(0);
+        await setSimClock(null);
         const message = copy ? '지금 아이 기록을 시험용으로 복사했어요. 이 브라우저의 아이 화면과 포켓로그는 시험용 기록을 써요.'
           : '빈 시험용 기록으로 시작해요. 이 브라우저의 아이 화면과 포켓로그는 시험용 기록을 써요.';
         return new Response(JSON.stringify({ ok: true, message }), {
@@ -272,7 +324,16 @@ export async function POST(request: Request) {
         await setSimDayOffset(days);
         return json({ message: `시험용 기록의 날짜를 ${shiftDate(todayKorea(), days)}(으)로 넘겼어요. 아이 화면을 새로고침하면 일일미션과 새 게임 횟수가 새 날 기준이 돼요.` });
       }
+      case 'simSetClock': {
+        // 시뮬레이션의 "지금 시각"을 정합니다 (쉬는 시간 막힘 확인용). 비우면 진짜 시각으로 돌아감
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const text = String(body.clock ?? '').trim();
+        if (text && parseHm(text) === null) throw new ParentError('시각은 07:30 처럼 적어 주세요.');
+        await setSimClock(text || null);
+        return json({ message: text ? `시험용 기록의 지금 시각을 ${text}(으)로 정했어요. 아이 화면·포켓로그의 쉬는 시간 판단에 이 시각을 써요.` : '시험용 기록의 시각을 진짜 시각으로 되돌렸어요.' });
+      }
       case 'simStop':
+        await setSimClock(null);
         return new Response(JSON.stringify({ ok: true, message: '시뮬레이션을 끝냈어요. 이 브라우저의 아이 화면은 다시 진짜 기록을 보여 줘요.' }), {
           headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': simStopCookie() },
         });

@@ -2,7 +2,8 @@
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
-  type BallKind, type PotionKind, type Subject, type TypeKey,
+  GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
+  type BallKind, type GiftChoice, type GiftLimits, type GiftSender, type GiftSize, type PotionKind, type ReplySticker, type Subject, type TypeKey,
 } from './game-config.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, species, typeLabel } from './pokedex.ts';
 
@@ -80,6 +81,25 @@ export type GameState = {
   battleLevels?: Record<string, number>;
   /** 포켓로그 이벤트에서 받은 이로치(색이 다른 포켓몬)의 도감 번호. 도감에 색깔별로 따로 모입니다 */
   shiny?: number[];
+  /** 보호자가 보낸 선물 (최근 GIFT_HISTORY 개, 오래된 것부터) */
+  gifts?: Gift[];
+  /** 배틀 추가권: 그날 새 게임 횟수를 다 썼을 때 1장으로 한 번 더. 안 쓰면 남아 있음 */
+  battleTickets?: number;
+};
+/** 보호자 선물 하나. opened 가 없으면 아직 안 연 것, reply 가 없으면 아직 답장 안 한 것 */
+export type Gift = {
+  id: string;
+  /** 보낸 날짜(그 기록 기준 오늘)와 시각 */
+  date: string; sentAt: string;
+  from: GiftSender; reason: string; size: GiftSize; letter: string;
+  opened?: {
+    at: string; choice: GiftChoice;
+    /** 아이가 받은 것 설명 (예: 사과열매, 몬스터볼, 상자에서 나온 것) */
+    got: string;
+    /** 받은 것이 볼이면 가방의 볼 번호 (바로 열 수 있게) */
+    ballId?: string;
+  };
+  reply?: { sticker: ReplySticker; text: string; at: string; /** 보호자가 확인했는지 */ seen?: boolean };
 };
 export type QuizDay = { seconds: number; answered: number; correct: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
@@ -300,7 +320,9 @@ export type Action =
   | { type: 'usePotion'; potionId: string; uid: string }
   | { type: 'evolve'; uid: string; target: number }
   | { type: 'exchangeExp'; statType: TypeKey }
-  | { type: 'expGift'; pick: number };
+  | { type: 'expGift'; pick: number }
+  | { type: 'openGift'; id: string; choice: GiftChoice; subject?: Subject }
+  | { type: 'replyGift'; id: string; sticker: ReplySticker; text?: string };
 
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
 
@@ -529,9 +551,116 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return { items, picks: [choice], done: true, ballIds: [ballId!], message: `경험치 선물! ${BALLS[EXP_GIFT.ball].label}을 얻었어!` };
     }
 
+    case 'openGift': {
+      needStarter();
+      const gift = (state.gifts ?? []).find(g => g.id === action.id);
+      if (!gift) fail('선물을 찾을 수 없어요.');
+      if (gift.opened) fail('이미 연 선물이에요.');
+      const options = GIFT_SIZES[gift.size].options as readonly GiftChoice[];
+      if (!options.includes(action.choice)) fail('둘 중 하나를 골라 줘.');
+      const opened: NonNullable<Gift['opened']> = { at: ctx.now, choice: action.choice, got: GIFT_CHOICE_INFO[action.choice].label };
+      let item: BoxItem | null = null;
+      switch (action.choice) {
+        case 'exp': state.exp += GIFT_EXP; break;
+        case 'berry': {
+          if (!action.subject || !SUBJECTS.includes(action.subject)) fail('어떤 열매를 받을지 계열을 골라 줘.');
+          item = rollPotion(SUBJECT_BERRY[action.subject]);
+          grant(state, item);
+          opened.got = POTIONS[SUBJECT_BERRY[action.subject]].label;
+          break;
+        }
+        case 'box': {
+          const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
+          item = row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
+          const ballId = grant(state, item);
+          opened.got = `랜덤상자 → ${item.kind === 'potion' ? POTIONS[item.potion].label : BALLS[item.ball].label}`;
+          if (ballId) opened.ballId = ballId;
+          break;
+        }
+        case 'candy': {
+          const partner = state.owned.find(p => p.uid === state.partner)!;
+          const candy = state.candy ??= { pending: [], sent: 0 };
+          candy.pending.push({ id: nextId(state, 'c'), date: ctx.today, species: partner.species, amount: GIFT_CANDY });
+          candy.sent += GIFT_CANDY;
+          opened.got = `${species(partner.species).name}에게 포켓로그 사탕 ${GIFT_CANDY}개`;
+          break;
+        }
+        case 'ball': {
+          item = { kind: 'ball', ball: GIFT_BALL };
+          opened.ballId = grant(state, item)!;
+          opened.got = BALLS[GIFT_BALL].label;
+          break;
+        }
+        case 'ticket': state.battleTickets = (state.battleTickets ?? 0) + 1; break;
+      }
+      gift.opened = opened;
+      return { gift: publicGift(gift), item, ballIds: opened.ballId ? [opened.ballId] : [], message: `${GIFT_SENDERS[gift.from]}의 선물: ${opened.got}!` };
+    }
+
+    case 'replyGift': {
+      const gift = (state.gifts ?? []).find(g => g.id === action.id);
+      if (!gift) fail('선물을 찾을 수 없어요.');
+      if (!gift.opened) fail('선물을 먼저 열어 줘.');
+      if (gift.reply) fail('답장은 한 번만 보낼 수 있어. 이미 보냈어!');
+      if (!REPLY_STICKERS.some(s => s.key === action.sticker)) fail('스티커를 하나 골라 줘.');
+      const text = String(action.text ?? '').trim().slice(0, REPLY_TEXT_MAX);
+      gift.reply = { sticker: action.sticker, text, at: ctx.now, seen: false };
+      return { gift: publicGift(gift), message: `${GIFT_SENDERS[gift.from]}에게 답장을 보냈어!` };
+    }
+
     default:
       fail('지원하지 않는 요청이에요.');
   }
+}
+
+// ---------- 보호자 선물 ----------
+/** 'YYYY-MM-DD'가 속한 주의 월요일 (큰 선물의 주 1개 한도용) */
+export function weekStart(date: string): string {
+  const day = new Date(date + 'T00:00:00Z').getUTCDay(); // 0 일
+  return shiftDate(date, -((day + 6) % 7));
+}
+/** 오늘·이번 주에 이미 보낸 선물 수 (한도 확인용) */
+export function giftCounts(state: GameState, today: string): GiftLimits {
+  const gifts = state.gifts ?? [];
+  const week = weekStart(today);
+  return {
+    small: gifts.filter(g => g.size === 'small' && g.date === today).length,
+    medium: gifts.filter(g => g.size === 'medium' && g.date === today).length,
+    large: gifts.filter(g => g.size === 'large' && g.date >= week && g.date <= today).length,
+  };
+}
+export type GiftInput = { from: GiftSender; reason: string; size: GiftSize; letter?: string };
+/** 보호자가 선물을 보냅니다. 한도를 넘으면 GameError. */
+export function sendGift(state: GameState, input: GiftInput, today: string, now: string, limits: GiftLimits = GIFT_LIMIT_DEFAULT): Gift {
+  if (!(input.from in GIFT_SENDERS)) fail('보내는 사람을 골라 주세요.');
+  if (!(input.size in GIFT_SIZES)) fail('선물 크기를 골라 주세요.');
+  const reason = String(input.reason ?? '').trim().slice(0, GIFT_REASON_MAX);
+  if (!reason) fail('선물 이유를 적어 주세요.');
+  const counts = giftCounts(state, today);
+  const limit = limits[input.size];
+  if (counts[input.size] >= limit) {
+    fail(input.size === 'large' ? `큰 선물은 일주일에 ${limit}개까지예요. 이번 주에는 이미 ${counts.large}개 보냈어요.` : `${GIFT_SIZES[input.size].label}은 하루에 ${limit}개까지예요. 오늘 이미 ${counts[input.size]}개 보냈어요.`);
+  }
+  const gift: Gift = { id: nextId(state, 'g'), date: today, sentAt: now, from: input.from, reason, size: input.size, letter: String(input.letter ?? '').trim().slice(0, GIFT_LETTER_MAX) };
+  state.gifts = [...(state.gifts ?? []), gift].slice(-GIFT_HISTORY);
+  return gift;
+}
+/** 화면에 보내는 선물 정보 (그대로 보내도 되는 내용만) */
+export const publicGift = (g: Gift) => ({
+  id: g.id, date: g.date, sentAt: g.sentAt, from: g.from, fromLabel: GIFT_SENDERS[g.from], reason: g.reason, size: g.size, letter: g.letter,
+  opened: g.opened ? { at: g.opened.at, choice: g.opened.choice, got: g.opened.got, ballId: g.opened.ballId } : null,
+  reply: g.reply ? { sticker: g.reply.sticker, text: g.reply.text, at: g.reply.at, seen: !!g.reply.seen } : null,
+});
+export type PublicGift = ReturnType<typeof publicGift>;
+/** 최근 것부터 */
+export const giftList = (state: GameState) => [...(state.gifts ?? [])].reverse().map(publicGift);
+/** 보호자가 아직 확인하지 않은 답장 수 */
+export const unseenReplies = (state: GameState) => (state.gifts ?? []).filter(g => g.reply && !g.reply.seen).length;
+/** 답장을 모두 확인한 것으로 표시. 바뀐 수를 돌려줍니다. */
+export function markRepliesSeen(state: GameState): number {
+  let n = 0;
+  for (const g of state.gifts ?? []) if (g.reply && !g.reply.seen) { g.reply.seen = true; n++; }
+  return n;
 }
 
 /** 스탯으로 바꿀 수 있는 남은 경험치 */
@@ -551,11 +680,23 @@ export function battleStartsLeft(state: GameState, today: string): number {
   const used = state.battle?.date === today ? state.battle.starts : 0;
   return Math.max(0, BATTLE_STARTS_PER_DAY - used);
 }
-/** 새 게임을 시작합니다(횟수 1 차감). 남은 횟수가 없으면 false. 이어하기는 이 함수를 거치지 않습니다. */
+/** 남아 있는 배틀 추가권 (보호자 큰 선물) */
+export const battleTickets = (state: GameState) => Math.max(0, state.battleTickets ?? 0);
+/** 오늘 시작할 수 있는 새 게임 수 = 하루 횟수 + 추가권 */
+export const battleStartsAvailable = (state: GameState, today: string) => battleStartsLeft(state, today) + battleTickets(state);
+/**
+ * 새 게임을 시작합니다(횟수 1 차감). 하루 횟수를 다 썼으면 배틀 추가권 1장을 씁니다. 둘 다 없으면 false.
+ * 이어하기는 이 함수를 거치지 않습니다.
+ */
 export function startBattle(state: GameState, today: string): boolean {
-  if (battleStartsLeft(state, today) < 1) return false;
-  const starts = state.battle?.date === today ? state.battle.starts : 0;
-  state.battle = { date: today, starts: starts + 1 };
+  const usedTicket = battleStartsLeft(state, today) < 1;
+  if (usedTicket) {
+    if (battleTickets(state) < 1) return false;
+    state.battleTickets = battleTickets(state) - 1;
+  } else {
+    const starts = state.battle?.date === today ? state.battle.starts : 0;
+    state.battle = { date: today, starts: starts + 1 };
+  }
   battleDay(state, today).starts += 1;
   return true;
 }
@@ -758,8 +899,10 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     explore,
     allMastered: bank ? allMastered(state, bank) : false,
     masterClaimed: prog?.masterClaimed ?? false,
-    /** 포켓로그(/battle): 오늘 남은 새 게임 횟수 */
-    battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY },
+    /** 포켓로그(/battle): 오늘 남은 새 게임 횟수, 배틀 추가권(보호자 큰 선물) */
+    battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY, tickets: battleTickets(state) },
+    /** 보호자 선물 (최근 것부터) */
+    gifts: giftList(state),
     /** 일일미션으로 포켓로그에 보내는 사탕 */
     candy: candySummary(state, today),
     /** 포켓로그 최고 레벨 (진화 계열 첫 모습 번호 기준) */
