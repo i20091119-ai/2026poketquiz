@@ -69,7 +69,7 @@ function ruleActive(rule: RestRule, weekday: number, minutes: number): { active:
   return { active: false, until: end };
 }
 
-export const restMessage = (name: string) => `지금은 ${name}이야.`;
+export const restMessage = (name: string) => `지금은 ${name}이야. 일일미션이나 탐험을 하며 포켓몬을 강화하자!`;
 
 /** 지금 배틀을 막아야 하는지와 곧 시작하는 쉬는 시간. openToday 면 오늘은 막지 않습니다. */
 export function restStatus(rules: RestRule[], clock: Clock, openToday: boolean, warnMinutes = BATTLE_REST_WARN_MINUTES): RestStatus {

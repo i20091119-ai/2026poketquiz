@@ -133,7 +133,7 @@ export function BattleTab({ left, perDay, tickets, gate }: { left: number; perDa
       <div>
         <h3>⚔️ 포켓로그 배틀</h3>
         {blocked
-          ? <p className="rest-note"><b>{gate?.message ?? '지금은 쉬는 시간이야.'}</b>{gate?.until ? ` ${gate.until}에 다시 열려.` : ''} 그동안 일일미션이나 탐험을 해 보자!</p>
+          ? <p className="rest-note"><b>{gate?.message ?? '지금은 쉬는 시간이야. 일일미션이나 탐험을 하며 포켓몬을 강화하자!'}</b></p>
           : <p>내 포켓몬으로 55웨이브까지 싸워 보자! {left > 0 ? <>오늘 새 게임 <b>{left}번</b> 남았어.</> : tickets > 0 ? <>오늘 새 게임은 다 했지만 <b>배틀 추가권</b>이 있어!</> : <>오늘 새 게임은 다 했어. 하던 게임은 이어서 할 수 있어!</>}{perDay > 1 ? ` (하루 ${perDay}번)` : ''}{tickets > 0 ? <> 🎟️ 추가권 <b>{tickets}장</b></> : null}</p>}
       </div>
       <div className="battle-actions">
