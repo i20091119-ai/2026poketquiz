@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { applyAction, battleStartsLeft, candySummary, childView, claimCandy, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -13,7 +13,7 @@ function makeBank(perSubject = 6): ActiveBank {
   let id = 1;
   const questions: Question[] = SUBJECTS.flatMap(subject => Array.from({ length: perSubject }, (_, i) => ({
     id: id++, subject, type: SUBJECT_TYPES[subject][0], prompt: `${subject} ${i}`,
-    choices: ['a', 'b', 'c', 'd', 'e'], answer: i % 5, explanation: '해설',
+    choices: ['a', 'b', 'c', 'd', 'e'], answer: i % 5, explanation: '해설', area: `영역${i % 2}`,
   })));
   return { id: 7, title: '테스트', questions };
 }
@@ -281,7 +281,7 @@ test('미션을 다 풀기 전에는 상자를 열 수 없다', () => {
 test('일일미션은 과목 속성을 고르게 낸다', () => {
   let id = 1;
   const questions: Question[] = SUBJECTS.flatMap(subject => Array.from({ length: 60 }, (_, i) => ({
-    id: id++, subject, type: SUBJECT_TYPES[subject][i % SUBJECT_TYPES[subject].length], prompt: '', choices: ['a', 'b', 'c', 'd', 'e'], answer: 0, explanation: '',
+    id: id++, subject, type: SUBJECT_TYPES[subject][i % SUBJECT_TYPES[subject].length], prompt: '', choices: ['a', 'b', 'c', 'd', 'e'], answer: 0, explanation: '', area: '',
   })));
   const bank: ActiveBank = { id: 1, title: '', questions };
   const state = initialState();
@@ -299,7 +299,7 @@ test('일일미션만 일주일(정답률 80%, 상자 보상 제외) 풀어도 �
   let id = 1;
   const questions: Question[] = SUBJECTS.flatMap(subject => Array.from({ length: 100 }, (_, i) => ({
     id: id++, subject, type: SUBJECT_TYPES[subject][i % SUBJECT_TYPES[subject].length], prompt: `${subject}${i}`,
-    choices: ['a', 'b', 'c', 'd', 'e'], answer: i % 5, explanation: '',
+    choices: ['a', 'b', 'c', 'd', 'e'], answer: i % 5, explanation: '', area: '',
   })));
   const bank: ActiveBank = { id: 1, title: '시뮬레이션', questions };
   let ok = 0;
@@ -414,10 +414,10 @@ test('포켓로그 기록: 날짜별 최고 웨이브·플레이 시간·새 게
   recordBattleProgress(state, '2026-09-27', 12, 60);
   recordBattleProgress(state, '2026-09-27', 5, 999); // 낮은 웨이브는 무시, 초는 한도까지만
   assert.deepEqual(state.battleLog!['2026-09-27'], { maxWave: 12, seconds: 240, starts: 1 });
-  for (let d = 1; d <= 20; d++) recordBattleProgress(state, `2026-10-${String(d).padStart(2, '0')}`, 1, 10);
+  for (let d = 1; d <= 40; d++) recordBattleProgress(state, shiftDate('2026-10-01', d - 1), 1, 10);
   const list = battleLogList(state);
-  assert.equal(list.length, 14);
-  assert.equal(list[0].date, '2026-10-20');
+  assert.equal(list.length, ACTIVITY_LOG_DAYS);
+  assert.equal(list[0].date, shiftDate('2026-10-01', 39));
   assert.ok(!state.battleLog!['2026-09-27']);
 });
 
@@ -448,4 +448,70 @@ test('일일미션 사탕: 다 풀면 파트너에게 3개, 모두 맞히면 5�
     // 다음 날은 아직 안 줌
     assert.equal(candySummary(state, '2026-09-27').today, null);
   }
+});
+
+test('약점 영역: 최근 5번 중 2번 이상 틀리면 약점, 4번 이상 맞히면 보통으로 돌아온다', () => {
+  assert.equal(isWeakArea(undefined), false);
+  assert.equal(isWeakArea({ recent: 'ox', correct: 1, wrong: 1 }), false);
+  assert.equal(isWeakArea({ recent: 'oxx', correct: 1, wrong: 2 }), true);
+  assert.equal(isWeakArea({ recent: 'xxoooo', correct: 4, wrong: 2 }), false); // 최근 5번은 xoooo → 틀림 1번
+  assert.equal(isWeakArea({ recent: 'xoxoo', correct: 3, wrong: 2 }), true);
+  assert.equal(WEAK_AREA.recent, 5);
+});
+
+test('영역별 성적: 첫 시도 결과만 기록하고, 약점 영역 문제가 다음 미션에 먼저 나온다 (과목당 최대 2개)', () => {
+  const bank = makeBank(8); // 과목마다 영역0/영역1 이 4문제씩
+  const state = started(bank);
+  const c = ctx(bank);
+  // 오늘 미션: 수학 문제 중 영역0 문제는 모두 첫 시도에 틀리고(그 뒤 맞힘), 나머지는 맞힘
+  ensureDaily(state, bank, c.today, c.random);
+  for (const id of state.daily!.questionIds) {
+    const q = bank.questions.find(q => q.id === id)!;
+    const wrongFirst = q.subject === '수학' && q.area === '영역0';
+    if (wrongFirst) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: (q.answer + 1) % 5 }, c);
+    applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: q.answer }, c);
+  }
+  const math = areaReport(state, bank).find(r => r.subject === '수학')!;
+  const a0 = math.areas.find(a => a.area === '영역0')!;
+  assert.ok(a0.wrong >= 1 && a0.correct === 0, '첫 시도에 틀린 것은 오답으로만 기록');
+  // 탐험에서도 영역0을 한 번 더 틀려 약점으로 만든다
+  const q0 = bank.questions.find(q => q.subject === '수학' && q.area === '영역0' && !state.daily!.questionIds.includes(q.id))!;
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q0.id, choice: (q0.answer + 1) % 5 }, c);
+  assert.equal(areaReport(state, bank).find(r => r.subject === '수학')!.areas.find(a => a.area === '영역0')!.weak, true);
+  // 다음 날 미션: 수학 3문제 중 영역0 문제가 최대 2개(복습 문제 제외)까지 먼저 들어간다
+  const tomorrow = { ...c, today: '2026-09-27' };
+  ensureDaily(state, bank, tomorrow.today, tomorrow.random);
+  const mathIds = state.daily!.questionIds.map(id => bank.questions.find(q => q.id === id)!).filter(q => q.subject === '수학');
+  assert.equal(mathIds.length, 3);
+  assert.ok(mathIds.filter(q => q.area === '영역0').length >= 1, '약점 영역 문제가 들어간다');
+  const view = childView(state, bank, '2026-09-26');
+  assert.ok(view.explore.length === 6);
+});
+
+test('퀴즈 시간·활동 요약: 1분마다 보낸 초를 하루 단위로 모으고, 그래프용 목록은 빈 날을 0으로 채운다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const c = ctx(bank);
+  applyAction(state, { type: 'quizTime', seconds: 60 }, c);
+  applyAction(state, { type: 'quizTime', seconds: 999 }, c); // 한 번에 120초까지만
+  assert.equal(state.quizLog!['2026-09-26'].seconds, 180);
+  const list = activityList(state, '2026-09-28', 7);
+  assert.equal(list.length, 7);
+  assert.equal(list[0].date, '2026-09-22');
+  assert.equal(list.find(d => d.date === '2026-09-26')!.quizSeconds, 180);
+  assert.equal(list[6].quizSeconds, 0);
+  // 포켓로그 하루 제한
+  recordBattleProgress(state, '2026-09-28', 3, 120);
+  assert.equal(battleTimeUp(state, '2026-09-28', 0), false); // 제한 없음
+  assert.equal(battleTimeUp(state, '2026-09-28', 2), true);
+  assert.equal(battleTimeUp(state, '2026-09-28', 30), false);
+});
+
+test('포켓로그 최고 레벨: 계열별로 가장 높은 레벨만 남고, 이상한 값은 무시한다', () => {
+  const state = initialState();
+  recordBattleLevels(state, [{ starter: 906, level: 12 }, { starter: 81, level: 7 }]);
+  recordBattleLevels(state, [{ starter: 906, level: 9 }, { starter: 81, level: 15 }, { starter: 0, level: 3 }, { starter: 25, level: 999 }]);
+  assert.deepEqual(state.battleLevels, { 906: 12, 81: 15 });
+  const bank = makeBank(3);
+  assert.equal(childView(state, bank, '2026-09-26').battleLevels[81], 15);
 });

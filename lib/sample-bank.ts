@@ -4,6 +4,16 @@ import type { QuestionInput } from './question-import.ts';
 
 type Row = [QuestionInput['subject'], QuestionInput['type'], string, string[], number, string];
 
+/** 샘플 문제의 영역: 과목별로 문제 내용에 맞춰 붙입니다 (보호자 화면 영역별 보기·약점 영역 자동 조절용) */
+function sampleArea(subject: QuestionInput['subject'], prompt: string): string {
+  if (subject === '수학') return '수·계산';
+  if (subject === '국어') return '받침·맞춤법';
+  if (subject === '영어') return /알파벳/.test(prompt) ? '알파벳' : /인사/.test(prompt) ? '문장 만들기' : '기본 단어';
+  if (subject === '한자') return /人/.test(prompt) ? '사람·가족' : /學/.test(prompt) ? '학교·나라' : '요일·자연';
+  if (subject === '상식') return /식물|은행나무|물고기|나비|꿀벌/.test(prompt) ? '동식물' : '날씨·계절';
+  return '선사·고조선';
+}
+
 const rows: Row[] = [
   ['수학', 'electric', '12 + 3 = ?', ['14', '15', '16', '13', '17'], 1, '일의 자리 2에 3을 더하면 5예요. 그래서 15예요.'],
   ['수학', 'steel', '24 − 2 = ?', ['20', '26', '22', '21', '23'], 2, '일의 자리 4에서 2를 빼면 2예요. 그래서 22예요.'],
@@ -56,4 +66,4 @@ const rows: Row[] = [
 
 export const SAMPLE_BANK_TITLE = '샘플 문제은행 (초1)';
 export const sampleQuestions: QuestionInput[] = rows.map(([subject, type, prompt, choices, answer, explanation]) =>
-  ({ subject, type, prompt, choices, answer, explanation }));
+  ({ subject, type, prompt, choices, answer, explanation, area: sampleArea(subject, prompt) }));

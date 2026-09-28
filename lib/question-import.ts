@@ -1,11 +1,13 @@
 // 구글 시트(CSV)로 문제를 가져오고 검증합니다.
-import { CHOICE_COUNT, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS, type Subject, type TypeKey } from './game-config.ts';
+import { CHOICE_COUNT, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS, type Subject, type TypeKey } from './game-config.ts';
 import type { Question } from './game-engine.ts';
 
 export type QuestionInput = Omit<Question, 'id'>;
 export type ImportIssue = { row: number; message: string };
 
-export const SHEET_COLUMNS = ['과목', '문제', ...Array.from({ length: CHOICE_COUNT }, (_, i) => `보기${i + 1}`), '정답', '해설', '속성'];
+export const SHEET_COLUMNS = ['과목', '문제', ...Array.from({ length: CHOICE_COUNT }, (_, i) => `보기${i + 1}`), '정답', '해설', '속성', '영역'];
+/** 영역 이름 최대 글자 수 */
+export const AREA_MAX = 30;
 
 const SUBJECT_ALIASES: Record<string, Subject> = {
   국어: '국어', 수학: '수학', 산수: '수학', 영어: '영어', English: '영어', english: '영어', 한자: '한자', 역사: '역사',
@@ -79,7 +81,7 @@ function toType(value: string, subject: Subject, prompt: string): TypeKey {
 
 /** 문제 하나를 검사하고 정리합니다. 문제가 있으면 오류 메시지를 던집니다. */
 export function normalizeQuestion(input: {
-  subject: string; prompt: string; choices: string[]; answer: number | string; explanation?: string; type?: string;
+  subject: string; prompt: string; choices: string[]; answer: number | string; explanation?: string; type?: string; area?: string;
 }): QuestionInput {
   const subject = SUBJECT_ALIASES[String(input.subject ?? '').trim()];
   if (!subject) throw new Error(`과목은 ${SUBJECTS.join(', ')} 중 하나여야 해요.`);
@@ -96,7 +98,9 @@ export function normalizeQuestion(input: {
   if (!Number.isInteger(answer) || answer < 0 || answer >= CHOICE_COUNT) throw new Error(`정답은 1~${CHOICE_COUNT} 번호나 보기 글자로 적어 주세요.`);
   const explanation = String(input.explanation ?? '').trim();
   if (explanation.length > 600) throw new Error('해설은 600자 이내로 적어 주세요.');
-  return { subject, prompt, choices, answer, explanation, type: toType(input.type ?? '', subject, prompt) };
+  const area = String(input.area ?? '').trim().replace(/\s+/g, ' ');
+  if (area.length > AREA_MAX) throw new Error(`영역 이름은 ${AREA_MAX}자 이내로 적어 주세요.`);
+  return { subject, prompt, choices, answer, explanation, type: toType(input.type ?? '', subject, prompt), area };
 }
 
 /** CSV 행들을 문제로 바꿉니다. 첫 줄이 제목 줄이면 열 이름으로 찾고, 아니면 기본 열 순서를 씁니다. */
@@ -114,13 +118,14 @@ export function rowsToQuestions(rows: string[][]) {
     subject: col('과목', 0), prompt: col('문제', 1),
     choices: Array.from({ length: CHOICE_COUNT }, (_, i) => col(`보기${i + 1}`, 2 + i)),
     answer: col('정답', 2 + CHOICE_COUNT), explanation: col('해설', 3 + CHOICE_COUNT), type: col('속성', 4 + CHOICE_COUNT),
+    area: col('영역', 5 + CHOICE_COUNT),
   };
   rows.slice(hasHeader ? 1 : 0).forEach((r, i) => {
     const rowNumber = i + (hasHeader ? 2 : 1);
     try {
       questions.push(normalizeQuestion({
         subject: r[idx.subject] ?? '', prompt: r[idx.prompt] ?? '', choices: idx.choices.map(c => r[c] ?? ''),
-        answer: r[idx.answer] ?? '', explanation: r[idx.explanation] ?? '', type: r[idx.type] ?? '',
+        answer: r[idx.answer] ?? '', explanation: r[idx.explanation] ?? '', type: r[idx.type] ?? '', area: r[idx.area] ?? '',
       }));
     } catch (e) {
       issues.push({ row: rowNumber, message: (e as Error).message });
@@ -132,7 +137,7 @@ export function rowsToQuestions(rows: string[][]) {
 /** 부모가 AI 대화창에 붙여 넣어 시트용 문제를 만들 때 쓰는 요청문 */
 export function aiRequestText(grade: string, keywords: Partial<Record<Subject, string>>, perSubject: number) {
   const lines = SUBJECTS.filter(s => keywords[s]?.trim()).map(s =>
-    `- ${s}: ${keywords[s]!.trim()} (속성은 ${SUBJECT_TYPES[s].map(t => TYPE_INFO[t].label).join('/')} 중 내용과 가장 어울리는 것)`);
+    `- ${s}: ${keywords[s]!.trim()} (속성은 ${SUBJECT_TYPES[s].map(t => TYPE_INFO[t].label).join('/')} 중 내용과 가장 어울리는 것, 영역은 ${SUBJECT_AREAS[s].join('/')} 중 하나를 글자 그대로)`);
   return [
     `${grade} 어린이를 위한 학습 퀴즈를 과목별로 ${perSubject}개씩 만들어 주세요.`,
     '과목과 범위:',
@@ -141,6 +146,6 @@ export function aiRequestText(grade: string, keywords: Partial<Record<Subject, s
     `조건: 보기는 서로 다른 ${CHOICE_COUNT}개, 정답은 1개, 해설은 아이가 이해할 수 있는 짧은 한국어 문장.`,
     '결과는 구글 시트에 붙여 넣을 수 있도록 아래 열 순서의 CSV(쉼표 구분, 첫 줄은 제목)로만 주세요.',
     SHEET_COLUMNS.join(','),
-    '정답 열에는 정답 보기의 번호(1~5)를 적어 주세요.',
+    '정답 열에는 정답 보기의 번호(1~5)를, 영역 열에는 그 문제가 속한 영역 이름(예: 덧셈, 받침·맞춤법)을 짧게 적어 주세요.',
   ].join('\n');
 }

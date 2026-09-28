@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 5173",
+    "prebuild": "node scripts/fetch-pokemon-art.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",

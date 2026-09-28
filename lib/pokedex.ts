@@ -47,11 +47,20 @@ for (const s of SPECIES) if (s.from === null) CATCH_POOLS[Math.min(s.tier, 3)].p
 
 const pad = (id: number, n: number) => String(id).padStart(n, '0');
 /** 포켓몬코리아 공식 도감 이미지. 실패하면 pokemon.com 이미지, 그다음 임시 이미지를 씁니다. */
+/** 포켓몬 그림 후보: 우리 사이트에 둔 공식 일러스트(빌드 때 받음) → 포켓몬코리아 → pokemon.com 순서 */
 export function pokemonImages(id: number): string[] {
   return [
+    `/assets/pokemon/${id}.png`,
     `https://data1.pokemonkorea.co.kr/newdata/pokedex/full/${pad(id, 4)}01.png`,
     `https://assets.pokemon.com/assets/cms2/img/pokedex/full/${pad(id, 3)}.png`,
   ];
+}
+
+/** 진화 계열의 첫 모습(포켓로그의 스타터에 해당). 예: 자포코일 → 코일 */
+export function rootOf(id: number): number {
+  let cur = id;
+  for (let i = 0; i < 5; i++) { const s = byId.get(cur); if (!s?.from) break; cur = s.from; }
+  return cur;
 }
 
 export const typeLabel = (t: TypeKey) => TYPE_INFO[t].label;

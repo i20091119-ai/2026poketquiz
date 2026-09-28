@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
+  ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -14,8 +14,12 @@ export type Question = {
   choices: string[];
   answer: number;
   explanation: string;
+  /** 영역 (예: 덧셈, 받침·맞춤법). 비어 있으면 '기타'로 묶입니다. */
+  area: string;
 };
 export type PublicQuestion = Omit<Question, 'answer' | 'explanation'>;
+/** 영역 이름 (비어 있으면 '기타') */
+export const areaOf = (q: { area?: string }) => q.area?.trim() || '기타';
 export type ActiveBank = { id: number; title: string; questions: Question[] };
 
 export type BoxItem =
@@ -31,7 +35,10 @@ export type BankProgress = {
   review: Record<string, string>;
   subjectRewards: Subject[];
   masterClaimed: boolean;
+  /** 영역별 성적: '과목|영역' → 최근 결과(o/x 최대 8개), 맞힌 수, 틀린 수 */
+  areas?: Record<string, AreaStat>;
 };
+export type AreaStat = { recent: string; correct: number; wrong: number };
 
 export type GameState = {
   version: 1;
@@ -67,7 +74,12 @@ export type GameState = {
   battleLog?: Record<string, BattleDay>;
   /** 일일미션으로 받은 포켓로그 사탕: 아직 게임이 가져가지 않은 것(pending), 지금까지 보낸 총량, 마지막으로 준 날 */
   candy?: { pending: CandyGift[]; sent: number; lastDate?: string; lastGift?: CandyGift };
+  /** 퀴즈 날짜별 기록: 화면을 보며 보낸 초, 푼 문제 수, 첫 시도에 맞힌 수 (최근 ACTIVITY_LOG_DAYS 일) */
+  quizLog?: Record<string, QuizDay>;
+  /** 포켓로그에서 도달한 최고 레벨: 진화 계열 첫 모습 번호 → 레벨 (판이 바뀌어도 최고 기록은 남음) */
+  battleLevels?: Record<string, number>;
 };
+export type QuizDay = { seconds: number; answered: number; correct: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
 /** 포켓로그에 보낼 사탕 한 묶음. species = 퀴즈 도감 번호(게임이 진화 전 첫 모습으로 바꿈) */
 export type CandyGift = { id: string; date: string; species: number; amount: number };
@@ -117,12 +129,28 @@ function progress(state: GameState, bankId: number): BankProgress {
   prog.review ??= {}; // 복습 기능 이전에 저장된 기록
   return prog;
 }
+// ---------- 영역(약점) ----------
+export const areaKey = (q: { subject: Subject; area?: string }) => `${q.subject}|${areaOf(q)}`;
+/** 문제를 풀 때마다 그 영역의 최근 결과를 남깁니다. */
+function noteArea(prog: BankProgress, q: Question, ok: boolean) {
+  const stat = (prog.areas ??= {})[areaKey(q)] ??= { recent: '', correct: 0, wrong: 0 };
+  stat.recent = (stat.recent + (ok ? 'o' : 'x')).slice(-8);
+  if (ok) stat.correct += 1; else stat.wrong += 1;
+}
+/** 최근 WEAK_AREA.recent 번 중 WEAK_AREA.wrong 번 이상 틀렸으면 약점 영역 */
+export function isWeakArea(stat?: AreaStat): boolean {
+  if (!stat) return false;
+  const recent = stat.recent.slice(-WEAK_AREA.recent);
+  return (recent.match(/x/g)?.length ?? 0) >= WEAK_AREA.wrong;
+}
+const isWeakQuestion = (prog: BankProgress, q: Question) => isWeakArea(prog.areas?.[areaKey(q)]);
+
 /** 전날 이전에 틀려서 오늘 다시 나와야 하는 문제 */
 const isDue = (prog: BankProgress, id: number, today: string) => !!prog.review[id] && prog.review[id] < today;
 /** 오늘 이미 틀린 문제 (오늘은 다시 풀 수 없음) */
 const wrongToday = (prog: BankProgress, id: number, today: string) => prog.review[id] === today;
-export const publicQuestion = ({ id, subject, type, prompt, choices }: Question): PublicQuestion =>
-  ({ id, subject, type, prompt, choices });
+export const publicQuestion = ({ id, subject, type, prompt, choices, area }: Question): PublicQuestion =>
+  ({ id, subject, type, prompt, choices, area });
 
 function addPokemon(state: GameState, id: number, now: string) {
   const duplicate = state.owned.some(p => p.species === id);
@@ -175,10 +203,13 @@ export function ensureDaily(state: GameState, bank: ActiveBank | null, today: st
     // 오늘 탐험에서 틀린 문제는 오늘 다시 풀지 않도록 빼 둡니다.
     const due = pool.filter(q => isDue(prog, q.id, today));
     const rest = pool.filter(q => !isDue(prog, q.id, today) && !wrongToday(prog, q.id, today));
+    // 약점 영역(최근에 자주 틀린 영역)의 다른 문제를 먼저 놓아 "변형 문제"가 더 자주 나오게 합니다.
+    const weak = (q: Question) => isWeakQuestion(prog, q);
+    const unsolved = rest.filter(q => !solved.has(q.id)), done = rest.filter(q => solved.has(q.id));
     const ordered = [
       ...shuffle(due, random),
-      ...shuffle(rest.filter(q => !solved.has(q.id)), random),
-      ...shuffle(rest.filter(q => solved.has(q.id)), random),
+      ...shuffle(unsolved.filter(weak), random), ...shuffle(unsolved.filter(q => !weak(q)), random),
+      ...shuffle(done.filter(weak), random), ...shuffle(done.filter(q => !weak(q)), random),
     ];
     // 전에 틀린 문제는 먼저 넣고, 남은 자리는 속성이 고르게 돌아가도록 날짜마다 속성 순서를 바꿔 채웁니다.
     // (예: 과목마다 속성 3개, 하루 3문제씩이면 매일 속성마다 1문제)
@@ -190,8 +221,11 @@ export function ensureDaily(state: GameState, bank: ActiveBank | null, today: st
       // 오늘 아직 적게 나온 속성부터 (같으면 날짜별 순서대로) 채웁니다.
       const count = (t: TypeKey) => picked.filter(q => q.type === t).length;
       const byNeed = [...rotation].sort((a, b) => count(a) - count(b));
-      const next = byNeed.map(t => ordered.find(q => !picked.includes(q) && q.type === t)).find(Boolean)
-        ?? ordered.find(q => !picked.includes(q));
+      // 약점 영역 문제는 과목당 WEAK_AREA.maxPerSubjectDaily 개까지만 (한 영역이 미션을 독차지하지 않게)
+      const weakFull = picked.filter(q => !isDue(prog, q.id, today) && weak(q)).length >= WEAK_AREA.maxPerSubjectDaily;
+      const candidates = weakFull && ordered.some(q => !picked.includes(q) && !weak(q)) ? ordered.filter(q => !weak(q) || isDue(prog, q.id, today)) : ordered;
+      const next = byNeed.map(t => candidates.find(q => !picked.includes(q) && q.type === t)).find(Boolean)
+        ?? candidates.find(q => !picked.includes(q)) ?? ordered.find(q => !picked.includes(q));
       if (!next) break;
       picked.push(next);
     }
@@ -253,6 +287,7 @@ export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, s
 
 // ---------- 행동 ----------
 export type Action =
+  | { type: 'quizTime'; seconds: number }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -324,10 +359,11 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         if (action.mode === 'daily') {
           const d = state.daily!;
           d.tries[q.id] = (d.tries[q.id] ?? 0) + 1;
+          if (d.tries[q.id] === 1) { noteArea(prog, q, false); quizDay(state, ctx.today).answered += 1; } // 첫 시도에 틀리면 그 영역의 오답으로 기록
           const left = DAILY_ATTEMPTS - d.tries[q.id];
           if (left > 0) return { correct: false, final: false, triesLeft: left, message: `괜찮아! 다시 생각해 보자. 기회가 ${left}번 남았어.` };
           d.wrong.push(q.id);
-        }
+        } else { noteArea(prog, q, false); quizDay(state, ctx.today).answered += 1; }
         return {
           correct: false, final: true, answer: q.answer, explanation: q.explanation,
           message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 다른 날 다시 나올 거야.`,
@@ -340,6 +376,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (reviewed) delete prog.review[q.id];
       const newlySolved = !prog.solved.includes(q.id);
       if (newlySolved) prog.solved.push(q.id);
+      // 첫 시도에 맞혔을 때만 그 영역의 정답으로 기록 (다시 풀어서 맞힌 것은 이미 오답으로 기록됨)
+      if (action.mode !== 'daily' || !state.daily!.tries[q.id]) { noteArea(prog, q, true); const day = quizDay(state, ctx.today); day.answered += 1; day.correct += 1; }
       // 일일미션은 이미 맞힌 적 있는 문제가 나와도 보상을 줍니다 (하루 한 번만 풀 수 있으므로).
       const rewarded = action.mode === 'daily' || newlySolved;
       if (action.mode === 'daily') state.daily!.correct.push(q.id);
@@ -355,6 +393,13 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         /** 이 답으로 오늘의 미션이 끝나 사탕을 보냈으면 그 내용 */
         candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
       };
+    }
+
+    case 'quizTime': {
+      // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 퀴즈 시간)
+      const seconds = Number(action.seconds);
+      if (Number.isFinite(seconds) && seconds > 0) quizDay(state, ctx.today).seconds += Math.min(Math.round(seconds), QUIZ_REPORT_MAX_SECONDS);
+      return { ok: true };
     }
 
     case 'dailyBox': {
@@ -572,6 +617,72 @@ export const candySummary = (state: GameState, today: string) => ({
   rule: DAILY_CANDY,
 });
 
+// ---------- 퀴즈 시간 기록 · 활동 요약 ----------
+/** 오늘 퀴즈 기록 칸 (없으면 만들고, 오래된 날은 지움) */
+function quizDay(state: GameState, today: string): QuizDay {
+  state.quizLog ??= {};
+  state.quizLog[today] ??= { seconds: 0, answered: 0, correct: 0 };
+  for (const date of Object.keys(state.quizLog).sort().slice(0, -ACTIVITY_LOG_DAYS)) delete state.quizLog[date];
+  return state.quizLog[today];
+}
+export type ActivityDay = { date: string; quizSeconds: number; answered: number; correct: number; battleSeconds: number; battleWave: number; battleStarts: number };
+/** 보호자 화면 그래프용: 오늘까지 days 일치 (없는 날은 0) */
+export function activityList(state: GameState, today: string, days: number): ActivityDay[] {
+  const out: ActivityDay[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = shiftDate(today, -i);
+    const q = state.quizLog?.[date], b = state.battleLog?.[date];
+    out.push({ date, quizSeconds: q?.seconds ?? 0, answered: q?.answered ?? 0, correct: q?.correct ?? 0, battleSeconds: b?.seconds ?? 0, battleWave: b?.maxWave ?? 0, battleStarts: b?.starts ?? 0 });
+  }
+  return out;
+}
+/** 오늘 포켓로그를 플레이한 초 */
+export const battleSecondsToday = (state: GameState, today: string) => state.battleLog?.[today]?.seconds ?? 0;
+/** 하루 제한(분, 0이면 없음)을 다 썼는지 */
+export const battleTimeUp = (state: GameState, today: string, limitMinutes: number) =>
+  limitMinutes > 0 && battleSecondsToday(state, today) >= limitMinutes * 60;
+
+// ---------- 보호자 화면: 영역별 성적 ----------
+export type AreaReport = {
+  area: string; total: number; solved: number; correct: number; wrong: number;
+  /** 최근 결과 (o/x, 오래된 것부터) */
+  recent: string; weak: boolean;
+  /** 2번 이상 틀린 문제 */
+  repeated: { id: number; prompt: string; wrong: number; solved: boolean }[];
+};
+export function areaReport(state: GameState, bank: ActiveBank): { subject: Subject; areas: AreaReport[] }[] {
+  const prog = progress(state, bank.id);
+  const solved = new Set(prog.solved);
+  return SUBJECTS.map(subject => {
+    const byArea = new Map<string, Question[]>();
+    for (const q of bank.questions.filter(q => q.subject === subject)) {
+      const list = byArea.get(areaOf(q)) ?? [];
+      list.push(q); byArea.set(areaOf(q), list);
+    }
+    const areas = [...byArea.entries()].map(([area, qs]) => {
+      const stat = prog.areas?.[`${subject}|${area}`];
+      return {
+        area, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length,
+        correct: stat?.correct ?? 0, wrong: stat?.wrong ?? 0, recent: stat?.recent ?? '', weak: isWeakArea(stat),
+        repeated: qs.filter(q => (prog.wrong[q.id] ?? 0) >= 2).sort((a, b) => prog.wrong[b.id] - prog.wrong[a.id])
+          .map(q => ({ id: q.id, prompt: q.prompt, wrong: prog.wrong[q.id], solved: solved.has(q.id) })),
+      };
+    });
+    // 약점 → 틀린 수 많은 순
+    areas.sort((a, b) => Number(b.weak) - Number(a.weak) || b.wrong - a.wrong || a.area.localeCompare(b.area, 'ko'));
+    return { subject, areas };
+  });
+}
+
+/** 게임이 보낸 파티 레벨로 계열별 최고 레벨을 갱신합니다. */
+export function recordBattleLevels(state: GameState, party: { starter: number; level: number }[]): void {
+  for (const p of party) {
+    if (!Number.isInteger(p.starter) || p.starter <= 0 || !Number.isInteger(p.level) || p.level <= 0 || p.level > 200) continue;
+    state.battleLevels ??= {};
+    if ((state.battleLevels[p.starter] ?? 0) < p.level) state.battleLevels[p.starter] = p.level;
+  }
+}
+
 /** 보호자 화면용: 최근 날짜부터 */
 export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
@@ -636,6 +747,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY },
     /** 일일미션으로 포켓로그에 보내는 사탕 */
     candy: candySummary(state, today),
+    /** 포켓로그 최고 레벨 (진화 계열 첫 모습 번호 기준) */
+    battleLevels: state.battleLevels ?? {},
   };
 }
 export type ChildView = ReturnType<typeof childView>;

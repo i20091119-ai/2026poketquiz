@@ -3,7 +3,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
-import { consumeNewBattleStart } from "#app/quiz-link";
+import { consumeNewBattleStart, quizStartingSpecies } from "#app/quiz-link";
 import { SpeciesFormChangeMoveLearnedTrigger } from "#data/form-change-triggers";
 import { Gender } from "#data/gender";
 import { ChallengeType } from "#enums/challenge-type";
@@ -63,8 +63,9 @@ export class SelectStarterPhase extends Phase {
       if (!i && activeOverrides.STARTER_SPECIES_OVERRIDE) {
         starter.speciesId = activeOverrides.STARTER_SPECIES_OVERRIDE;
       }
-      const species = speciesDataRegistry.getSpecies(starter.speciesId);
-      let starterFormIndex = starter.formIndex;
+      // 퀴즈에서 진화시킨 포켓몬은 진화한 모습으로 출전 (부모님 결정). 종이 바뀌면 모습(form)은 기본으로.
+      const species = quizStartingSpecies(speciesDataRegistry.getStarter(starter.speciesId));
+      let starterFormIndex = species.speciesId === starter.speciesId ? starter.formIndex : 0;
       if (
         starter.speciesId in activeOverrides.STARTER_FORM_OVERRIDES
         && activeOverrides.STARTER_FORM_OVERRIDES[starter.speciesId] != null

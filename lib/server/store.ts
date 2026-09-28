@@ -79,6 +79,15 @@ export async function setGrade(grade: string) {
   await db().prepare("INSERT INTO settings (key, value) VALUES ('grade', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(grade).run();
 }
 
+// ---------- 포켓로그(/battle) 하루 플레이 시간 제한 (분, 0 = 없음) ----------
+export async function getBattleLimitMinutes(): Promise<number> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'battle_limit_minutes'").first<{ value: string }>();
+  return Math.max(0, Number(row?.value) || 0);
+}
+export async function setBattleLimitMinutes(minutes: number) {
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('battle_limit_minutes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(minutes)).run();
+}
+
 // ---------- 포켓로그(/battle) 비밀번호 ----------
 // 비밀번호 자체가 아니라 서명값(해시)만 저장합니다 (lib/server/battle-auth.ts).
 export async function getBattlePasswordHash(): Promise<string | null> {
@@ -91,10 +100,10 @@ export async function setBattlePasswordHash(hash: string | null) {
 }
 
 // ---------- 문제은행 ----------
-type QuestionRow = { id: number; bank_id: number; subject: string; type: string; prompt: string; choices: string; answer: number; explanation: string };
+type QuestionRow = { id: number; bank_id: number; subject: string; type: string; prompt: string; choices: string; answer: number; explanation: string; area: string | null };
 const toQuestion = (r: QuestionRow): Question => ({
   id: r.id, subject: r.subject as Subject, type: r.type as Question['type'], prompt: r.prompt,
-  choices: JSON.parse(r.choices), answer: r.answer, explanation: r.explanation,
+  choices: JSON.parse(r.choices), answer: r.answer, explanation: r.explanation, area: r.area ?? '',
 });
 
 export type BankRow = { id: number; title: string; grade: string; keywords: string; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null };
@@ -147,11 +156,11 @@ export async function updateBank(id: number, title: string, grade: string, keywo
 
 export async function addQuestions(bankId: number, questions: QuestionInput[]) {
   const now = new Date().toISOString();
-  const stmt = db().prepare('INSERT INTO questions (bank_id, subject, type, prompt, choices, answer, explanation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const stmt = db().prepare('INSERT INTO questions (bank_id, subject, type, prompt, choices, answer, explanation, area, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
   // D1 batch는 한 번에 너무 많으면 실패할 수 있어 나눠서 넣습니다.
   for (let i = 0; i < questions.length; i += 50) {
     await db().batch(questions.slice(i, i + 50).map(q =>
-      stmt.bind(bankId, q.subject, q.type, q.prompt, JSON.stringify(q.choices), q.answer, q.explanation, now)));
+      stmt.bind(bankId, q.subject, q.type, q.prompt, JSON.stringify(q.choices), q.answer, q.explanation, q.area ?? '', now)));
   }
 }
 
@@ -171,8 +180,8 @@ export async function deleteBank(id: number) {
 }
 
 export async function updateQuestion(id: number, q: QuestionInput) {
-  await db().prepare('UPDATE questions SET subject = ?, type = ?, prompt = ?, choices = ?, answer = ?, explanation = ? WHERE id = ?')
-    .bind(q.subject, q.type, q.prompt, JSON.stringify(q.choices), q.answer, q.explanation, id).run();
+  await db().prepare('UPDATE questions SET subject = ?, type = ?, prompt = ?, choices = ?, answer = ?, explanation = ?, area = ? WHERE id = ?')
+    .bind(q.subject, q.type, q.prompt, JSON.stringify(q.choices), q.answer, q.explanation, q.area ?? '', id).run();
 }
 
 export async function deleteQuestion(id: number) {

@@ -6,6 +6,9 @@
 import { defaultStarterSpecies } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { QUIZ_RULES } from "#app/quiz-rules";
+import type { PokemonSpecies } from "#data/pokemon-species";
+import type { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 
 /** 퀴즈 앱 서버 주소. 게임이 퀴즈 앱의 /battle/ 아래에서 열리므로 같은 주소를 씁니다. */
@@ -60,6 +63,47 @@ export function applyQuizStarters(): void {
   console.log(`퀴즈 앱 보유 포켓몬 ${quizOwnedSpecies.length}마리 → 스타터 ${starters.size}종`);
 }
 
+/** 진화 단계 깊이 (스타터 0, 1단계 진화 1, …) */
+function evolutionDepth(speciesId: SpeciesId): number {
+  let depth = 0;
+  let current: SpeciesId | null = speciesId;
+  while (current != null && depth < 5) {
+    const prev = speciesDataRegistry.getSpeciesData(current).prevolution;
+    if (prev == null) {
+      break;
+    }
+    current = prev;
+    depth++;
+  }
+  return depth;
+}
+
+/**
+ * 고른 스타터로 실제 출전할 종. 퀴즈에서 그 스타터 계열의 진화형을 갖고 있으면 가장 많이 진화한 모습을 돌려줍니다.
+ * (부모님 결정: 진화한 포켓몬은 진화한 모습으로, 레벨은 시작 레벨 그대로)
+ */
+export function quizStartingSpecies(starterId: StarterSpeciesId): PokemonSpecies {
+  let best: SpeciesId = starterId;
+  let bestDepth = 0;
+  if (QUIZ_RULES.startEvolved) {
+    for (const id of quizOwnedSpecies) {
+      try {
+        if (speciesDataRegistry.getStarter(id as SpeciesId) !== starterId) {
+          continue;
+        }
+        const depth = evolutionDepth(id as SpeciesId);
+        if (depth > bestDepth) {
+          best = id as SpeciesId;
+          bestDepth = depth;
+        }
+      } catch {
+        // 포켓로그에 없는 번호는 건너뜀
+      }
+    }
+  }
+  return speciesDataRegistry.getSpecies(best);
+}
+
 // ---- 하루 시도 횟수 (SPEC 7번) — 퀴즈 앱 서버가 관리합니다 ----
 export const QUIZ_BATTLE_URL = "/api/battle";
 const OFFLINE_MESSAGE = "퀴즈 앱 서버에 연결되지 않아 새 게임을 시작할 수 없어요. 인터넷을 확인하고 다시 해 주세요.";
@@ -77,7 +121,11 @@ export async function canStartNewBattle(): Promise<BattleStartResult> {
     if (!res.ok) {
       return { ok: false, message: OFFLINE_MESSAGE };
     }
-    const body = (await res.json()) as { left?: number; message?: string | null };
+    const body = (await res.json()) as { left?: number; message?: string | null; timeUp?: boolean };
+    if (body.timeUp) {
+      showTimeUpOverlay(body.message ?? TIME_UP_FALLBACK);
+      return { ok: false, message: body.message ?? TIME_UP_FALLBACK };
+    }
     return (body.left ?? 0) > 0 ? { ok: true } : { ok: false, message: body.message ?? OFFLINE_MESSAGE };
   } catch (err) {
     console.warn("시도 횟수 확인 실패:", err);
@@ -100,6 +148,45 @@ export async function consumeNewBattleStart(): Promise<BattleStartResult> {
   }
 }
 
+// ---- 하루 플레이 시간 제한 (보호자 공간에서 정함, 기본 없음) ----
+const TIME_UP_FALLBACK = "오늘 포켓로그 시간을 다 썼어요. 내일 또 하자!";
+let timeUpShown = false;
+
+/**
+ * 시간을 다 썼을 때 게임 화면을 가리는 안내판. 게임은 멈추지 않지만 만질 수 없고, 버튼을 누르면 퀴즈 앱으로 돌아갑니다.
+ * (진행 중인 판은 게임이 웨이브마다 저장해 두므로 내일 이어서 할 수 있어요.)
+ */
+export function showTimeUpOverlay(message: string): void {
+  if (timeUpShown) {
+    return;
+  }
+  timeUpShown = true;
+  const wrap = document.createElement("div");
+  wrap.style.cssText =
+    "position:fixed;inset:0;z-index:2147483646;background:rgba(20,24,32,.92);color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-family:system-ui,sans-serif;padding:24px";
+  const box = document.createElement("div");
+  box.style.cssText = "max-width:420px";
+  const title = document.createElement("div");
+  title.textContent = "⏰ 오늘은 여기까지!";
+  title.style.cssText = "font-size:26px;font-weight:800;margin-bottom:12px";
+  const text = document.createElement("p");
+  text.textContent = message;
+  text.style.cssText = "font-size:17px;line-height:1.5;margin:0 0 20px";
+  const link = document.createElement("a");
+  link.href = "/";
+  link.textContent = "퀴즈로 돌아가기";
+  link.style.cssText =
+    "display:inline-block;background:#2e7d5b;color:#fff;font-weight:800;font-size:18px;padding:14px 26px;border-radius:14px;text-decoration:none";
+  box.append(title, text, link);
+  wrap.append(box);
+  const add = () => document.body.append(wrap);
+  if (document.body) {
+    add();
+  } else {
+    document.addEventListener("DOMContentLoaded", add);
+  }
+}
+
 // ---- 일일미션 사탕 (SPEC 11번) ----
 export const QUIZ_CANDY_URL = "/api/battle/candy";
 const APPLIED_KEY = "quizCandyApplied";
@@ -116,30 +203,33 @@ interface CandyGift {
  * 퀴즈 앱에서 아직 안 가져간 사탕 묶음을 받아 스타터에게 넣고 저장한 뒤, 가져갔다고 알립니다.
  * 저장 데이터를 읽은 직후(LoginPhase)에 부릅니다. 알림이 실패해도 같은 묶음을 두 번 넣지 않도록 넣은 묶음 번호를 기기에 적어 둡니다.
  */
-export async function applyQuizCandyGifts(): Promise<void> {
-  let gifts: CandyGift[] = [];
+async function fetchCandyGifts(): Promise<CandyGift[]> {
   try {
     const res = await fetch(QUIZ_CANDY_URL, { cache: "no-store" });
     if (!res.ok) {
-      return;
+      return [];
     }
     const body = (await res.json()) as { gifts?: CandyGift[] };
-    gifts = Array.isArray(body.gifts) ? body.gifts : [];
+    return Array.isArray(body.gifts) ? body.gifts : [];
   } catch (err) {
     console.warn("퀴즈 앱에서 사탕 목록을 받지 못했어요:", err);
-    return;
+    return [];
   }
+}
+function appliedCandyIds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+export async function applyQuizCandyGifts(): Promise<void> {
+  const gifts = await fetchCandyGifts();
   if (gifts.length === 0) {
     return;
   }
-
-  let applied: string[] = [];
-  try {
-    applied = JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "[]") as string[];
-  } catch {
-    applied = [];
-  }
-  const appliedSet = new Set(applied);
+  const appliedSet = appliedCandyIds();
   let added = 0;
   for (const gift of gifts) {
     if (appliedSet.has(gift.id) || !(gift.amount > 0)) {
@@ -206,7 +296,18 @@ export function startProgressReporting(): void {
       return;
     }
     lastWave = wave;
-    const body = JSON.stringify({ wave, seconds });
+    // 파티 포켓몬의 지금 레벨 (퀴즈 도감에 "포켓로그 최고 레벨"로 표시). starter = 진화 전 첫 모습 번호
+    let party: { species: number; starter: number; level: number }[] = [];
+    try {
+      party = globalScene.getPlayerParty().map(p => ({
+        species: p.species.speciesId,
+        starter: speciesDataRegistry.getStarter(p.species.speciesId),
+        level: p.level,
+      }));
+    } catch {
+      party = [];
+    }
+    const body = JSON.stringify({ wave, seconds, party });
     if (useBeacon && navigator.sendBeacon) {
       navigator.sendBeacon(QUIZ_PROGRESS_URL, new Blob([body], { type: "application/json" }));
       return;
@@ -216,7 +317,14 @@ export function startProgressReporting(): void {
       headers: { "Content-Type": "application/json" },
       body,
       keepalive: true,
-    }).catch(() => {});
+    })
+      .then(res => (res.ok ? res.json() : null))
+      .then((data: { timeUp?: boolean; message?: string | null } | null) => {
+        if (data?.timeUp) {
+          showTimeUpOverlay(data.message ?? TIME_UP_FALLBACK);
+        }
+      })
+      .catch(() => {});
   };
 
   setInterval(() => {

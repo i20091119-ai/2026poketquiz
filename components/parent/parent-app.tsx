@@ -1,11 +1,12 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Copy, Download, FlaskConical, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ArrowLeft, BookPlus, Copy, Download, FlaskConical, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
-import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
-import type { Question } from '@/lib/game-engine';
+import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from '@/lib/game-config';
+import type { ActivityDay, AreaReport, Question } from '@/lib/game-engine';
 import { species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { aiRequestText } from '@/lib/question-import';
 import { APP_VERSION, CHANGES, versionLabel } from '@/lib/version';
@@ -14,7 +15,15 @@ type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
-  battle: { log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } } };
+  battle: {
+    log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } };
+    /** 하루 시간 제한(분, 0 = 없음)과 고를 수 있는 값 */
+    limit: number; limitOptions: readonly number[];
+  };
+  /** 최근 28일 날짜별 활동 (오래된 날부터) */
+  activity: ActivityDay[];
+  /** 아직 안 불러온 연습 문제은행 이름 */
+  preparedBanks: string[];
   /** 개발자 메뉴 시뮬레이션: 이 브라우저가 시뮬레이션 중인지, 시험용 기록의 날짜와 요약 */
   sim: {
     active: boolean; today: string; dayOffset: number;
@@ -25,6 +34,7 @@ type Overview = {
     id: number; title: string;
     subjects: { subject: Subject; total: number; solved: number; review: number }[];
     hardest: { id: number; subject: Subject; prompt: string; wrong: number; solved: boolean }[];
+    areas: { subject: Subject; areas: AreaReport[] }[];
   };
 };
 type BankDetail = { bank: Omit<BankSummary, 'question_count'>; questions: Question[] };
@@ -124,12 +134,13 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
 }) {
   const [grade, setGrade] = useState(overview.grade);
   const [battlePassword, setBattlePassword] = useState('');
+  const [battleLimit, setBattleLimit] = useState(overview.battle.limit);
   const [creating, setCreating] = useState(false);
   const { child, active } = overview;
   return (
     <>
       <section className="panel parent-intro">
-        <span className="pill">아이 현황</span>
+        <span className="pill">{overview.sim.active ? '🧪 시뮬레이션 중 · 아래는 시험용 기록' : '아이 현황'}</span>
         <h2>{child.partner ? `${species(child.partner).name}와 모험 중` : '아직 파트너를 고르지 않았어요'}</h2>
         <div className="parent-summary">
           <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (스탯으로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
@@ -138,6 +149,8 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </div>
         <StatBoard stats={child.stats} />
       </section>
+
+      <ActivitySection days={overview.activity} />
 
       {active && (
         <section className="panel parent-section">
@@ -148,12 +161,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
                 <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div></div>
             ))}
           </div>
-          {active.hardest.length > 0 && <>
-            <h3>많이 틀린 문제</h3>
-            <ul className="hardest">
-              {active.hardest.map(h => <li key={h.id}>[{h.subject}] {h.prompt} <span>{h.wrong}번 틀림{h.solved ? ' · 이후 맞힘' : ''}</span></li>)}
-            </ul>
-          </>}
+          <AreaBoard report={active.areas} />
         </section>
       )}
 
@@ -193,6 +201,14 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             onClick={async () => { if (window.confirm('포켓로그 비밀번호를 지울까요? 다시 정하기 전까지 포켓로그가 열리지 않아요.') && await call({ action: 'clearBattlePassword' })) await reload(); }}>지우기</button>}
         </div>
         <p className="muted">게임 주소: <a href="/battle/" target="_blank" rel="noreferrer">/battle/</a> · 미리 받아 두기: <a href="/battle/prepare" target="_blank" rel="noreferrer">/battle/prepare</a></p>
+        <h3>하루 플레이 시간 제한</h3>
+        <p className="muted">정해 두면 그날 포켓로그를 그 시간만큼 한 뒤에는 게임 화면에 &lsquo;오늘은 여기까지&rsquo; 안내가 뜨고 퀴즈로 돌아가요. 하던 판은 내일 이어서 할 수 있어요. 지금은 <b>{overview.battle.limit ? `${overview.battle.limit}분` : '제한 없음'}</b>.</p>
+        <div className="inline-form">
+          <select value={battleLimit} onChange={e => setBattleLimit(Number(e.target.value))}>
+            {overview.battle.limitOptions.map(m => <option key={m} value={m}>{m ? `하루 ${m}분` : '제한 없음'}</option>)}
+          </select>
+          <button className="secondary" disabled={busy || battleLimit === overview.battle.limit} onClick={async () => { if (await call({ action: 'setBattleLimit', minutes: battleLimit })) await reload(); }}>저장</button>
+        </div>
       </section>
 
       <section className="panel parent-section">
@@ -207,8 +223,14 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <section className="panel parent-section">
         <div className="heading-row">
           <div><h2>주차별 문제은행</h2><p>공개한 문제은행 하나가 아이의 일일미션과 탐험에 쓰여요.</p></div>
-          <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 구글 시트로 문제은행 추가</button>
+          <div className="button-row">
+            {overview.preparedBanks.length > 0 && <button className="secondary small" disabled={busy}
+              onClick={async () => { if (await call({ action: 'importPreparedBanks' })) await reload(); }}>
+              <BookPlus size={16} /> 연습 문제은행 {overview.preparedBanks.length}개 불러오기</button>}
+            <button className="primary small" onClick={() => setCreating(true)}><Plus size={18} /> 구글 시트로 문제은행 추가</button>
+          </div>
         </div>
+        {overview.preparedBanks.length > 0 && <p className="muted">미리 만들어 둔 초1 연습 문제은행(과목당 24문제, 영역 표시 포함)을 &lsquo;검토 중&rsquo; 상태로 가져와요. 내용을 보고 고친 뒤 공개하면 돼요.</p>}
         <div className="bank-list">
           {overview.banks.map(b => (
             <button key={b.id} className={'bank-row ' + b.status} onClick={() => onOpenBank(b.id)}>
@@ -236,6 +258,107 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
     </>
+  );
+}
+
+// ---------------- 학습 활동 그래프 ----------------
+const CHART = { quiz: '#2a78d6', battle: '#eb6834' }; // 두 색은 색약 검사를 통과한 짝 (파랑·주황)
+const minutes = (sec: number) => Math.round(sec / 60);
+const weekday = ['일', '월', '화', '수', '목', '금', '토'];
+/** 하루 퀴즈 시간·포켓로그 시간을 막대로. 최근 7일 또는 최근 4주(주별 합계) */
+function ActivitySection({ days }: { days: ActivityDay[] }) {
+  const [range, setRange] = useState<'week' | 'month'>('week');
+  const [asTable, setAsTable] = useState(false);
+  const rows = range === 'week'
+    ? days.slice(-7).map(d => ({ label: `${Number(d.date.slice(8))}일(${weekday[new Date(d.date + 'T00:00:00').getDay()]})`, quiz: minutes(d.quizSeconds), battle: minutes(d.battleSeconds), answered: d.answered, correct: d.correct, wave: d.battleWave }))
+    : Array.from({ length: 4 }, (_, i) => {
+        const week = days.slice(i * 7, i * 7 + 7);
+        return {
+          label: `${week[0].date.slice(5).replace('-', '/')}~${week[6].date.slice(5).replace('-', '/')}`,
+          quiz: minutes(week.reduce((s, d) => s + d.quizSeconds, 0)), battle: minutes(week.reduce((s, d) => s + d.battleSeconds, 0)),
+          answered: week.reduce((s, d) => s + d.answered, 0), correct: week.reduce((s, d) => s + d.correct, 0), wave: Math.max(...week.map(d => d.battleWave)),
+        };
+      });
+  const totalQuiz = rows.reduce((s, r) => s + r.quiz, 0), totalBattle = rows.reduce((s, r) => s + r.battle, 0);
+  const totalAnswered = rows.reduce((s, r) => s + r.answered, 0), totalCorrect = rows.reduce((s, r) => s + r.correct, 0);
+  return (
+    <section className="panel parent-section activity">
+      <div className="heading-row">
+        <div><h2>하루에 얼마나 했나</h2><p className="muted">퀴즈 화면을 보고 있던 시간과 포켓로그 플레이 시간(분). 1분마다 기록해서 1~2분 차이는 날 수 있어요.</p></div>
+        <div className="button-row">
+          <button className={'chip' + (range === 'week' ? ' on' : '')} onClick={() => setRange('week')}>최근 7일</button>
+          <button className={'chip' + (range === 'month' ? ' on' : '')} onClick={() => setRange('month')}>최근 4주</button>
+          <button className="text-button" onClick={() => setAsTable(v => !v)}>{asTable ? '그래프로' : '표로 보기'}</button>
+        </div>
+      </div>
+      <div className="parent-summary">
+        <span><i className="dot" style={{ background: CHART.quiz }} /> 퀴즈 {totalQuiz}분</span>
+        <span><i className="dot" style={{ background: CHART.battle }} /> 포켓로그 {totalBattle}분</span>
+        <span>푼 문제 {totalAnswered}개{totalAnswered ? ` · 첫 시도 정답 ${Math.round((totalCorrect / totalAnswered) * 100)}%` : ''}</span>
+      </div>
+      {asTable
+        ? <table className="battle-log">
+            <thead><tr><th>{range === 'week' ? '날짜' : '주'}</th><th>퀴즈</th><th>포켓로그</th><th>푼 문제</th><th>첫 시도 정답</th><th>최고 웨이브</th></tr></thead>
+            <tbody>{rows.map(r => <tr key={r.label}><td>{r.label}</td><td>{r.quiz}분</td><td>{r.battle}분</td><td>{r.answered}개</td><td>{r.correct}개</td><td>{r.wave || '-'}</td></tr>)}</tbody>
+          </table>
+        : <div className="chart-box">
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={rows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }} barGap={2} barCategoryGap="28%">
+                <CartesianGrid vertical={false} stroke="#e6ede3" />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={{ stroke: '#dbe5d9' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={false} tickLine={false} allowDecimals={false} unit="분" />
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }} formatter={(v, name) => [`${v}분`, name === 'quiz' ? '퀴즈' : '포켓로그']}
+                  labelFormatter={(l, payload) => { const r = payload?.[0]?.payload as typeof rows[number] | undefined; return r ? `${l} · 푼 문제 ${r.answered}개${r.wave ? ` · ${r.wave}웨이브` : ''}` : String(l); }} />
+                <Legend formatter={v => (v === 'quiz' ? '퀴즈' : '포켓로그')} iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13 }} />
+                <Bar dataKey="quiz" fill={CHART.quiz} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="battle" fill={CHART.battle} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>}
+    </section>
+  );
+}
+
+// ---------------- 영역별 성적 ----------------
+/** 과목마다 영역별 정답률·틀린 수·약점 표시, 반복 오답 문제 */
+function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[] }[] }) {
+  const weakAreas = report.flatMap(r => r.areas.filter(a => a.weak).map(a => `${r.subject} · ${a.area}`));
+  const rate = (a: AreaReport) => (a.correct + a.wrong ? Math.round((a.correct / (a.correct + a.wrong)) * 100) : null);
+  const level = (a: AreaReport) => a.weak ? 'weak' : rate(a) === null ? 'none' : rate(a)! >= 80 ? 'good' : 'mid';
+  return (
+    <div className="area-board">
+      <div className="heading-row">
+        <h3>영역별로 보기</h3>
+        <span className="muted legend"><i className="lv good" /> 잘함(80% 이상) <i className="lv mid" /> 보통 <i className="lv weak" /> 약점(최근 5번 중 2번 이상 틀림) <i className="lv none" /> 아직 안 품</span>
+      </div>
+      {weakAreas.length > 0
+        ? <p className="focus-note">🎯 지금 집중 중인 영역: <b>{weakAreas.join(', ')}</b> — 일일미션에 이 영역 문제가 더 자주 나와요. 최근 5번 중 4번 이상 맞히면 보통으로 돌아가요.</p>
+        : <p className="muted">지금 약점으로 잡힌 영역은 없어요. (문제에 &lsquo;영역&rsquo;이 적혀 있어야 나눠 보여요. 영역이 없는 문제는 &lsquo;기타&rsquo;로 묶여요.)</p>}
+      <div className="area-grid">
+        {report.map(r => (
+          <div className="area-subject" key={r.subject}>
+            <b>{r.subject}</b>
+            {r.areas.length === 0 && <span className="muted">문제 없음</span>}
+            {r.areas.map(a => (
+              <div className={'area-row ' + level(a)} key={a.area} title={`맞힘 ${a.correct} · 틀림 ${a.wrong} · 최근 ${a.recent.split('').map(c => c === 'o' ? 'O' : 'X').join('') || '-'}`}>
+                <span className="area-name">{a.area}</span>
+                <span className="area-stat">{rate(a) === null ? '-' : `${rate(a)}%`}</span>
+                <span className="area-stat">{a.wrong ? `틀림 ${a.wrong}` : ''}</span>
+                <span className="area-recent">{a.recent.slice(-5).split('').map((c, i) => <i key={i} className={c === 'o' ? 'o' : 'x'} />)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      {report.some(r => r.areas.some(a => a.repeated.length)) && <>
+        <h3>반복해서 틀리는 문제 (2번 이상)</h3>
+        <ul className="hardest">
+          {report.flatMap(r => r.areas.flatMap(a => a.repeated.map(q => (
+            <li key={q.id}>[{r.subject} · {a.area}] {q.prompt} <span>{q.wrong}번 틀림{q.solved ? ' · 이후 맞힘' : ''}</span></li>
+          ))))}
+        </ul>
+      </>}
+    </div>
   );
 }
 
@@ -466,7 +589,7 @@ function BankEditor({ bankId, initialIssues, grade, aiConfigured, busy, call, on
         {shown.map((q, i) => (
           <article className="review-question" key={q.id}>
             <div className="heading-row">
-              <b>{i + 1}. [{q.subject}] {q.prompt}</b>
+              <b>{i + 1}. [{q.subject}{q.area ? ` · ${q.area}` : ''}] {q.prompt}</b>
               <span className="button-row">
                 <TypeBadge type={q.type} small />
                 <button className="text-button" disabled={busy} onClick={() => setEditing(q)}><Pencil size={14} /> 수정</button>
@@ -521,6 +644,10 @@ function QuestionForm({ initial, busy, onSave }: { initial: Question; busy: bool
       </div>
     ))}
     <label>해설<textarea rows={3} value={q.explanation} onChange={e => setQ({ ...q, explanation: e.target.value })} /></label>
+    <label>영역 <small className="muted">(비우면 &lsquo;기타&rsquo;)</small>
+      <input maxLength={30} list={`areas-${q.subject}`} value={q.area ?? ''} onChange={e => setQ({ ...q, area: e.target.value })} />
+      <datalist id={`areas-${q.subject}`}>{SUBJECT_AREAS[q.subject].map(a => <option key={a} value={a} />)}</datalist>
+    </label>
     <button className="primary" disabled={busy} onClick={() => onSave(q)}>저장</button>
   </>;
 }

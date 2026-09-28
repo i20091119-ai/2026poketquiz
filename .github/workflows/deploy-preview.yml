@@ -1,4 +1,4 @@
-# 아래 작업본(게임 작업본 claude/battle-pokerogue, 개발자 메뉴 작업본 claude/dev-menu)에 새 버전이 올라오면,
+# 아래 작업본(게임 작업본 claude/battle-pokerogue, 개발자 메뉴 작업본 claude/dev-menu, 학습 분석 작업본 claude/insight)에 새 버전이 올라오면,
 # 아이가 쓰는 진짜 게임과는 별개인 미리보기 사이트(poke-quiz-preview, 기록 저장소도 따로)에 올립니다. 포켓로그(/battle)도 함께 만듭니다.
 # 미리보기 사이트는 하나뿐이라, 마지막에 올린 작업본의 모습이 보입니다.
 # 열쇠는 진짜 게임과 같은 CLOUDFLARE_API_TOKEN 을 씁니다.
@@ -6,7 +6,7 @@ name: 미리보기 올리기 (게임 작업본)
 
 on:
   push:
-    branches: [claude/battle-pokerogue, claude/dev-menu]
+    branches: [claude/battle-pokerogue, claude/dev-menu, claude/insight]
   workflow_dispatch:
 
 concurrency:
@@ -69,6 +69,13 @@ jobs:
           [ -n "$uuid" ] || { echo "::error::기록 저장소 번호를 찾지 못했어요."; exit 1; }
           echo "기록 저장소 번호: $uuid"
           sed -i "s/\"database_id\": \"[^\"]*\"/\"database_id\": \"$uuid\"/" wrangler.jsonc
+
+      # 포켓몬 그림 1,025장(약 130MB)은 한 번 받아 두고 다음 실행에서 재사용합니다 (npm run build 전에 자동으로 받음).
+      - name: 포켓몬 그림 캐시
+        uses: actions/cache@v4
+        with:
+          path: public/assets/pokemon
+          key: pokemon-art-${{ hashFiles('scripts/fetch-pokemon-art.mjs') }}
 
       - name: 만들기
         run: npm run build

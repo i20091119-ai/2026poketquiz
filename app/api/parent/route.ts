@@ -1,13 +1,14 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
-import { BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
-import { battleLogList, battleStartsLeft, candySummary, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
+import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
+import { activityList, areaReport, battleLogList, battleStartsLeft, candySummary, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
+import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
 import { hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
-import { isSimulating, simStartCookie, simStopCookie } from '@/lib/server/player';
+import { isSimulating, playerOf, simStartCookie, simStopCookie } from '@/lib/server/player';
 import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
-  getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
+  getBattleLimitMinutes, getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setBattleLimitMinutes, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -34,14 +35,21 @@ async function simulationInfo(request: Request) {
 }
 
 async function overview(request: Request) {
-  const [grade, banks, bank, { state }, battleHash, sim] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(), getBattlePasswordHash(), simulationInfo(request)]);
+  // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
+  const player = await playerOf(request);
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes()]);
+  const today = player.today;
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
   const wrong = progress?.wrong ?? {};
   return {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
-    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, todayKorea()), candy: candySummary(state, todayKorea()) },
+    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, today), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS },
+    /** 최근 4주 날짜별 활동 (퀴즈 시간·푼 문제·포켓로그 시간) — 주간 그래프용 */
+    activity: activityList(state, today, 28),
+    /** 준비된 연습 문제은행 중 아직 안 불러온 것 */
+    preparedBanks: PREPARED_BANKS.map(b => b.title).filter(t => !banks.some(x => x.title === t)),
     sim,
     banks,
     child: {
@@ -56,6 +64,8 @@ async function overview(request: Request) {
       }),
       hardest: bank.questions.filter(q => wrong[q.id]).sort((a, b) => wrong[b.id] - wrong[a.id]).slice(0, 10)
         .map(q => ({ id: q.id, subject: q.subject, prompt: q.prompt, wrong: wrong[q.id], solved: solved.has(q.id) })),
+      /** 과목별 영역 성적 (약점 영역, 반복 오답 포함) */
+      areas: areaReport(state, bank),
     },
   };
 }
@@ -156,6 +166,18 @@ export async function POST(request: Request) {
       case 'clearBattlePassword':
         await setBattlePasswordHash(null);
         return json({ message: '포켓로그 비밀번호를 지웠어요. 다시 정하기 전까지 포켓로그는 열리지 않아요.' });
+
+      case 'setBattleLimit': {
+        const minutes = Number(body.minutes);
+        if (!(BATTLE_LIMIT_OPTIONS as readonly number[]).includes(minutes)) throw new ParentError('시간 제한 값을 다시 골라 주세요.');
+        await setBattleLimitMinutes(minutes);
+        return json({ message: minutes ? `포켓로그 하루 시간 제한을 ${minutes}분으로 정했어요. 다 쓰면 게임 화면에 안내가 뜨고 퀴즈로 돌아가요.` : '포켓로그 시간 제한을 없앴어요.' });
+      }
+
+      case 'importPreparedBanks': {
+        const added = await importPreparedBanks();
+        return json({ message: added.length ? `연습 문제은행 ${added.length}개(${added.join(', ')})를 불러왔어요. 검토한 뒤 '아이에게 공개'를 눌러 주세요.` : '준비된 연습 문제은행은 이미 모두 불러왔어요.' });
+      }
 
       case 'createBank': {
         const grade = String(body.grade ?? await getGrade());

@@ -44,6 +44,19 @@ export type Subject = typeof SUBJECTS[number];
  * 과목별로 스탯이 오르는 속성. 비슷한 계열 3개씩 묶어 18속성을 모두 한 번씩 씁니다.
  * 문제마다 이 중 하나가 붙습니다.
  */
+/**
+ * 과목별 영역 (아이 엄마 확정안, 2026-09-28). 시트의 "영역" 칸에 이 글자 그대로 적습니다(빈칸은 '기타').
+ * 보호자 화면의 영역별 성적·약점 자동 조절이 이 이름으로 묶입니다. 목록에 없는 이름도 그대로 쓰이지만, 여기 있는 이름을 권장합니다.
+ */
+export const SUBJECT_AREAS: Record<Subject, readonly string[]> = {
+  국어: ['받침·맞춤법', '낱말 뜻', '흉내말·반대말', '부호·띄어쓰기', '내용 확인', '생각·까닭'],
+  수학: ['수·계산', '규칙', '모양·측정', '분류·자료'],
+  영어: ['알파벳', '파닉스', '사이트워드', '기본 단어', '문장 만들기'],
+  한자: ['숫자', '요일·자연', '방향·위치', '사람·가족', '학교·나라', '색·크기·기타'],
+  역사: ['선사·고조선', '삼국·남북국', '고려', '조선', '근현대', '문화·풍속'],
+  상식: ['동식물', '날씨·계절', '몸·안전', '동네·규칙', '음악', '미술'],
+};
+
 export const SUBJECT_TYPES: Record<Subject, TypeKey[]> = {
   국어: ['normal', 'psychic', 'fairy'], // 마음과 빛
   수학: ['electric', 'steel', 'rock'], // 광물과 기계
@@ -173,9 +186,19 @@ export const DUPLICATE_BONUS = 5;
 export const BATTLE_STARTS_PER_DAY = 1;
 /** 포켓로그 가족 비밀번호의 최소 글자 수 (보호자 공간에서 정함) */
 export const BATTLE_PASSWORD_MIN = 4;
-/** 보호자 화면에 보여 줄 포켓로그 기록 일수, 한 번 보고에 인정하는 최대 초(1분마다 보고) */
-export const BATTLE_LOG_DAYS = 14;
+/** 날짜별 기록(퀴즈 시간·포켓로그 기록)을 보관하는 일수 — 보호자 화면 주간 그래프 4주분 */
+export const ACTIVITY_LOG_DAYS = 35;
+export const BATTLE_LOG_DAYS = ACTIVITY_LOG_DAYS;
+/** 한 번 보고에 인정하는 최대 초 (아이 화면·포켓로그 모두 1분마다 보고) */
 export const BATTLE_REPORT_MAX_SECONDS = 120;
+export const QUIZ_REPORT_MAX_SECONDS = 120;
+/** 포켓로그 하루 플레이 시간 제한 선택지(분). 0 = 제한 없음. 보호자 공간에서 고르고, 기본은 제한 없음 */
+export const BATTLE_LIMIT_OPTIONS = [0, 15, 30, 45, 60, 90] as const;
+/**
+ * 약점 영역 판정: 그 영역에서 최근 WEAK_RECENT 번 중 WEAK_WRONG 번 이상 틀리면 약점.
+ * 약점 영역 문제는 일일미션에 더 자주 나오고, 최근 5번 중 4번 이상 맞히면 보통으로 돌아갑니다.
+ */
+export const WEAK_AREA = { recent: 5, wrong: 2, maxPerSubjectDaily: 2 };
 /**
  * 일일미션 → 포켓로그 사탕 (battle/SPEC.md 11번 성장 요소).
  * 오늘의 미션을 다 풀면(틀린 것 포함) 파트너 포켓몬(의 진화 전 첫 모습)에게 포켓로그 사탕을 보냅니다. 모두 맞히면 더 많이.
