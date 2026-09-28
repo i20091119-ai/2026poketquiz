@@ -173,9 +173,19 @@ export const DUPLICATE_BONUS = 5;
 export const BATTLE_STARTS_PER_DAY = 1;
 /** 포켓로그 가족 비밀번호의 최소 글자 수 (보호자 공간에서 정함) */
 export const BATTLE_PASSWORD_MIN = 4;
-/** 보호자 화면에 보여 줄 포켓로그 기록 일수, 한 번 보고에 인정하는 최대 초(1분마다 보고) */
-export const BATTLE_LOG_DAYS = 14;
+/** 날짜별 기록(퀴즈 시간·포켓로그 기록)을 보관하는 일수 — 보호자 화면 주간 그래프 4주분 */
+export const ACTIVITY_LOG_DAYS = 35;
+export const BATTLE_LOG_DAYS = ACTIVITY_LOG_DAYS;
+/** 한 번 보고에 인정하는 최대 초 (아이 화면·포켓로그 모두 1분마다 보고) */
 export const BATTLE_REPORT_MAX_SECONDS = 120;
+export const QUIZ_REPORT_MAX_SECONDS = 120;
+/** 포켓로그 하루 플레이 시간 제한 선택지(분). 0 = 제한 없음. 보호자 공간에서 고르고, 기본은 제한 없음 */
+export const BATTLE_LIMIT_OPTIONS = [0, 15, 30, 45, 60, 90] as const;
+/**
+ * 약점 영역 판정: 그 영역에서 최근 WEAK_RECENT 번 중 WEAK_WRONG 번 이상 틀리면 약점.
+ * 약점 영역 문제는 일일미션에 더 자주 나오고, 최근 5번 중 4번 이상 맞히면 보통으로 돌아갑니다.
+ */
+export const WEAK_AREA = { recent: 5, wrong: 2, maxPerSubjectDaily: 2 };
 /**
  * 일일미션 → 포켓로그 사탕 (battle/SPEC.md 11번 성장 요소).
  * 오늘의 미션을 다 풀면(틀린 것 포함) 파트너 포켓몬(의 진화 전 첫 모습)에게 포켓로그 사탕을 보냅니다. 모두 맞히면 더 많이.

@@ -12,3 +12,9 @@ declare namespace Cloudflare {
 declare const __APP_VERSION__: string;
 /** 빌드한(올린) 날짜, 예: 2026-09-28 (vite.config.ts) */
 declare const __BUILD_DATE__: string;
+
+/** CSV 파일을 글자 그대로 불러오기 (vite ?raw). 연습 문제은행(lib/server/prepared-banks.ts)에 씁니다. */
+declare module '*.csv?raw' {
+  const text: string;
+  export default text;
+}

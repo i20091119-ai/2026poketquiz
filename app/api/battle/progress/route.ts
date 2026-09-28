@@ -1,8 +1,9 @@
 // 포켓로그가 1분마다 보내는 진행 보고 (지금 웨이브, 그동안 플레이한 초). 보호자 화면의 날짜별 기록이 됩니다.
-import { recordBattleProgress } from '@/lib/game-engine';
+import { battleTimeUp, recordBattleProgress } from '@/lib/game-engine';
+import { TIME_UP_MESSAGE } from '../route';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { playerOf } from '@/lib/server/player';
-import { json, mutateState } from '@/lib/server/store';
+import { getBattleLimitMinutes, json, mutateState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,11 @@ export async function POST(request: Request) {
     const wave = Number(body?.wave ?? 0), seconds = Number(body?.seconds ?? 0);
     const player = await playerOf(request);
     const today = player.today;
-    const { result } = await mutateState(state => ({ result: recordBattleProgress(state, today, wave, seconds), changed: true }), player.id);
-    return json({ ok: true, today: result });
+    const limit = await getBattleLimitMinutes();
+    const { state, result } = await mutateState(state => ({ result: recordBattleProgress(state, today, wave, seconds), changed: true }), player.id);
+    const timeUp = battleTimeUp(state, today, limit);
+    // timeUp 이면 게임이 화면을 가리고 퀴즈로 돌아가게 합니다 (하루 시간 제한)
+    return json({ ok: true, today: result, limit, timeUp, message: timeUp ? TIME_UP_MESSAGE(limit) : null });
   } catch (error) {
     console.error('포켓로그 진행 기록 실패', error);
     return json({ error: '기록하지 못했어요.' }, 503);
