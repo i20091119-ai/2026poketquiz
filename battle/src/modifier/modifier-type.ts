@@ -5,6 +5,7 @@ import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { activeOverrides } from "#app/overrides";
+import { isBattleEvolutionAllowed } from "#app/quiz-link";
 import { EvolutionItem } from "#balance/pokemon-evolutions";
 import { getTmNumber, tmPoolTiers } from "#balance/tm-pool-tiers";
 import { getBerryEffectDescription, getBerryName } from "#data/berry";
@@ -1529,6 +1530,10 @@ class TmModifierTypeGenerator extends ModifierTypeGenerator {
 class EvolutionItemModifierTypeGenerator extends ModifierTypeGenerator {
   constructor(rare: boolean) {
     super((party: readonly Pokemon[], pregenArgs?: any[]) => {
+      // 퀴즈 연동판: 보호자가 "배틀 중 진화 허용"을 끄면(기본) 진화 아이템은 어디서도(상점·이벤트) 만들어지지 않음
+      if (!isBattleEvolutionAllowed()) {
+        return null;
+      }
       if (pregenArgs && pregenArgs.length === 1 && pregenArgs[0] in EvolutionItem) {
         return new EvolutionItemModifierType(pregenArgs[0] as EvolutionItem);
       }

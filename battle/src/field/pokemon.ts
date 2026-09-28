@@ -12,6 +12,7 @@ import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { activeOverrides } from "#app/overrides";
+import { isBattleEvolutionAllowed } from "#app/quiz-link";
 import type { AnySound } from "#audio/audio-manager";
 import { speciesEggMoves } from "#balance/egg-moves";
 import { FusionSpeciesFormEvolution, SpeciesFormEvolution, validateShedinjaEvo } from "#balance/pokemon-evolutions";
@@ -2936,6 +2937,10 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
    * @returns The evolution this pokemon can currently evolve into, or `null` if it cannot evolve
    */
   public getEvolution(): SpeciesFormEvolution | null {
+    // 퀴즈 연동판: 보호자가 "배틀 중 진화 허용"을 끄면(기본) 내 포켓몬은 판 안에서 진화하지 않음 (quiz-rules.ts evolutionSwitch)
+    if (this.isPlayer() && !isBattleEvolutionAllowed()) {
+      return null;
+    }
     if (speciesDataRegistry.hasEvolutions(this.species.speciesId)) {
       const evolutions: SpeciesFormEvolution[] = [];
       for (const evo of speciesDataRegistry.getEvolutions(this.species.speciesId)) {

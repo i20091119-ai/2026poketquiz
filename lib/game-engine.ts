@@ -4,7 +4,7 @@ import {
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, typeLabel } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, species, typeLabel } from './pokedex.ts';
 
 export type Question = {
   id: number;
@@ -78,6 +78,8 @@ export type GameState = {
   quizLog?: Record<string, QuizDay>;
   /** 포켓로그에서 도달한 최고 레벨: 진화 계열 첫 모습 번호 → 레벨 (판이 바뀌어도 최고 기록은 남음) */
   battleLevels?: Record<string, number>;
+  /** 포켓로그 이벤트에서 받은 이로치(색이 다른 포켓몬)의 도감 번호. 도감에 색깔별로 따로 모입니다 */
+  shiny?: number[];
 };
 export type QuizDay = { seconds: number; answered: number; correct: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
@@ -683,6 +685,19 @@ export function recordBattleLevels(state: GameState, party: { starter: number; l
   }
 }
 
+/** 포켓로그 이벤트에서 받은 이로치를 도감에 남깁니다 (이미 있으면 그대로). 새로 늘어난 수를 돌려줍니다. */
+export function recordShiny(state: GameState, ids: number[]): number {
+  let added = 0;
+  for (const id of ids) {
+    if (!Number.isInteger(id) || !isSpecies(id)) continue;
+    state.shiny ??= [];
+    if (state.shiny.includes(id)) continue;
+    state.shiny.push(id);
+    added += 1;
+  }
+  return added;
+}
+
 /** 보호자 화면용: 최근 날짜부터 */
 export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
@@ -749,6 +764,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     candy: candySummary(state, today),
     /** 포켓로그 최고 레벨 (진화 계열 첫 모습 번호 기준) */
     battleLevels: state.battleLevels ?? {},
+    /** 포켓로그 이벤트에서 받은 이로치 (도감에 색깔별로 따로 표시) */
+    shiny: state.shiny ?? [],
   };
 }
 export type ChildView = ReturnType<typeof childView>;

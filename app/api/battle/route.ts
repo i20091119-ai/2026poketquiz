@@ -5,7 +5,7 @@ import { battleSecondsToday, battleStartsLeft, battleTimeUp, startBattle } from 
 import { BATTLE_STARTS_PER_DAY } from '@/lib/game-config';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { playerOf } from '@/lib/server/player';
-import { getBattleLimitMinutes, json, mutateState, readState } from '@/lib/server/store';
+import { getBattleEvolutionAllowed, getBattleLimitMinutes, json, mutateState, readState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +16,13 @@ export async function GET(request: Request) {
   try {
     if (!(await isBattleAllowed(request))) return json({ error: '포켓로그 비밀번호를 먼저 넣어 주세요.' }, 401);
     const player = await playerOf(request);
-    const [{ state }, limit] = await Promise.all([readState(player.id), getBattleLimitMinutes()]);
+    const [{ state }, limit, evolution] = await Promise.all([readState(player.id), getBattleLimitMinutes(), getBattleEvolutionAllowed()]);
     const timeUp = battleTimeUp(state, player.today, limit);
     const left = timeUp ? 0 : battleStartsLeft(state, player.today);
-    // sim: 보호자 시뮬레이션 중이면 true (게임 화면 위에 띠를 보여 줌). limit/used/timeUp: 하루 시간 제한(분, 0 = 없음)
+    // sim: 보호자 시뮬레이션 중이면 true (게임 화면 위에 띠를 보여 줌). limit/used/timeUp: 하루 시간 제한(분, 0 = 없음). evolution: 판 안 진화 허용(보호자 설정)
     return json({
       left, perDay: BATTLE_STARTS_PER_DAY, message: timeUp ? TIME_UP_MESSAGE(limit) : left ? null : NO_STARTS_MESSAGE, sim: !!player.sim,
-      limit, usedSeconds: battleSecondsToday(state, player.today), timeUp,
+      limit, usedSeconds: battleSecondsToday(state, player.today), timeUp, evolution,
     });
   } catch (error) {
     console.error('시도 횟수 읽기 실패', error);

@@ -88,6 +88,15 @@ export async function setBattleLimitMinutes(minutes: number) {
   await db().prepare("INSERT INTO settings (key, value) VALUES ('battle_limit_minutes', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(minutes)).run();
 }
 
+// ---------- 포켓로그(/battle) 판 안 진화 허용 (기본 꺼짐: 레벨이 올라도 진화하지 않고, 진화 아이템도 보상에 안 나옴) ----------
+export async function getBattleEvolutionAllowed(): Promise<boolean> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'battle_evolution_allowed'").first<{ value: string }>();
+  return row?.value === '1';
+}
+export async function setBattleEvolutionAllowed(allowed: boolean) {
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('battle_evolution_allowed', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(allowed ? '1' : '0').run();
+}
+
 // ---------- 포켓로그(/battle) 비밀번호 ----------
 // 비밀번호 자체가 아니라 서명값(해시)만 저장합니다 (lib/server/battle-auth.ts).
 export async function getBattlePasswordHash(): Promise<string | null> {

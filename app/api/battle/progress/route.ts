@@ -3,7 +3,7 @@ import { battleTimeUp, recordBattleLevels, recordBattleProgress } from '@/lib/ga
 import { TIME_UP_MESSAGE } from '../route';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { playerOf } from '@/lib/server/player';
-import { getBattleLimitMinutes, json, mutateState } from '@/lib/server/store';
+import { getBattleEvolutionAllowed, getBattleLimitMinutes, json, mutateState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +17,15 @@ export async function POST(request: Request) {
     const wave = Number(body?.wave ?? 0), seconds = Number(body?.seconds ?? 0);
     const player = await playerOf(request);
     const today = player.today;
-    const limit = await getBattleLimitMinutes();
+    const [limit, evolution] = await Promise.all([getBattleLimitMinutes(), getBattleEvolutionAllowed()]);
     const party = Array.isArray(body?.party) ? (body.party as { starter?: unknown; level?: unknown }[]).slice(0, 6) : [];
     const { state, result } = await mutateState(state => {
       recordBattleLevels(state, party.map(p => ({ starter: Number(p?.starter), level: Number(p?.level) })));
       return { result: recordBattleProgress(state, today, wave, seconds), changed: true };
     }, player.id);
     const timeUp = battleTimeUp(state, today, limit);
-    // timeUp 이면 게임이 화면을 가리고 퀴즈로 돌아가게 합니다 (하루 시간 제한)
-    return json({ ok: true, today: result, limit, timeUp, message: timeUp ? TIME_UP_MESSAGE(limit) : null });
+    // timeUp 이면 게임이 화면을 가리고 퀴즈로 돌아가게 합니다 (하루 시간 제한). evolution: 판 안 진화 허용 설정(게임이 1분마다 다시 받음)
+    return json({ ok: true, today: result, limit, timeUp, evolution, message: timeUp ? TIME_UP_MESSAGE(limit) : null });
   } catch (error) {
     console.error('포켓로그 진행 기록 실패', error);
     return json({ error: '기록하지 못했어요.' }, 503);

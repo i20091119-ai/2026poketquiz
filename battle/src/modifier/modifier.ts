@@ -4,6 +4,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { activeOverrides } from "#app/overrides";
+import { isBattleEvolutionAllowed } from "#app/quiz-link";
 import { FusionSpeciesFormEvolution } from "#balance/pokemon-evolutions";
 import { FRIENDSHIP_GAIN_FROM_RARE_CANDY } from "#balance/starters";
 import { getBerryEffectFunc, getBerryPredicate } from "#data/berry";
@@ -2339,6 +2340,10 @@ export class EvolutionItemModifier extends ConsumablePokemonModifier {
    * @returns `true` if the evolution was successful
    */
   override apply(playerPokemon: PlayerPokemon): boolean {
+    // 퀴즈 연동판: 보호자가 "배틀 중 진화 허용"을 끄면(기본) 진화 아이템을 써도 진화하지 않음 (아이템은 남음)
+    if (!isBattleEvolutionAllowed()) {
+      return false;
+    }
     let matchingEvolution = speciesDataRegistry.hasEvolutions(playerPokemon.species.speciesId)
       ? speciesDataRegistry
           .getEvolutions(playerPokemon.species.speciesId)

@@ -19,6 +19,8 @@ type Overview = {
     log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } };
     /** 하루 시간 제한(분, 0 = 없음)과 고를 수 있는 값 */
     limit: number; limitOptions: readonly number[];
+    /** 판 안 진화 허용 (기본 꺼짐) */
+    evolution: boolean;
   };
   /** 최근 28일 날짜별 활동 (오래된 날부터) */
   activity: ActivityDay[];
@@ -208,6 +210,14 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             {overview.battle.limitOptions.map(m => <option key={m} value={m}>{m ? `하루 ${m}분` : '제한 없음'}</option>)}
           </select>
           <button className="secondary" disabled={busy || battleLimit === overview.battle.limit} onClick={async () => { if (await call({ action: 'setBattleLimit', minutes: battleLimit })) await reload(); }}>저장</button>
+        </div>
+        <h3>배틀 중 진화 허용</h3>
+        <p className="muted">꺼 두면(기본) 포켓로그 판 안에서 레벨이 올라도 진화하지 않고, 진화의 돌 같은 진화 아이템도 보상에 나오지 않아요. 포켓몬 진화는 퀴즈 스탯으로만 해요. 지금은 <b>{overview.battle.evolution ? '허용' : '막음'}</b>.</p>
+        <div className="inline-form">
+          <button className="secondary" disabled={busy}
+            onClick={async () => { if (await call({ action: 'setBattleEvolution', allowed: !overview.battle.evolution })) await reload(); }}>
+            {overview.battle.evolution ? '진화 막기' : '진화 허용하기'}
+          </button>
         </div>
       </section>
 

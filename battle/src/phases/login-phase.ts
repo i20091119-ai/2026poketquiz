@@ -3,7 +3,7 @@ import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { Phase } from "#app/phase";
-import { applyQuizCandyGifts } from "#app/quiz-link";
+import { applyQuizCandyGifts, flushQuizShinies } from "#app/quiz-link";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { bypassLogin } from "#constants/app-constants";
 import { PlayerGender } from "#enums/player-gender";
@@ -52,6 +52,7 @@ export class LoginPhase extends Phase {
     } catch (err) {
       console.warn("일일미션 사탕을 넣지 못했어요:", err);
     }
+    flushQuizShinies().catch(() => {}); // 지난번에 못 알린 이벤트 이로치를 퀴즈 도감에 알림
     if (success || bypassLogin) {
       await this.end();
       return;

@@ -2,19 +2,19 @@
 import { useState } from 'react';
 import { ASSETS } from '@/lib/assets';
 import { TYPE_INFO, type TypeKey } from '@/lib/game-config';
-import { pokemonImages, species } from '@/lib/pokedex';
+import { pokemonImages, shinyImages, shinyName, species } from '@/lib/pokedex';
 
-/** 공식 도감 이미지 → pokemon.com → 임시 이미지 순서로 시도합니다. */
-export function PokemonImage({ id, className, size }: { id: number; className?: string; size?: number }) {
-  const sources = [...pokemonImages(id), ASSETS.pokemonPlaceholder];
+/** 공식 도감 이미지 → pokemon.com → 임시 이미지 순서로 시도합니다. shiny 면 이로치(색이 다른) 그림을 먼저 시도합니다. */
+export function PokemonImage({ id, className, size, shiny }: { id: number; className?: string; size?: number; shiny?: boolean }) {
+  const sources = [...(shiny ? shinyImages(id) : []), ...pokemonImages(id), ASSETS.pokemonPlaceholder];
   const [index, setIndex] = useState(0);
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      key={id}
+      key={shiny ? `s${id}` : id}
       className={className}
       src={sources[index]}
-      alt={species(id).name}
+      alt={shiny ? shinyName(id) : species(id).name}
       width={size}
       height={size}
       loading="lazy"

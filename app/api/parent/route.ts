@@ -8,7 +8,7 @@ import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured 
 import { isSimulating, playerOf, simStartCookie, simStopCookie } from '@/lib/server/player';
 import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
-  getBattleLimitMinutes, getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setBattleLimitMinutes, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
+  getBattleEvolutionAllowed, getBattleLimitMinutes, getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setBattleEvolutionAllowed, setBattleLimitMinutes, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -37,7 +37,7 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes()]);
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed()]);
   const today = player.today;
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
@@ -45,7 +45,7 @@ async function overview(request: Request) {
   return {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
-    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, today), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS },
+    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, today), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS, evolution: battleEvolution },
     /** 최근 4주 날짜별 활동 (퀴즈 시간·푼 문제·포켓로그 시간) — 주간 그래프용 */
     activity: activityList(state, today, 28),
     /** 준비된 연습 문제은행 중 아직 안 불러온 것 */
@@ -172,6 +172,12 @@ export async function POST(request: Request) {
         if (!(BATTLE_LIMIT_OPTIONS as readonly number[]).includes(minutes)) throw new ParentError('시간 제한 값을 다시 골라 주세요.');
         await setBattleLimitMinutes(minutes);
         return json({ message: minutes ? `포켓로그 하루 시간 제한을 ${minutes}분으로 정했어요. 다 쓰면 게임 화면에 안내가 뜨고 퀴즈로 돌아가요.` : '포켓로그 시간 제한을 없앴어요.' });
+      }
+
+      case 'setBattleEvolution': {
+        const allowed = body.allowed === true;
+        await setBattleEvolutionAllowed(allowed);
+        return json({ message: allowed ? '배틀 중 진화를 허용했어요. 게임에는 1분 안에 반영돼요.' : '배틀 중 진화를 막았어요. 레벨이 올라도 진화하지 않고, 진화 아이템도 보상에 나오지 않아요.' });
       }
 
       case 'importPreparedBanks': {

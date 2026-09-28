@@ -1,6 +1,7 @@
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { isBattleEvolutionAllowed } from "#app/quiz-link";
 import { QUIZ_RULES } from "#app/quiz-rules";
 import { modifierTypes } from "#data/data-lists";
 import { MAX_PER_TYPE_POKEBALLS } from "#data/pokeball";
@@ -868,8 +869,18 @@ function hasMaximumBalls(ballType: PokeballType): boolean {
  * 퀴즈 앱 연동판에서 뺀 보상 (quiz-rules.ts):
  * - 포획 금지(SPEC 2번): 볼
  * - 알 시스템 제거(SPEC 4번): 알 교환권, 유전자쐐기
+ * - 판 안 진화 스위치(보호자 공간, 기본 꺼짐): 진화 아이템은 스위치가 켜져 있을 때만 나오도록 가중치를 0으로
  * 빠진 자리는 같은 등급의 다른 아이템이 가중치대로 채웁니다.
  */
+const EVOLUTION_ITEM_IDS = ["EVOLUTION_ITEM", "RARE_EVOLUTION_ITEM"];
+function gateEvolutionItem(m: WeightedModifierType): void {
+  if (!QUIZ_RULES.evolutionSwitch || !EVOLUTION_ITEM_IDS.includes(m.modifierType.id)) {
+    return;
+  }
+  const weight = m.weight;
+  m.weight = (party, rerollCount) =>
+    isBattleEvolutionAllowed() ? (weight instanceof Function ? weight(party, rerollCount) : weight) : 0;
+}
 function removeDisabledRewards() {
   const disabled = (m: WeightedModifierType): boolean =>
     (QUIZ_RULES.captureDisabled && m.modifierType instanceof AddPokeballModifierType)
@@ -884,6 +895,7 @@ function removeDisabledRewards() {
   ]) {
     for (const tier of Object.keys(pool) as unknown as ModifierTier[]) {
       pool[tier] = pool[tier].filter(m => !disabled(m));
+      pool[tier].forEach(gateEvolutionItem);
     }
   }
 }
