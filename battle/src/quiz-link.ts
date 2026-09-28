@@ -280,6 +280,99 @@ function quitIfNeeded(): void {
   }
 }
 
+// ---- ✕ 버튼: 언제든 게임을 멈추고 퀴즈로 (부모님 결정) ----
+/** 저장하고 퀴즈 앱으로. 전투 중이면 원본 "저장 후 나가기"와 같은 방식(이번 웨이브 시작 지점으로 저장) */
+function saveAndLeave(): void {
+  const leave = () => window.location.assign("/");
+  setTimeout(leave, 5000); // 저장이 오래 걸려도 5초 뒤에는 나감
+  try {
+    if (globalScene?.currentBattle) {
+      globalScene.gameData.saveAll(true, true, true, true).then(leave, leave);
+      return;
+    }
+  } catch {
+    // 저장에 실패해도 나감 (웨이브마다 자동 저장되어 있음)
+  }
+  leave();
+}
+
+/** "그만할까?" 확인 창. 아이가 실수로 눌러도 한 번 더 물어봅니다. */
+function confirmExit(): void {
+  if (document.getElementById("quiz-exit-confirm")) {
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.id = "quiz-exit-confirm";
+  wrap.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;background:rgba(20,24,32,.75);display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif";
+  const box = document.createElement("div");
+  box.style.cssText =
+    "background:#fff;color:#1f2d27;border-radius:20px;padding:22px 20px 18px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)";
+  const title = document.createElement("div");
+  title.textContent = "게임을 그만하고 퀴즈로 돌아갈까?";
+  title.style.cssText = "font-size:19px;font-weight:800;margin-bottom:8px";
+  const text = document.createElement("p");
+  text.textContent = "저장하고 나갈게. 다음에 '계속하기'를 누르면 이번 웨이브 처음부터 이어서 할 수 있어.";
+  text.style.cssText = "font-size:14px;line-height:1.5;color:#4a5d51;margin:0 0 16px";
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px";
+  const stay = document.createElement("button");
+  stay.textContent = "계속하기";
+  stay.style.cssText =
+    "flex:1;border:1px solid #cbd8c3;background:#fff;color:#1f2d27;border-radius:14px;padding:13px;font-size:16px;font-weight:700";
+  const quit = document.createElement("button");
+  quit.textContent = "그만하기";
+  quit.style.cssText =
+    "flex:1;border:0;background:#17674e;color:#fff;border-radius:14px;padding:13px;font-size:16px;font-weight:800";
+  stay.onclick = () => wrap.remove();
+  quit.onclick = () => {
+    quit.textContent = "저장하는 중…";
+    quit.disabled = true;
+    stay.disabled = true;
+    saveAndLeave();
+  };
+  row.append(stay, quit);
+  box.append(title, text, row);
+  wrap.append(box);
+  // 게임이 터치·키 입력을 가로채지 않도록 확인 창 안의 입력은 여기서 멈춤
+  for (const type of ["pointerdown", "touchstart", "keydown"]) {
+    wrap.addEventListener(type, e => e.stopPropagation());
+  }
+  document.body.append(wrap);
+}
+
+/** 게임 화면 오른쪽 위에 늘 떠 있는 ✕ 버튼 */
+export function showExitButton(): void {
+  if (!QUIZ_RULES.exitButton) {
+    return;
+  }
+  const add = () => {
+    if (document.getElementById("quiz-exit-button")) {
+      return;
+    }
+    const btn = document.createElement("button");
+    btn.id = "quiz-exit-button";
+    btn.type = "button";
+    btn.setAttribute("aria-label", "게임 그만하기");
+    btn.textContent = "✕";
+    btn.style.cssText =
+      "position:fixed;top:calc(env(safe-area-inset-top, 0px) + 8px);right:calc(env(safe-area-inset-right, 0px) + 8px);z-index:2147483600;width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.85);background:rgba(20,24,32,.6);color:#fff;font-size:20px;font-weight:800;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;touch-action:manipulation";
+    for (const type of ["pointerdown", "touchstart"]) {
+      btn.addEventListener(type, e => e.stopPropagation());
+    }
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      confirmExit();
+    });
+    document.body.append(btn);
+  };
+  if (document.body) {
+    add();
+  } else {
+    document.addEventListener("DOMContentLoaded", add);
+  }
+}
+
 // ---- 일일미션 사탕 (SPEC 11번) ----
 export const QUIZ_CANDY_URL = "/api/battle/candy";
 const APPLIED_KEY = "quizCandyApplied";
