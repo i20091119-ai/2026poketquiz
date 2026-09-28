@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { isInstalledApp } from '@/components/pwa';
 import { ASSETS } from '@/lib/assets';
 import { TYPE_INFO, type TypeKey } from '@/lib/game-config';
 import { pokemonImages, shinyImages, shinyName, species } from '@/lib/pokedex';
@@ -57,10 +58,14 @@ function reloadIfOutdated(res: Response) {
   window.location.reload();
 }
 
-/** 보호자 공간을 새 창으로 엽니다. 게임 화면이 링크 누르기를 가로채도 열리도록 직접 창을 띄웁니다. */
+/**
+ * 보호자 공간을 새 창으로 엽니다. 게임 화면이 링크 누르기를 가로채도 열리도록 직접 창을 띄웁니다.
+ * 홈 화면에 설치한 앱으로 열려 있으면 새 창(=브라우저)으로 튀어나가지 않도록 같은 앱 창에서 엽니다.
+ */
 export const openParent = (path: string) => (e: { preventDefault: () => void }) => {
   e.preventDefault();
   const url = new URL(path, window.location.href).href; // 지금 열려 있는 주소 기준 (주소가 바뀌어도 그대로 동작)
+  if (isInstalledApp()) { window.location.assign(url); return; }
   const win = window.open(url, '_blank');
   if (win) win.opener = null;
   else window.location.assign(url); // 새 창이 막히면 이 창에서 이동
