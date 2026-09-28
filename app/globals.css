@@ -609,5 +609,7 @@ select { width: auto; min-width: 120px; }
 .parent-section > .stat-board:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 @media (max-width: 560px) {
   .parent-tabs { gap: 0; }
-  .parent-tab { flex: 1; justify-content: center; padding: 10px 4px; font-size: 13.5px; }
+  .parent-tabs { flex-wrap: wrap; border-bottom: 0; gap: 6px; }
+  .parent-tab { flex: 1 1 30%; justify-content: center; padding: 9px 4px; font-size: 13.5px; border: 1px solid #dbe5d9; border-radius: 10px; margin-bottom: 0; background: #fff; }
+  .parent-tab.on { background: #17674e; color: #fff; border-color: #17674e; }
 }

@@ -141,17 +141,18 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 }
 
 // ---------------- 대시보드 ----------------
-/** 보호자 공간 큰 탭 3개와 각 탭 안의 작은 탭 */
+/** 보호자 공간 탭 5개 (한 줄) */
 const MAIN_TABS = [
-  { key: 'study', label: '📚 학습·문제은행', subs: [{ key: 'report', label: '학습 현황' }, { key: 'banks', label: '문제은행' }] },
-  { key: 'play', label: '🎁 선물·배틀', subs: [{ key: 'gift', label: '선물 보내기' }, { key: 'battleLog', label: '포켓로그 기록' }, { key: 'battleSet', label: '포켓로그 설정' }] },
-  { key: 'dev', label: '🛠️ 업데이트·개발', subs: [{ key: 'version', label: '업데이트 내용' }, { key: 'sim', label: '시뮬레이션' }] },
+  { key: 'report', label: '📊 학습 현황' },
+  { key: 'gift', label: '🎁 선물' },
+  { key: 'banks', label: '📚 문제은행' },
+  { key: 'battle', label: '⚔️ 배틀 설정' },
+  { key: 'dev', label: '🛠️ 업데이트·개발' },
 ] as const;
 type MainTab = typeof MAIN_TABS[number]['key'];
-const TAB_KEY = 'pq-parent-tab';
-function loadTabs(): { main: MainTab; sub: Record<string, string> } {
-  const fallback = { main: 'study' as MainTab, sub: {} as Record<string, string> };
-  try { const v = JSON.parse(localStorage.getItem(TAB_KEY) ?? 'null'); return v && MAIN_TABS.some(t => t.key === v.main) ? { main: v.main, sub: v.sub ?? {} } : fallback; } catch { return fallback; }
+const TAB_KEY = 'pq-parent-tab2';
+function loadTab(): MainTab {
+  try { const v = localStorage.getItem(TAB_KEY); return MAIN_TABS.some(t => t.key === v) ? v as MainTab : 'report'; } catch { return 'report'; }
 }
 
 function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
@@ -162,14 +163,8 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
   const [battleLimit, setBattleLimit] = useState(overview.battle.limit);
   const [creating, setCreating] = useState(false);
   // 고른 탭은 이 기기에 기억해 두었다가 다음에 열 때 그대로 보여 줍니다
-  const [tabs, setTabs] = useState(loadTabs);
-  const go = (main: MainTab, sub?: string) => setTabs(t => {
-    const next = { main, sub: sub ? { ...t.sub, [main]: sub } : t.sub };
-    try { localStorage.setItem(TAB_KEY, JSON.stringify(next)); } catch { /* 저장 못 해도 진행 */ }
-    return next;
-  });
-  const mainInfo = MAIN_TABS.find(t => t.key === tabs.main)!;
-  const sub = mainInfo.subs.some(x => x.key === tabs.sub[tabs.main]) ? tabs.sub[tabs.main] : mainInfo.subs[0].key;
+  const [tab, setTab] = useState<MainTab>(loadTab);
+  const go = (t: MainTab) => { setTab(t); try { localStorage.setItem(TAB_KEY, t); } catch { /* 저장 못 해도 진행 */ } };
   const { child, active } = overview;
   const newReplies = overview.gifts.newReplies;
 
@@ -191,26 +186,22 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         {newReplies > 0 && (
           <div className="reply-badge">
             <b>💌 새 답장 {newReplies}개</b>
-            <button className="secondary small" onClick={() => go('play', 'gift')}>보러 가기</button>
+            <button className="secondary small" onClick={() => go('gift')}>보러 가기</button>
             <button className="text-button" disabled={busy} onClick={async () => { if (await call({ action: 'markRepliesSeen' })) await reload(); }}>확인했어요</button>
           </div>
         )}
       </section>
 
-      {/* 큰 탭 한 줄 */}
+      {/* 탭 한 줄 */}
       <div className="parent-tabs" role="tablist">
         {MAIN_TABS.map(t => (
-          <button key={t.key} role="tab" aria-selected={tabs.main === t.key} className={'parent-tab' + (tabs.main === t.key ? ' on' : '')} onClick={() => go(t.key)}>
-            {t.label}{t.key === 'play' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}
+          <button key={t.key} role="tab" aria-selected={tab === t.key} className={'parent-tab' + (tab === t.key ? ' on' : '')} onClick={() => go(t.key)}>
+            {t.label}{t.key === 'gift' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}
           </button>
         ))}
       </div>
-      {/* 작은 탭 한 줄 */}
-      <div className="parent-subtabs">
-        {mainInfo.subs.map(x => <button key={x.key} className={'chip' + (sub === x.key ? ' on' : '')} onClick={() => go(tabs.main, x.key)}>{x.label}</button>)}
-      </div>
 
-      {tabs.main === 'study' && sub === 'report' && <>
+      {tab === 'report' && <>
         <section className="panel parent-section"><StatBoard stats={child.stats} /></section>
         <ActivitySection days={overview.activity} />
         {active ? (
@@ -225,9 +216,29 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <AreaBoard report={active.areas} />
           </section>
         ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
+        <section className="panel parent-section">
+          <h2>포켓로그 기록</h2>
+          <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음{overview.battle.tickets ? ` · 배틀 추가권 ${overview.battle.tickets}장` : ''}.</p>
+          <p className="muted">🍬 일일미션 사탕: 다 풀면 {overview.battle.candy.rule.finished}개, 모두 맞히면 {overview.battle.candy.rule.perfect}개를 파트너에게 보내요. 지금까지 {overview.battle.candy.sent}개{overview.battle.candy.pending ? ` (게임이 아직 안 가져간 ${overview.battle.candy.pending}개)` : ''}. 사탕은 포켓로그 안에서 패시브 특성 해제·스타터 비용 낮추기에 써요.</p>
+          {overview.battle.log.length === 0
+            ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
+            : <table className="battle-log">
+                <thead><tr><th>날짜</th><th>최고 웨이브</th><th>플레이 시간</th><th>새 게임</th></tr></thead>
+                <tbody>
+                  {overview.battle.log.map(d => (
+                    <tr key={d.date}>
+                      <td>{d.date}</td>
+                      <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
+                      <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
+                      <td>{d.starts ? `${d.starts}번` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </section>
       </>}
 
-      {tabs.main === 'study' && sub === 'banks' && <>
+      {tab === 'banks' && <>
         <section className="panel parent-section">
           <div className="heading-row">
             <div><h2>주차별 문제은행</h2><p>공개한 문제은행 하나가 아이의 일일미션과 탐험에 쓰여요.</p></div>
@@ -260,32 +271,9 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </section>
       </>}
 
-      {tabs.main === 'play' && sub === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
+      {tab === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
 
-      {tabs.main === 'play' && sub === 'battleLog' && (
-        <section className="panel parent-section">
-          <h2>포켓로그 기록</h2>
-          <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음{overview.battle.tickets ? ` · 배틀 추가권 ${overview.battle.tickets}장` : ''}.</p>
-          <p className="muted">🍬 일일미션 사탕: 다 풀면 {overview.battle.candy.rule.finished}개, 모두 맞히면 {overview.battle.candy.rule.perfect}개를 파트너에게 보내요. 지금까지 {overview.battle.candy.sent}개{overview.battle.candy.pending ? ` (게임이 아직 안 가져간 ${overview.battle.candy.pending}개)` : ''}. 사탕은 포켓로그 안에서 패시브 특성 해제·스타터 비용 낮추기에 써요.</p>
-          {overview.battle.log.length === 0
-            ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
-            : <table className="battle-log">
-                <thead><tr><th>날짜</th><th>최고 웨이브</th><th>플레이 시간</th><th>새 게임</th></tr></thead>
-                <tbody>
-                  {overview.battle.log.map(d => (
-                    <tr key={d.date}>
-                      <td>{d.date}</td>
-                      <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
-                      <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
-                      <td>{d.starts ? `${d.starts}번` : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>}
-        </section>
-      )}
-
-      {tabs.main === 'play' && sub === 'battleSet' && <>
+      {tab === 'battle' && <>
         <section className="panel parent-section">
           <RestEditor rest={overview.battle.rest} busy={busy} call={call} reload={reload} />
         </section>
@@ -325,8 +313,9 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </section>
       </>}
 
-      {tabs.main === 'dev' && <>
-        <DevMenu part={sub === 'sim' ? 'sim' : 'version'} sim={overview.sim} busy={busy} call={call} reload={reload} />
+      {tab === 'dev' && <>
+        <DevMenu part="version" sim={overview.sim} busy={busy} call={call} reload={reload} />
+        <DevMenu part="sim" sim={overview.sim} busy={busy} call={call} reload={reload} />
         {/* 이 칸은 항상 맨 아래에 둡니다 (업데이트·개발 탭의 마지막). 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
         <section className="panel parent-section danger-zone">
           <h2>아이 게임 처음부터 다시 하기</h2>
