@@ -3,13 +3,16 @@
  * 퀴즈에서 얻은 포켓몬만 스타터로 쓸 수 있게, 퀴즈 앱 서버에서 보유 포켓몬 목록을 받아 옵니다.
  * (SPEC.md 1번)
  */
+import { getSessionDataLocalStorageKey } from "#app/account";
 import { defaultStarterSpecies } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { QUIZ_RULES } from "#app/quiz-rules";
+import { bypassLogin } from "#constants/app-constants";
 import type { PokemonSpecies } from "#data/pokemon-species";
 import type { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
+import { decrypt, encrypt } from "#utils/data";
 
 /** 퀴즈 앱 서버 주소. 게임이 퀴즈 앱의 /battle/ 아래에서 열리므로 같은 주소를 씁니다. */
 export const QUIZ_MY_POKEMON_URL = "/api/my-pokemon";
@@ -277,6 +280,188 @@ function quitIfNeeded(): void {
     globalScene.gameData.saveAll(true, true, true, true).then(leave, leave);
   } catch {
     leave();
+  }
+}
+
+// ---- 부활권 · 게임 오버 판 서버에 올리기 (도전 이벤트 "전 과목 올클리어" 보상) ----
+export const QUIZ_RUNS_URL = "/api/battle/runs";
+export const QUIZ_REVIVE_URL = "/api/battle/revive";
+const RUNS_UPLOADED_KEY = "quizRunsUploaded";
+
+interface SavedPokemonLike {
+  hp: number;
+  stats?: number[];
+  status?: unknown;
+}
+/** 판 저장의 파티 전원(기절한 포켓몬 포함)과 상대의 체력을 가득 채우고 상태 이상을 없앱니다. */
+export function healSessionData(data: { party?: SavedPokemonLike[]; enemyParty?: SavedPokemonLike[] }): void {
+  for (const p of [...(data.party ?? []), ...(data.enemyParty ?? [])]) {
+    const max = p.stats?.[0];
+    if (typeof max === "number" && max > 0) {
+      p.hp = max;
+    }
+    p.status = null;
+  }
+}
+
+function uploadedRunIds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(RUNS_UPLOADED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+async function uploadRuns(runs: { id: string; wave: number; victory: boolean; data: string }[]): Promise<void> {
+  if (runs.length === 0) {
+    return;
+  }
+  try {
+    const res = await fetch(QUIZ_RUNS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runs }),
+      keepalive: false,
+    });
+    if (res.ok) {
+      const ids = uploadedRunIds();
+      for (const r of runs) {
+        ids.add(r.id);
+      }
+      localStorage.setItem(RUNS_UPLOADED_KEY, JSON.stringify([...ids].slice(-100)));
+    }
+  } catch (err) {
+    console.warn("판 기록을 퀴즈 앱에 올리지 못했어요 (다음에 게임을 열 때 다시 올려요):", err);
+  }
+}
+
+/** 기기에 있는 원본 "플레이 기록"(runHistoryData_Guest) 중 아직 안 올린 판을 퀴즈 앱 서버에 올립니다. 게임을 열 때 한 번. */
+export async function syncQuizRunHistory(): Promise<void> {
+  const raw = localStorage.getItem("runHistoryData_Guest");
+  if (!raw) {
+    return;
+  }
+  let history: Record<string, { entry: { waveIndex?: number; timestamp?: number }; isVictory: boolean }>;
+  try {
+    history = JSON.parse(decrypt(raw, bypassLogin));
+  } catch {
+    return;
+  }
+  const done = uploadedRunIds();
+  const runs = Object.entries(history)
+    .filter(([id]) => !done.has(id))
+    .map(([id, h]) => ({
+      id,
+      wave: Number(h.entry?.waveIndex) || 1,
+      victory: !!h.isVictory,
+      data: JSON.stringify(h.entry),
+    }));
+  // 한 번에 너무 크지 않게 5판씩
+  for (let i = 0; i < runs.length; i += 5) {
+    await uploadRuns(runs.slice(i, i + 5));
+  }
+}
+
+/** 게임 오버(또는 클리어) 때 그 판을 바로 올립니다. */
+export function reportQuizRun(entry: { waveIndex: number; timestamp: number }, isVictory: boolean): void {
+  void uploadRuns([
+    { id: String(entry.timestamp), wave: entry.waveIndex, victory: isVictory, data: JSON.stringify(entry) },
+  ]);
+}
+
+/** 이 슬롯의 웨이브 시작 저장을 체력 가득 채운 상태로 바꿉니다. 저장이 없으면 false */
+function healSavedSlot(slotId: number): boolean {
+  const key = getSessionDataLocalStorageKey(slotId);
+  const raw = localStorage.getItem(key);
+  if (!raw) {
+    return false;
+  }
+  try {
+    const data = JSON.parse(decrypt(raw, bypassLogin));
+    healSessionData(data);
+    localStorage.setItem(key, encrypt(JSON.stringify(data), bypassLogin));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 부활권을 쓸지 묻는 창. 쓰면 true */
+function askRevive(tickets: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText =
+      "position:fixed;inset:0;z-index:2147483647;background:rgba(20,24,32,.75);display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif";
+    const box = document.createElement("div");
+    box.style.cssText =
+      "background:#fff;color:#1f2d27;border-radius:20px;padding:22px 20px 18px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)";
+    box.innerHTML = `<div style="font-size:44px;line-height:1">💖</div>
+      <div style="font-size:19px;font-weight:800;margin:6px 0 8px">부활권을 쓸까?</div>
+      <p style="font-size:14px;line-height:1.5;color:#4a5d51;margin:0 0 16px">내 포켓몬이 모두 체력을 가득 채우고 이 웨이브를 다시 싸워!<br>남은 부활권 <b>${tickets}장</b></p>`;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px";
+    const no = document.createElement("button");
+    no.textContent = "안 쓸래";
+    no.style.cssText =
+      "flex:1;border:1px solid #cbd8c3;background:#fff;color:#1f2d27;border-radius:14px;padding:13px;font-size:16px;font-weight:700";
+    const yes = document.createElement("button");
+    yes.textContent = "쓸래!";
+    yes.style.cssText =
+      "flex:1;border:0;background:#e5484d;color:#fff;border-radius:14px;padding:13px;font-size:16px;font-weight:800";
+    const done = (v: boolean) => {
+      wrap.remove();
+      resolve(v);
+    };
+    no.onclick = () => done(false);
+    yes.onclick = () => done(true);
+    row.append(no, yes);
+    box.append(row);
+    wrap.append(box);
+    for (const type of ["pointerdown", "touchstart", "keydown"]) {
+      wrap.addEventListener(type, e => e.stopPropagation());
+    }
+    document.body.append(wrap);
+  });
+}
+
+/**
+ * 게임 오버 화면: 부활권이 있으면 쓸지 묻고, 쓰면 서버에서 1장을 빼고 웨이브 시작 저장을 체력 가득 채운 상태로 바꿉니다.
+ * true 면 게임이 그 웨이브를 다시 시작하면 됩니다(원본 "다시 도전"과 같은 방식).
+ */
+export async function offerQuizRevive(slotId: number): Promise<boolean> {
+  if (!QUIZ_RULES.reviveTickets || !localStorage.getItem(getSessionDataLocalStorageKey(slotId))) {
+    return false;
+  }
+  try {
+    const info = (await (await fetch(QUIZ_REVIVE_URL, { cache: "no-store" })).json()) as {
+      tickets?: number;
+      blocked?: boolean;
+    };
+    if (!info.tickets || info.blocked || !(await askRevive(info.tickets))) {
+      return false;
+    }
+    const res = (await (
+      await fetch(QUIZ_REVIVE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "gameover" }),
+      })
+    ).json()) as { ok?: boolean; message?: string };
+    if (!res.ok) {
+      showQuizToast(res.message ?? "부활권을 쓰지 못했어.");
+      return false;
+    }
+    return healSavedSlot(slotId);
+  } catch (err) {
+    console.warn("부활권 확인 실패:", err);
+    return false;
+  }
+}
+
+/** 배틀 탭에서 되살린 판으로 들어왔으면 "계속하기"를 누르라고 알려 줍니다. */
+export function noteRevivedRun(): void {
+  if (localStorage.getItem("quizRevived")) {
+    localStorage.removeItem("quizRevived");
+    showQuizToast("💖 부활권으로 판을 되살렸어! '계속하기'를 누르면 그 웨이브부터 다시 시작해.", 12000);
   }
 }
 

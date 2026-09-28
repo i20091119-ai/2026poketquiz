@@ -147,6 +147,15 @@ export const SUBJECT_BERRY: Record<Subject, PotionKind> = {
   국어: 'star', 수학: 'thunder', 영어: 'blue', 한자: 'fire', 역사: 'moon', 상식: 'apple',
 };
 
+// ---- 도전 이벤트 (이벤트 탭) ----
+/** 일일미션 연속 이벤트: 이 일수만큼 빠짐없이 다 풀면 완료 */
+export const STREAK_DAYS = 10;
+export const EVENT_INFO = {
+  allClear: { title: '도전! 전 과목 올클리어', reward: '부활권 1장' },
+  streak: { title: `일일미션 ${STREAK_DAYS}일 연속`, reward: '랜덤박스 1개' },
+} as const;
+export type EventId = keyof typeof EVENT_INFO;
+
 // ---- 볼 ----
 // 등급: 0 흔함, 1 조금 드묾, 2 희귀, 3 전설·환상
 export const BALLS = {
@@ -156,6 +165,8 @@ export const BALLS = {
   master: { label: '마스터볼', odds: [0, 20, 50, 30] },
   // 탐험 전 과목 마스터 보상: 50%가 희귀 또는 전설
   luxury: { label: '럭셔리볼', odds: [20, 30, 25, 25] },
+  // 일일미션 연속 이벤트 보상: lib/rare-pokemon.ts 후보에서만 나옴 (odds 는 쓰지 않음)
+  rare: { label: '희귀 포켓몬 볼', odds: [0, 0, 100, 0] },
 } as const;
 export type BallKind = keyof typeof BALLS;
 export const TIER_LABELS = ['흔함', '조금 드묾', '희귀', '전설'];

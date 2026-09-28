@@ -4,6 +4,8 @@ import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { offerQuizRevive, reportQuizRun } from "#app/quiz-link";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin } from "#constants/app-constants";
 import { modifierTypes } from "#data/data-lists";
 import { getCharVariantFromDialogue } from "#data/dialogue";
@@ -83,43 +85,29 @@ export class GameOverPhase extends BattlePhase {
       return;
     }
 
+    // 퀴즈 연동판: 부활권이 있으면 먼저 쓸지 묻고, 쓰면 체력 가득 채운 웨이브 시작 저장으로 이 웨이브를 다시 시작
+    if (!this.isVictory && QUIZ_RULES.reviveTickets) {
+      void offerQuizRevive(globalScene.sessionSlotId).then(revived => {
+        if (revived) {
+          this.restartWave();
+        } else {
+          this.askRetryOrEnd();
+        }
+      });
+      return;
+    }
+    this.askRetryOrEnd();
+  }
+
+  /** 원본: 다시 도전(설정에서 켰을 때)을 묻거나 게임 오버를 처리 */
+  private askRetryOrEnd(): void {
     if (this.isVictory || !settings.general.enableRetries) {
       this.handleGameOver();
       return;
     }
 
     const retryOptions: ConfirmModeConfig = {
-      yesHandler: () => {
-        globalScene.ui
-          .fadeOut(1250)
-          .then(() => {
-            globalScene.reset();
-            globalScene.phaseManager.clearPhaseQueue();
-            return globalScene.gameData.loadSession(globalScene.sessionSlotId);
-          })
-          .then(() => {
-            globalScene.phaseManager.pushNew("EncounterPhase", true);
-
-            const availablePartyMembers = globalScene.getPokemonAllowedInBattle().length;
-
-            globalScene.phaseManager.pushNew("SummonPhase", 0, true, true);
-            if (globalScene.currentBattle.double && availablePartyMembers > 1) {
-              globalScene.phaseManager.pushNew("SummonPhase", 1, true, true);
-            }
-            if (
-              globalScene.currentBattle.waveIndex > 1
-              && globalScene.currentBattle.battleType !== BattleType.TRAINER
-            ) {
-              globalScene.phaseManager.pushNew("CheckSwitchPhase", 0, globalScene.currentBattle.double);
-              if (globalScene.currentBattle.double && availablePartyMembers > 1) {
-                globalScene.phaseManager.pushNew("CheckSwitchPhase", 1, globalScene.currentBattle.double);
-              }
-            }
-
-            globalScene.ui.fadeIn(1250);
-            this.end();
-          });
-      },
+      yesHandler: () => this.restartWave(),
       noHandler: () => this.handleGameOver(),
       inputDelay: 1000,
     };
@@ -127,6 +115,36 @@ export class GameOverPhase extends BattlePhase {
     globalScene.ui.showText(i18next.t("battle:retryBattle"), null, () => {
       globalScene.ui.setMode(UiMode.CONFIRM, retryOptions);
     });
+  }
+
+  /** 웨이브 시작 저장을 다시 불러와 이 웨이브를 처음부터 다시 싸움 (원본 "다시 도전"과 같은 순서) */
+  private restartWave(): void {
+    globalScene.ui
+      .fadeOut(1250)
+      .then(() => {
+        globalScene.reset();
+        globalScene.phaseManager.clearPhaseQueue();
+        return globalScene.gameData.loadSession(globalScene.sessionSlotId);
+      })
+      .then(() => {
+        globalScene.phaseManager.pushNew("EncounterPhase", true);
+
+        const availablePartyMembers = globalScene.getPokemonAllowedInBattle().length;
+
+        globalScene.phaseManager.pushNew("SummonPhase", 0, true, true);
+        if (globalScene.currentBattle.double && availablePartyMembers > 1) {
+          globalScene.phaseManager.pushNew("SummonPhase", 1, true, true);
+        }
+        if (globalScene.currentBattle.waveIndex > 1 && globalScene.currentBattle.battleType !== BattleType.TRAINER) {
+          globalScene.phaseManager.pushNew("CheckSwitchPhase", 0, globalScene.currentBattle.double);
+          if (globalScene.currentBattle.double && availablePartyMembers > 1) {
+            globalScene.phaseManager.pushNew("CheckSwitchPhase", 1, globalScene.currentBattle.double);
+          }
+        }
+
+        globalScene.ui.fadeIn(1250);
+        this.end();
+      });
   }
 
   /**
@@ -228,6 +246,7 @@ export class GameOverPhase extends BattlePhase {
             }
             this.getRunHistoryEntry().then(runHistoryEntry => {
               globalScene.gameData.saveRunHistory(runHistoryEntry, this.isVictory);
+              reportQuizRun(runHistoryEntry, this.isVictory); // 퀴즈 앱 서버에도 올림 (부활권으로 되살리기용)
               globalScene.phaseManager.pushNew("PostGameOverPhase", globalScene.sessionSlotId, endCardPhase);
               this.end();
             });

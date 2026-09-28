@@ -24,6 +24,8 @@ export const ASSETS = {
     ultra: '/assets/balls/ultra.png',
     master: '/assets/balls/master.png',
     luxury: '/assets/balls/luxury.png',
+    // 희귀 포켓몬 볼: 따로 그린 그림이 없어 하이퍼볼 그림을 씀 (부모님 그림이 생기면 rare.png 로 바꾸기)
+    rare: '/assets/balls/ultra.png',
   } satisfies Record<BallKind, string>,
   type: (t: TypeKey) => `/assets/types/${t}.png`,
   /** 아이 답장 스티커 (새싹 동글이, 부모님이 주신 샘플 reply-stickers-sample.html 의 그림을 그대로 파일로 뺌) */

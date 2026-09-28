@@ -129,6 +129,42 @@ export const setBattleRest = (rules: RestRule[]) => setSetting('battle_rest', JS
 export const getRestOpenDate = () => getSetting('battle_rest_open');
 export const setRestOpenDate = (date: string | null) => setSetting('battle_rest_open', date);
 
+// ---------- 포켓로그 게임 오버 판 (부활권) ----------
+const RUNS_KEEP = 30;
+export type RunInput = { id: string; wave: number; victory: boolean; data: string };
+/** 게임이 올린 판들을 저장합니다 (같은 판은 한 번만). 기록마다 최근 RUNS_KEEP 판만 남깁니다. 새로 넣은 수를 돌려줍니다. */
+export async function saveRuns(player: PlayerId, runs: RunInput[]): Promise<number> {
+  let added = 0;
+  const now = new Date().toISOString();
+  for (const r of runs) {
+    const res = await db().prepare('INSERT OR IGNORE INTO battle_runs (player, id, wave, victory, data, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(player, r.id, r.wave, r.victory ? 1 : 0, r.data, now).run();
+    added += res.meta.changes ?? 0;
+  }
+  if (added) {
+    await db().prepare(`DELETE FROM battle_runs WHERE player = ? AND id NOT IN (SELECT id FROM battle_runs WHERE player = ? ORDER BY CAST(id AS INTEGER) DESC LIMIT ${RUNS_KEEP})`)
+      .bind(player, player).run();
+  }
+  return added;
+}
+/** 부활권으로 되살릴 수 있는 가장 최근 게임 오버 판 (이긴 판·이미 되살린 판 제외) */
+export async function latestDefeat(player: PlayerId): Promise<{ id: string; wave: number } | null> {
+  const row = await db().prepare('SELECT id, wave FROM battle_runs WHERE player = ? AND victory = 0 AND revived_at IS NULL ORDER BY CAST(id AS INTEGER) DESC LIMIT 1')
+    .bind(player).first<{ id: string; wave: number }>();
+  return row ?? null;
+}
+/** 판 저장을 꺼내고 "되살림"으로 표시합니다. 없거나 이미 되살렸으면 null */
+export async function takeRunForRevive(player: PlayerId, id: string): Promise<{ wave: number; data: string } | null> {
+  const row = await db().prepare('SELECT wave, data FROM battle_runs WHERE player = ? AND id = ? AND victory = 0 AND revived_at IS NULL').bind(player, id).first<{ wave: number; data: string }>();
+  if (!row) return null;
+  await db().prepare('UPDATE battle_runs SET revived_at = ? WHERE player = ? AND id = ?').bind(new Date().toISOString(), player, id).run();
+  return row;
+}
+/** 되살림 표시를 되돌립니다 (부활권을 못 썼을 때) */
+export async function undoRevive(player: PlayerId, id: string) {
+  await db().prepare('UPDATE battle_runs SET revived_at = NULL WHERE player = ? AND id = ?').bind(player, id).run();
+}
+
 // ---------- 시뮬레이션 시각 ('HH:MM', 없으면 진짜 시각) ----------
 export const getSimClock = () => getSetting('sim_clock');
 export const setSimClock = (clock: string | null) => setSetting('sim_clock', clock);

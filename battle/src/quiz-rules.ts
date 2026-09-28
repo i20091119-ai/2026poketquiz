@@ -31,6 +31,11 @@ export const QUIZ_RULES = {
    * 전투 중이면 원본 "저장 후 나가기"와 같게 이번 웨이브 시작 지점으로 저장 (quiz-link.ts showExitButton)
    */
   exitButton: true,
+  /**
+   * 부모님 결정: 부활권(퀴즈 앱 도전 이벤트 보상). 게임 오버 화면에서 쓰면 웨이브 시작 저장을 체력 가득 채워 그 웨이브를 다시 시작.
+   * 게임 오버된 판은 퀴즈 앱 서버에도 올려(원본 플레이 기록은 기기에만 있음), 진행 중인 판이 없을 때 배틀 탭에서 되살릴 수 있게 함.
+   */
+  reviveTickets: true,
   /** 원본 안내 정리(부모님 결정): 제목 화면의 "접속자 수·로그인 계정" 표시와 메뉴의 커뮤니티(디스코드 등) 항목을 숨김. 안내 문장은 battle-extras/locales-ko 로 바꿈 */
   hideOriginalNotices: true,
 } as const;

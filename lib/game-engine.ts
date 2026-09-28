@@ -2,10 +2,12 @@
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
+  EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
   type BallKind, type GiftChoice, type GiftLimits, type GiftSender, type GiftSize, type PotionKind, type ReplySticker, type Subject, type TypeKey,
 } from './game-config.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, species, typeLabel } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, rootOf, species, typeLabel } from './pokedex.ts';
+import { RARE_POKEMON } from './rare-pokemon.ts';
 
 export type Question = {
   id: number;
@@ -25,7 +27,9 @@ export type ActiveBank = { id: number; title: string; questions: Question[] };
 
 export type BoxItem =
   | { kind: 'potion'; potion: PotionKind; amount: number }
-  | { kind: 'ball'; ball: BallKind };
+  | { kind: 'ball'; ball: BallKind }
+  /** 포켓로그 배틀 추가권 1장 */
+  | { kind: 'ticket' };
 export type Ball = { id: string; kind: BallKind };
 export type Potion = { id: string; kind: PotionKind };
 export type OwnedPokemon = { uid: string; species: number; obtainedAt: string };
@@ -85,6 +89,17 @@ export type GameState = {
   gifts?: Gift[];
   /** 배틀 추가권: 그날 새 게임 횟수를 다 썼을 때 1장으로 한 번 더. 안 쓰면 남아 있음 */
   battleTickets?: number;
+  /** 도전 이벤트 (이벤트 탭) */
+  events?: { allClear?: AllClearEvent; streak?: StreakEvent };
+  /** 부활권: 게임 오버된 포켓로그 판을 그 웨이브에서 체력 가득 채워 되살림 */
+  reviveTickets?: number;
+};
+/** 도전! 전 과목 올클리어: 수락한 날, 그때 공개 중이던 문제은행, 마스터한 과목(문제은행이 바뀌어도 남음) */
+export type AllClearEvent = { acceptedAt: string; bankId: number; mastered: Subject[]; completedAt?: string; celebrated?: boolean };
+/** 일일미션 연속: 연속 일수, 마지막으로 다 푼 날, 최고 기록, 완료일, 보상 상자 */
+export type StreakEvent = {
+  acceptedAt: string; count: number; lastDate?: string; best: number; completedAt?: string;
+  box?: { items: BoxItem[]; pick: number | null };
 };
 /** 보호자 선물 하나. opened 가 없으면 아직 안 연 것, reply 가 없으면 아직 답장 안 한 것 */
 export type Gift = {
@@ -193,6 +208,7 @@ function rollPotion(potion: PotionKind): BoxItem {
 /** 보상을 주고, 볼이면 새 볼 id를 돌려줍니다. */
 function grant(state: GameState, item: BoxItem): string | null {
   if (item.kind === 'potion') { (state.potions ??= []).push({ id: nextId(state, 'm'), kind: item.potion }); return null; }
+  if (item.kind === 'ticket') { state.battleTickets = (state.battleTickets ?? 0) + 1; return null; }
   const id = nextId(state, 'b');
   state.balls.push({ id, kind: item.ball });
   return id;
@@ -322,7 +338,10 @@ export type Action =
   | { type: 'exchangeExp'; statType: TypeKey }
   | { type: 'expGift'; pick: number }
   | { type: 'openGift'; id: string; choice: GiftChoice; subject?: Subject }
-  | { type: 'replyGift'; id: string; sticker: ReplySticker; text?: string };
+  | { type: 'replyGift'; id: string; sticker: ReplySticker; text?: string }
+  | { type: 'acceptEvent'; event: EventId }
+  | { type: 'eventSeen'; event: EventId }
+  | { type: 'eventBox'; pick: number };
 
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
 
@@ -490,9 +509,15 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const index = state.balls.findIndex(b => b.id === action.ballId);
       if (index < 0) fail('볼을 찾을 수 없어요.');
       const [ball] = state.balls.splice(index, 1);
-      const odds = BALLS[ball.kind].odds;
-      const tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
-      const id = pick(CATCH_POOLS[tier], random);
+      let tier: number, id: number;
+      if (ball.kind === 'rare') {
+        id = pickRarePokemon(state, random);
+        tier = 2;
+      } else {
+        const odds = BALLS[ball.kind].odds;
+        tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
+        id = pick(CATCH_POOLS[tier], random);
+      }
       const result = addPokemon(state, id, ctx.now);
       const name = species(id).name;
       return {
@@ -573,7 +598,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
           item = row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
           const ballId = grant(state, item);
-          opened.got = `랜덤상자 → ${item.kind === 'potion' ? POTIONS[item.potion].label : BALLS[item.ball].label}`;
+          opened.got = `랜덤상자 → ${boxItemLabel(item)}`;
           if (ballId) opened.ballId = ballId;
           break;
         }
@@ -608,9 +633,151 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return { gift: publicGift(gift), message: `${GIFT_SENDERS[gift.from]}에게 답장을 보냈어!` };
     }
 
+    case 'acceptEvent': {
+      needStarter();
+      const ev = state.events ??= {};
+      if (action.event === 'allClear') {
+        if (ev.allClear) fail('이미 도전 중이거나 끝낸 이벤트예요.');
+        const bank = needBank(ctx.bank);
+        ev.allClear = { acceptedAt: ctx.today, bankId: bank.id, mastered: [] };
+      } else if (action.event === 'streak') {
+        if (ev.streak) fail('이미 도전 중이거나 끝낸 이벤트예요.');
+        ev.streak = { acceptedAt: ctx.today, count: 0, best: 0 };
+      } else fail('이벤트를 다시 골라 주세요.');
+      syncEvents(state, ctx.bank, ctx.today);
+      return { message: `${EVENT_INFO[action.event].title} 도전 시작!` };
+    }
+
+    case 'eventSeen': {
+      const e = action.event === 'allClear' ? state.events?.allClear : undefined;
+      if (e?.completedAt) e.celebrated = true;
+      return { ok: true };
+    }
+
+    case 'eventBox': {
+      const choice = needPick(action.pick);
+      const st = state.events?.streak;
+      if (!st?.completedAt) fail(`일일미션 ${STREAK_DAYS}일 연속을 먼저 해내야 해요.`);
+      st.box ??= { items: streakBoxItems(random), pick: null };
+      if (st.box.pick !== null) fail('랜덤박스는 이미 열었어요.');
+      const ballId = grant(state, st.box.items[choice]);
+      st.box.pick = choice;
+      const item = st.box.items[choice];
+      return {
+        items: st.box.items, picks: [choice], done: true, ballIds: ballId ? [ballId] : [],
+        message: item.kind === 'ticket' ? '배틀 추가권을 얻었어!' : '희귀 포켓몬 볼을 얻었어!',
+      };
+    }
+
     default:
       fail('지원하지 않는 요청이에요.');
   }
+}
+
+/** 상자 내용물 이름 (예: 사과열매, 몬스터볼, 배틀 추가권) */
+export const boxItemLabel = (item: BoxItem) =>
+  item.kind === 'potion' ? POTIONS[item.potion].label : item.kind === 'ball' ? BALLS[item.ball].label : '배틀 추가권';
+
+// ---------- 도전 이벤트 ----------
+/** 희귀 포켓몬 볼: 후보(lib/rare-pokemon.ts) 중 아이가 아직 없는 계열을 먼저 */
+function pickRarePokemon(state: GameState, random: Random): number {
+  const pool = RARE_POKEMON.map(([id]) => id).filter(isSpecies);
+  const ownedLines = new Set(state.owned.map(p => rootOf(p.species)));
+  const fresh = pool.filter(id => !ownedLines.has(rootOf(id)));
+  return pick(fresh.length ? fresh : pool, random);
+}
+/** 연속 이벤트 랜덤박스 3칸: 희귀 포켓몬 볼 또는 배틀 추가권, 세 칸이 모두 같지는 않게 */
+function streakBoxItems(random: Random): BoxItem[] {
+  const one = (): BoxItem => (random() < 0.5 ? { kind: 'ball', ball: 'rare' } : { kind: 'ticket' });
+  const items = [one(), one(), one()];
+  if (items.every(i => i.kind === items[0].kind)) items[Math.floor(random() * 3)] = items[0].kind === 'ticket' ? { kind: 'ball', ball: 'rare' } : { kind: 'ticket' };
+  return items;
+}
+/** 연속 기록이 오늘 기준으로 살아 있는지 (어제나 오늘 다 풀었으면 이어짐) */
+const streakAlive = (st: StreakEvent, today: string) => !!st.lastDate && st.lastDate >= shiftDate(today, -1);
+/**
+ * 이벤트 진도를 오늘 상태에 맞춥니다 (아이 화면을 열 때·행동할 때마다). 바뀌었으면 true.
+ * - 올클리어: 공개 중인 문제은행에서 마스터한 과목을 쌓음(수락 전에 마스터한 것도, 문제은행이 바뀌어도 남음). 6과목 다 되면 부활권 +1
+ * - 연속: 오늘 일일미션을 다 풀었으면 어제에 이어 +1(끊겼으면 1부터). 하루라도 빠지면 0. STREAK_DAYS 가 되면 완료
+ */
+export function syncEvents(state: GameState, bank: ActiveBank | null, today: string): boolean {
+  let changed = false;
+  const ac = state.events?.allClear;
+  if (ac && !ac.completedAt && bank) {
+    for (const subject of SUBJECTS) {
+      if (!ac.mastered.includes(subject) && subjectMastered(state, bank, subject)) { ac.mastered.push(subject); changed = true; }
+    }
+    if (SUBJECTS.every(s => ac.mastered.includes(s))) {
+      ac.completedAt = today;
+      state.reviveTickets = (state.reviveTickets ?? 0) + 1;
+      changed = true;
+    }
+  }
+  const st = state.events?.streak;
+  if (st && !st.completedAt) {
+    if (st.count > 0 && !streakAlive(st, today)) { st.count = 0; changed = true; }
+    if (state.daily?.date === today && dailyFinished(state) && st.lastDate !== today && today >= st.acceptedAt) {
+      st.count = st.lastDate === shiftDate(today, -1) && st.count > 0 ? st.count + 1 : 1;
+      st.lastDate = today;
+      st.best = Math.max(st.best, st.count);
+      if (st.count >= STREAK_DAYS) st.completedAt = today;
+      changed = true;
+    }
+  }
+  return changed;
+}
+/** 아이 화면용 이벤트 정보 */
+export function eventsView(state: GameState, bank: ActiveBank | null, today: string) {
+  const ac = state.events?.allClear;
+  const st = state.events?.streak;
+  const subjectsWithQuestions = bank ? SUBJECTS.filter(s => bank.questions.some(q => q.subject === s)) : [...SUBJECTS];
+  const allClear = {
+    ...EVENT_INFO.allClear,
+    accepted: !!ac, acceptedAt: ac?.acceptedAt ?? null,
+    /** 수락 전이면 지금 문제은행에서 이미 마스터한 과목(수락하면 인정됨) */
+    mastered: ac ? ac.mastered : bank ? SUBJECTS.filter(s => subjectMastered(state, bank, s)) : [],
+    subjects: SUBJECTS, subjectsWithQuestions,
+    completedAt: ac?.completedAt ?? null, celebrated: !!ac?.celebrated,
+    /** 다시 나오지 않음: 완료하고 축하 창까지 봤으면 숨김 */
+    hidden: !!ac?.completedAt && !!ac.celebrated,
+  };
+  const alive = st ? streakAlive(st, today) : false;
+  const count = st ? (alive ? st.count : 0) : 0;
+  const doneToday = !!st && st.lastDate === today;
+  const streak = {
+    ...EVENT_INFO.streak, days: STREAK_DAYS,
+    accepted: !!st, acceptedAt: st?.acceptedAt ?? null, count, best: st?.best ?? 0, doneToday,
+    /** 오늘 미션을 하면 몇 일째가 되는지 */
+    nextCount: doneToday ? count : count + 1,
+    completedAt: st?.completedAt ?? null,
+    box: st?.box ? { items: st.box.pick === null ? st.box.items.map(() => null) : st.box.items, pick: st.box.pick } : null,
+    hidden: !!st?.completedAt && st.box?.pick != null,
+  };
+  return { allClear, streak, reviveTickets: state.reviveTickets ?? 0 };
+}
+/** 보호자 화면용 요약 */
+export const eventsReport = (state: GameState, bank: ActiveBank | null, today: string) => {
+  const v = eventsView(state, bank, today);
+  return {
+    allClear: { accepted: v.allClear.accepted, acceptedAt: v.allClear.acceptedAt, mastered: state.events?.allClear?.mastered ?? [], completedAt: v.allClear.completedAt },
+    streak: { accepted: v.streak.accepted, acceptedAt: v.streak.acceptedAt, count: v.streak.count, best: v.streak.best, completedAt: v.streak.completedAt, boxOpened: v.streak.box?.pick != null },
+    reviveTickets: v.reviveTickets,
+  };
+};
+/** 부활권 1장 쓰기. 없으면 false */
+export function spendReviveTicket(state: GameState): boolean {
+  if ((state.reviveTickets ?? 0) < 1) return false;
+  state.reviveTickets = (state.reviveTickets ?? 0) - 1;
+  return true;
+}
+/** 시뮬레이션 전용: 연속 기록을 n일로 맞춤 (어제까지 다 푼 것으로) */
+export function simSetStreak(state: GameState, today: string, days: number) {
+  const st = state.events?.streak;
+  if (!st || st.completedAt) return false;
+  st.count = Math.max(0, Math.min(days, STREAK_DAYS - 1));
+  st.lastDate = st.count ? shiftDate(today, -1) : undefined;
+  st.best = Math.max(st.best, st.count);
+  return true;
 }
 
 // ---------- 보호자 선물 ----------
@@ -903,6 +1070,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY, tickets: battleTickets(state) },
     /** 보호자 선물 (최근 것부터) */
     gifts: giftList(state),
+    /** 도전 이벤트와 부활권 */
+    events: eventsView(state, bank, today),
     /** 일일미션으로 포켓로그에 보내는 사탕 */
     candy: candySummary(state, today),
     /** 포켓로그 최고 레벨 (진화 계열 첫 모습 번호 기준) */
