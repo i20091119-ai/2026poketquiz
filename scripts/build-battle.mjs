@@ -116,7 +116,9 @@ writeFileSync(path.join(out, 'service-worker.js'), readFileSync(path.join(extras
 cpSync(path.join(extras, 'prepare.html'), path.join(out, 'prepare.html'));
 // 비밀번호 문(SPEC 9번): 첫 화면은 정적으로 바로 열리므로, 문이 잠겨 있으면(401/403) 로그인 화면으로 보내는 확인 스크립트를 넣습니다.
 const indexPath = path.join(out, 'index.html');
-const gateScript = '<script>fetch("./asset-manifest.json",{cache:"no-store",credentials:"same-origin"}).then(function(r){if(r.status===401||r.status===403){location.replace("./login")}}).catch(function(){})</script>';
+// 1) 문이 잠겨 있으면 로그인 화면으로  2) 보호자 시뮬레이션 중이면(퀴즈 서버 /api/battle 의 sim) 화면 위에 띠를 보여 줌
+const gateScript = '<script>fetch("./asset-manifest.json",{cache:"no-store",credentials:"same-origin"}).then(function(r){if(r.status===401||r.status===403){location.replace("./login")}}).catch(function(){});'
+  + 'fetch("/api/battle",{cache:"no-store",credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).then(function(b){if(!b||!b.sim)return;var a=document.createElement("a");a.href="/parent";a.textContent="\uD83E\uDDEA \uC2DC\uBBAC\uB808\uC774\uC158 \uC911 \u00B7 \uC2DC\uD5D8\uC6A9 \uAE30\uB85D \u00B7 \uB20C\uB7EC\uC11C \uBCF4\uD638\uC790 \uACF5\uAC04\uC73C\uB85C";a.style.cssText="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#6d28d9;color:#fff;text-align:center;font:800 13px/1.2 system-ui,sans-serif;padding:7px 10px;text-decoration:none";function add(){document.body.appendChild(a)}if(document.body){add()}else{document.addEventListener("DOMContentLoaded",add)}}).catch(function(){})</script>';
 writeFileSync(indexPath, readFileSync(indexPath, 'utf8').replace('<head>', '<head>' + gateScript));
 const SKIP = new Set(['index.html', 'asset-manifest.json', 'prefetch-manifest.json', 'prepare.html', 'service-worker.js']);
 const files = readdirSync(out, { withFileTypes: true, recursive: true })

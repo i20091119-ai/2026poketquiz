@@ -78,6 +78,13 @@ export const todayKorea = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 
+/** 'YYYY-MM-DD' 날짜에서 days 일 뒤 (시뮬레이션의 "다음 날로 넘기기"에 씀) */
+export function shiftDate(date: string, days: number): string {
+  const t = Date.parse(date + 'T00:00:00Z');
+  if (!Number.isFinite(t)) return date;
+  return new Date(t + days * 86400000).toISOString().slice(0, 10);
+}
+
 export function initialState(): GameState {
   return {
     version: 1, exp: 0,

@@ -1,5 +1,6 @@
 import { SUBJECTS, type Subject } from '@/lib/game-config';
-import { nextExploreQuestion, secureRandom, todayKorea } from '@/lib/game-engine';
+import { nextExploreQuestion, secureRandom } from '@/lib/game-engine';
+import { playerOf } from '@/lib/server/player';
 import { activeBank, json, readState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
@@ -11,8 +12,9 @@ export async function GET(request: Request) {
     const subject = params.get('subject') as Subject;
     if (!SUBJECTS.includes(subject)) return json({ error: '과목을 다시 골라 주세요.' }, 400);
     const skip = Number(params.get('skip')) || undefined;
-    const [bank, { state }] = await Promise.all([activeBank(), readState()]);
-    return json({ question: nextExploreQuestion(state, bank, subject, todayKorea(), secureRandom, skip) });
+    const player = await playerOf(request);
+    const [bank, { state }] = await Promise.all([activeBank(), readState(player.id)]);
+    return json({ question: nextExploreQuestion(state, bank, subject, player.today, secureRandom, skip) });
   } catch (error) {
     console.error('탐험 문제 읽기 실패', error);
     return json({ error: '문제를 불러오지 못했어요.' }, 503);

@@ -1,12 +1,13 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
-import { battleLogList, battleStartsLeft, todayKorea } from '@/lib/game-engine';
+import { battleLogList, battleStartsLeft, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
 import { hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
+import { isSimulating, simStartCookie, simStopCookie } from '@/lib/server/player';
 import {
-  activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade, json,
-  listBanks, publishBank, readState, resetGame, setGrade, updateBank, updateQuestion,
+  activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
+  getSimDayOffset, json, listBanks, overwriteState, publishBank, readState, resetGame, setGrade, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -15,8 +16,25 @@ export const dynamic = 'force-dynamic';
 const MAX_IMPORT = 1000;
 class ParentError extends Error {}
 
-async function overview() {
-  const [grade, banks, bank, { state }, battleHash] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(), getBattlePasswordHash()]);
+/** 개발자 메뉴의 시뮬레이션 상태: 이 브라우저가 시뮬레이션 중인지, 시험용 기록의 오늘과 요약 */
+async function simulationInfo(request: Request) {
+  const [active, dayOffset, { state }] = await Promise.all([isSimulating(request), getSimDayOffset(), readState(SIM_PLAYER)]);
+  const today = shiftDate(todayKorea(), dayOffset);
+  const day = state.battleLog?.[today];
+  return {
+    active, today, dayOffset,
+    summary: {
+      partner: state.owned.find(p => p.uid === state.partner)?.species ?? null,
+      exp: state.exp, owned: state.owned.length,
+      dailyDone: !!state.daily && state.daily.date === today && state.daily.correct.length + state.daily.wrong.length >= state.daily.questionIds.length && state.daily.questionIds.length > 0,
+      battleLeft: battleStartsLeft(state, today),
+      battleWave: day?.maxWave ?? 0, battleMinutes: day ? Math.round(day.seconds / 60) : 0,
+    },
+  };
+}
+
+async function overview(request: Request) {
+  const [grade, banks, bank, { state }, battleHash, sim] = await Promise.all([getGrade(), listBanks(), activeBank(), readState(), getBattlePasswordHash(), simulationInfo(request)]);
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
   const wrong = progress?.wrong ?? {};
@@ -24,6 +42,7 @@ async function overview() {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
     battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, todayKorea()) },
+    sim,
     banks,
     child: {
       exp: state.exp, expSpent: state.expSpent ?? 0, stats: state.stats, owned: state.owned.length, dex: state.dex.length,
@@ -94,7 +113,7 @@ export async function GET(request: Request) {
       const bank = await editableBank(bankId);
       return json({ loggedIn: true, bank: { ...bank, keywords: JSON.parse(bank.keywords) }, questions: await bankQuestions(bankId) });
     }
-    return json({ loggedIn: true, ...(await overview()) });
+    return json({ loggedIn: true, ...(await overview(request)) });
   } catch (error) {
     if (error instanceof ParentError) return json({ error: error.message }, 400);
     console.error('부모 화면 읽기 실패', error);
@@ -206,6 +225,29 @@ export async function POST(request: Request) {
       case 'resetChild':
         await resetGame();
         return json({ message: '아이 게임을 처음부터 다시 시작하도록 초기화했어요. 아이 화면에서 파트너를 새로 고르면 돼요.' });
+
+      // ---- 개발자 메뉴: 시뮬레이션 (아이의 진짜 기록은 절대 건드리지 않고 sim 기록만 씀) ----
+      case 'simStart': {
+        const copy = body.source === 'copy';
+        const state = copy ? (await readState()).state : initialState();
+        await overwriteState(SIM_PLAYER, state);
+        await setSimDayOffset(0);
+        const message = copy ? '지금 아이 기록을 시험용으로 복사했어요. 이 브라우저의 아이 화면과 포켓로그는 시험용 기록을 써요.'
+          : '빈 시험용 기록으로 시작해요. 이 브라우저의 아이 화면과 포켓로그는 시험용 기록을 써요.';
+        return new Response(JSON.stringify({ ok: true, message }), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': await simStartCookie(request) },
+        });
+      }
+      case 'simNextDay': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const days = (await getSimDayOffset()) + 1;
+        await setSimDayOffset(days);
+        return json({ message: `시험용 기록의 날짜를 ${shiftDate(todayKorea(), days)}(으)로 넘겼어요. 아이 화면을 새로고침하면 일일미션과 새 게임 횟수가 새 날 기준이 돼요.` });
+      }
+      case 'simStop':
+        return new Response(JSON.stringify({ ok: true, message: '시뮬레이션을 끝냈어요. 이 브라우저의 아이 화면은 다시 진짜 기록을 보여 줘요.' }), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Set-Cookie': simStopCookie() },
+        });
 
       case 'deleteQuestion':
         await deleteQuestion(Number(body.id));

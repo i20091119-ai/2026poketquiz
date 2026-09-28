@@ -229,13 +229,22 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .exchange-type.current { border-color: #f2b705; }
 @media (max-width: 560px) { .exchange-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @keyframes float { 50% { transform: translateY(-8px); } }
-.battle-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 18px 26px; border-top: 1px solid #e6ede3; background: linear-gradient(90deg, #fff4e5, #ffe9d6); }
+/* 두 번째 탭 묶음 [배틀 | 이벤트]: 위 탭 묶음과 같은 모양, 사이에 간격 */
+.tabs-secondary { margin-top: 28px; padding-top: 8px; border-top: 2px dashed #dbe5d9; }
+.battle-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 22px 26px; border-color: #f3d9c3; background: linear-gradient(90deg, #fff4e5, #ffe9d6); }
 .battle-card h3 { margin: 0 0 4px; font-size: 18px; }
 .battle-card p { margin: 0; color: #6b4f3a; font-size: 14px; }
 .battle-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .battle-actions a.primary { display: inline-flex; align-items: center; justify-content: center; width: auto; padding: 12px 20px; border-radius: 14px; background: #d9602c; color: #fff; font-weight: 800; text-decoration: none; font-size: 16px; }
 .battle-actions .text-button { font-size: 13px; }
 @media (max-width: 560px) { .battle-actions { align-items: stretch; width: 100%; } .battle-actions a.primary { width: 100%; } }
+.coming-soon { text-align: center; padding: 34px 26px; background: #fbfcfa; }
+.coming-soon h3 { margin: 8px 0 4px; font-size: 22px; }
+.coming-soon p { margin: 0; color: #6a7b70; }
+
+/* 보호자 시뮬레이션 띠 (아이 화면 맨 위) */
+.sim-banner { display: block; position: sticky; top: 0; z-index: 50; background: #6d28d9; color: #fff; text-align: center; font-size: 14px; font-weight: 800; padding: 9px 12px; text-decoration: none; }
+.sim-banner:hover { background: #5b21b6; }
 .stat-board { padding: 22px 26px 26px; border-top: 1px solid #e6ede3; }
 .stat-groups { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }
 .stat-group { border: 2px solid; border-radius: 16px; padding: 12px 10px 10px; position: relative; background: #fbfcfa; }
@@ -390,6 +399,14 @@ select { width: auto; min-width: 120px; }
 .battle-log tr:first-child td { font-weight: 800; }
 .hardest span { color: #a2573b; font-size: 12px; margin-left: 6px; }
 .danger-zone { border-color: #eac3b8; }
+/* 개발자 메뉴 */
+.dev-menu { border-color: #d8ccf1; background: #faf8ff; }
+.dev-menu h3 { margin: 6px 0 0; font-size: 16px; }
+.dev-menu .changes { margin: 0; padding-left: 20px; font-size: 14px; color: #4b5563; }
+.dev-menu .sim-state { border: 1px solid #d8ccf1; border-radius: 12px; padding: 12px 14px; background: #fff; font-size: 14px; }
+.dev-menu .sim-state b { color: #6d28d9; }
+.dev-menu .button-row .secondary { border-color: #c4b5fd; color: #5b21b6; }
+.dev-menu .button-row .primary.small { background: #6d28d9; box-shadow: 0 3px 0 #4c1d95; }
 .bank-list { display: flex; flex-direction: column; gap: 8px; }
 .bank-row { display: flex; align-items: center; gap: 12px; text-align: left; border: 1px solid #dfe8dd; border-radius: 12px; padding: 12px 16px; background: #fff; color: inherit; font-size: 15px; }
 .bank-row b { flex: 1; }

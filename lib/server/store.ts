@@ -5,7 +5,10 @@ import { initialState, type ActiveBank, type GameState, type Question } from '..
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
 
-const PLAYER_ID = 'family';
+/** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
+export type PlayerId = 'family' | 'sim';
+export const REAL_PLAYER: PlayerId = 'family';
+export const SIM_PLAYER: PlayerId = 'sim';
 
 export function db(): D1Database {
   if (!env.DB) throw new Error('D1 데이터베이스(DB)가 연결되지 않았어요. wrangler.jsonc를 확인해 주세요.');
@@ -17,36 +20,53 @@ export const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-App-Version': __APP_VERSION__ } });
 
 // ---------- 게임 상태 ----------
-export async function readState() {
+export async function readState(player: PlayerId = REAL_PLAYER) {
   const d = db();
   await d.prepare('INSERT OR IGNORE INTO game_state (id, revision, document, updated_at) VALUES (?, 0, ?, ?)')
-    .bind(PLAYER_ID, JSON.stringify(initialState()), new Date().toISOString()).run();
-  const row = await d.prepare('SELECT revision, document FROM game_state WHERE id = ?').bind(PLAYER_ID)
+    .bind(player, JSON.stringify(initialState()), new Date().toISOString()).run();
+  const row = await d.prepare('SELECT revision, document FROM game_state WHERE id = ?').bind(player)
     .first<{ revision: number; document: string }>();
   if (!row) throw new Error('게임 기록을 불러오지 못했어요.');
   return { revision: row.revision, state: { ...initialState(), ...JSON.parse(row.document) } as GameState };
 }
 
 /** 아이 게임 기록을 지웁니다. 다음에 열면 파트너 고르기부터 다시 시작합니다. (문제은행은 그대로) */
-export async function resetGame() {
-  await db().prepare('DELETE FROM game_state WHERE id = ?').bind(PLAYER_ID).run();
+export async function resetGame(player: PlayerId = REAL_PLAYER) {
+  await db().prepare('DELETE FROM game_state WHERE id = ?').bind(player).run();
+}
+
+/** 기록을 통째로 덮어씁니다 (시뮬레이션 시작: 아이 기록 복사 / 빈 기록). 진짜 기록에는 쓰지 않습니다. */
+export async function overwriteState(player: typeof SIM_PLAYER, state: GameState) {
+  await db().prepare(`INSERT INTO game_state (id, revision, document, updated_at) VALUES (?, 0, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET document = excluded.document, revision = game_state.revision + 1, updated_at = excluded.updated_at`)
+    .bind(player, JSON.stringify(state), new Date().toISOString()).run();
 }
 
 /** revision이 그대로일 때만 저장합니다. 다른 요청이 먼저 저장했다면 false. */
-export async function saveState(state: GameState, revision: number) {
+export async function saveState(state: GameState, revision: number, player: PlayerId = REAL_PLAYER) {
   const result = await db().prepare('UPDATE game_state SET document = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND revision = ?')
-    .bind(JSON.stringify(state), new Date().toISOString(), PLAYER_ID, revision).run();
+    .bind(JSON.stringify(state), new Date().toISOString(), player, revision).run();
   return result.meta.changes === 1;
 }
 
 /** 상태를 읽고 → 바꾸고 → 저장. 충돌하면 다시 시도합니다. */
-export async function mutateState<T>(change: (state: GameState) => { result: T; changed: boolean }) {
+export async function mutateState<T>(change: (state: GameState) => { result: T; changed: boolean }, player: PlayerId = REAL_PLAYER) {
   for (let attempt = 0; attempt < 4; attempt++) {
-    const { revision, state } = await readState();
+    const { revision, state } = await readState(player);
     const { result, changed } = change(state);
-    if (!changed || await saveState(state, revision)) return { state, result };
+    if (!changed || await saveState(state, revision, player)) return { state, result };
   }
   throw new Error('다른 화면에서 기록이 바뀌었어요. 다시 시도해 주세요.');
+}
+
+// ---------- 시뮬레이션 날짜 ----------
+// 보호자가 "다음 날로 넘기기"를 누른 횟수. 시험용 기록의 오늘 = 진짜 오늘 + 이 값(일).
+export async function getSimDayOffset(): Promise<number> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'sim_day_offset'").first<{ value: string }>();
+  return Math.max(0, Number(row?.value) || 0);
+}
+export async function setSimDayOffset(days: number) {
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('sim_day_offset', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(days)).run();
 }
 
 // ---------- 설정 ----------

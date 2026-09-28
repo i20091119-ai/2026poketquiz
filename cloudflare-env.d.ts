@@ -8,5 +8,7 @@ declare namespace Cloudflare {
   }
 }
 
-/** 빌드할 때 넣는 버전 번호 (vite.config.ts) */
+/** 빌드할 때 넣는 저장 번호 (GitHub 커밋 앞 7자리, vite.config.ts). 새 버전 확인·자동 새로고침에 씁니다. */
 declare const __APP_VERSION__: string;
+/** 빌드한(올린) 날짜, 예: 2026-09-28 (vite.config.ts) */
+declare const __BUILD_DATE__: string;

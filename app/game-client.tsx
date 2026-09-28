@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { Backpack, BookOpen, Compass, Settings, Sun } from 'lucide-react';
+import { Backpack, BookOpen, Compass, Gift, Settings, Sun, Swords } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
-import { HomePanel, StarterPicker } from '@/components/game/home';
+import { BattleTab, EventTab, HomePanel, StarterPicker } from '@/components/game/home';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
 import { BagTab } from '@/components/game/bag-tab';
@@ -14,12 +14,18 @@ import { ASSETS } from '@/lib/assets';
 import { type Subject } from '@/lib/game-config';
 import type { Action, Ball, ChildView, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
+import { versionLabel } from '@/lib/version';
 
 type Quiz = { mode: 'daily' | 'explore'; subject?: Subject; question: PublicQuestion };
+/** 보호자 시뮬레이션 중일 때 서버가 알려 주는 날짜 정보 (아니면 null) */
+type Sim = { today: string; dayOffset: number } | null;
+type GameResponse = { view: ChildView; sim?: Sim };
 
 export default function Game() {
   const [view, setView] = useState<ChildView | null>(null);
+  const [sim, setSim] = useState<Sim>(null);
   const [tab, setTab] = useState('daily');
+  const [tab2, setTab2] = useState('battle');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -29,14 +35,14 @@ export default function Game() {
   const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
 
   const refresh = useCallback((signal?: AbortSignal) =>
-    getJson<{ view: ChildView }>('/api/game', signal).then(
-      data => { setView(data.view); setError(''); return data.view; },
+    getJson<GameResponse>('/api/game', signal).then(
+      data => { setView(data.view); setSim(data.sim ?? null); setError(''); return data.view; },
       e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); return null; },
     ), []);
   useEffect(() => {
     const controller = new AbortController();
-    getJson<{ view: ChildView }>('/api/game', controller.signal).then(
-      data => setView(data.view),
+    getJson<GameResponse>('/api/game', controller.signal).then(
+      data => { setView(data.view); setSim(data.sim ?? null); },
       e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); },
     );
     const onFocus = () => { void refresh(); };
@@ -49,8 +55,9 @@ export default function Game() {
     setBusy(true);
     setError('');
     try {
-      const data = await postJson<{ view: ChildView; result: T }>('/api/game', action);
+      const data = await postJson<GameResponse & { result: T }>('/api/game', action);
       setView(data.view);
+      setSim(data.sim ?? null);
       return data.result;
     } catch (e) {
       setError((e as Error).message);
@@ -111,11 +118,12 @@ export default function Game() {
   };
 
   if (!view) {
-    return <main><Header /><div className="workspace">{error ? <ErrorBar message={error} onRetry={() => void refresh()} /> : <section className="panel empty">불러오는 중…</section>}</div></main>;
+    return <main><SimBanner sim={sim} /><Header /><div className="workspace">{error ? <ErrorBar message={error} onRetry={() => void refresh()} /> : <section className="panel empty">불러오는 중…</section>}</div></main>;
   }
 
   return (
     <main>
+      <SimBanner sim={sim} />
       <Header />
       <div className="workspace">
         {error && <ErrorBar message={error} onRetry={() => void refresh()} />}
@@ -154,13 +162,23 @@ export default function Game() {
                 onUsePotion={async (potionId, uid) => { const r = await act<{ message: string }>({ type: 'usePotion', potionId, uid }); if (r) setNotice(r.message); return !!r; }} />
             </TabsContent>
           </Tabs>
+
+          {/* 두 번째 탭 묶음: 위 탭을 무엇으로 골랐든 항상 아래에 보입니다. 처음엔 배틀 탭. */}
+          <Tabs className="tabs-secondary" value={tab2} onValueChange={setTab2}>
+            <TabsList className="nav">
+              <TabsTrigger value="battle"><Swords />배틀</TabsTrigger>
+              <TabsTrigger value="event"><Gift />이벤트</TabsTrigger>
+            </TabsList>
+            <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} /></TabsContent>
+            <TabsContent value="event"><EventTab /></TabsContent>
+          </Tabs>
         </>}
 
         <footer>
           <span>포켓몬 배움 탐험대</span>
           <a href="/parent" target="_blank" rel="noreferrer" onClick={openParent('/parent')}><Settings size={14} /> 보호자 공간 ↗</a>
           <a href="https://pokemonkorea.co.kr/pokedex" target="_blank" rel="noreferrer">포켓몬 공식 도감 ↗</a>
-          <span className="version">버전 {__APP_VERSION__}</span>
+          <span className="version">버전 {versionLabel(__BUILD_DATE__)}</span>
         </footer>
       </div>
 
@@ -212,6 +230,16 @@ export default function Game() {
         </DialogContent>
       </Dialog>
     </main>
+  );
+}
+
+/** 보호자 시뮬레이션 중임을 알리는 띠. 누르면 보호자 공간으로 돌아갑니다. */
+function SimBanner({ sim }: { sim: Sim }) {
+  if (!sim) return null;
+  return (
+    <a className="sim-banner" href="/parent" onClick={goTo('/parent')}>
+      🧪 시뮬레이션 중 · 시험용 기록 · 게임 날짜 {sim.today}{sim.dayOffset > 0 ? ` (오늘 +${sim.dayOffset}일)` : ''} · 눌러서 보호자 공간으로
+    </a>
   );
 }
 

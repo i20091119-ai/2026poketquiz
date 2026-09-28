@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Copy, Download, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Copy, Download, FlaskConical, LogOut, Pencil, Plus, Send, Sparkles, Trash2, Upload } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
@@ -8,12 +8,18 @@ import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GRADES, SUBJECTS, SUBJECT_TYPES, TYP
 import type { Question } from '@/lib/game-engine';
 import { species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { aiRequestText } from '@/lib/question-import';
+import { APP_VERSION, CHANGES, versionLabel } from '@/lib/version';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
   battle: { log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number };
+  /** 개발자 메뉴 시뮬레이션: 이 브라우저가 시뮬레이션 중인지, 시험용 기록의 날짜와 요약 */
+  sim: {
+    active: boolean; today: string; dayOffset: number;
+    summary: { partner: number | null; exp: number; owned: number; dailyDone: boolean; battleLeft: number; battleWave: number; battleMinutes: number };
+  };
   child: { exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
   active: null | {
     id: number; title: string;
@@ -90,7 +96,7 @@ function Shell({ children, onLogout }: { children: React.ReactNode; onLogout?: (
           {onLogout && <button className="text-button" onClick={onLogout}><LogOut size={16} /> 로그아웃</button>}
         </span>
       </header>
-      <div className="workspace">{children}<footer><span className="version">버전 {__APP_VERSION__}</span></footer></div>
+      <div className="workspace">{children}<footer><span className="version">버전 {versionLabel(__BUILD_DATE__)}</span></footer></div>
     </main>
   );
 }
@@ -214,6 +220,9 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </div>
       </section>
 
+      <DevMenu sim={overview.sim} busy={busy} call={call} reload={reload} />
+
+      {/* 이 칸은 항상 맨 아래에 둡니다. 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
       <section className="panel parent-section danger-zone">
         <h2>아이 게임 처음부터 다시 하기</h2>
         <p>파트너, 포켓몬, 스탯, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
@@ -226,6 +235,48 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />
     </>
+  );
+}
+
+// ---------------- 개발자 메뉴 ----------------
+/** 버전 표시와 시뮬레이션(아이 기록을 건드리지 않는 시험용 기록으로 앱 전체를 해 보기) */
+function DevMenu({ sim, busy, call, reload }: { sim: Overview['sim']; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const childScreen = '/';
+  const start = async (source: 'copy' | 'empty') => {
+    if (source === 'copy' && !window.confirm('지금 아이 기록을 시험용으로 복사해서 시뮬레이션을 시작할까요? 아이의 진짜 기록은 바뀌지 않아요.')) return;
+    if (await call({ action: 'simStart', source })) goTo(childScreen)({ preventDefault() {} });
+  };
+  const s = sim.summary;
+  return (
+    <section className="panel parent-section dev-menu">
+      <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 개발자 메뉴</h2>
+
+      <h3>① 버전</h3>
+      <p>버전 <b>{versionLabel(__BUILD_DATE__)}</b> <span className="muted">· 저장 번호 {__APP_VERSION__}</span></p>
+      <p className="muted">버전 {APP_VERSION}에서 바뀐 것</p>
+      <ul className="changes">{CHANGES.map(c => <li key={c}>{c}</li>)}</ul>
+
+      <h3>② 시뮬레이션</h3>
+      <p>보호자가 아이처럼 앱 전체(일일미션, 탐험, 도감, 가방, 포켓로그 배틀)를 해 볼 수 있어요. <b>아이의 진짜 기록은 절대 바뀌지 않고</b>, 이 브라우저에서만 시험용 기록을 써요. 포켓로그 시도 횟수와 기록도 시험용으로 따로 세요.</p>
+      {sim.active ? <>
+        <div className="sim-state">
+          <b>🧪 시뮬레이션 중</b> · 게임 날짜 <b>{sim.today}</b>{sim.dayOffset > 0 ? ` (오늘 +${sim.dayOffset}일)` : ' (오늘)'}<br />
+          시험용 기록: {s.partner ? `파트너 ${species(s.partner).name}` : '파트너 아직 없음'} · 경험치 {s.exp.toLocaleString()} · 포켓몬 {s.owned}마리 · 오늘 일일미션 {s.dailyDone ? '끝' : '진행 중'} · 포켓로그 새 게임 {s.battleLeft}번 남음{s.battleWave ? ` · 오늘 최고 ${s.battleWave}웨이브 ${s.battleMinutes}분` : ''}
+        </div>
+        <div className="button-row">
+          <button className="primary small" disabled={busy} onClick={goTo(childScreen)}>아이 화면으로 가기</button>
+          <button className="secondary" disabled={busy} onClick={async () => { if (await call({ action: 'simNextDay' })) await reload(); }}>다음 날로 넘기기 →</button>
+          <button className="secondary" disabled={busy} onClick={async () => { if (await call({ action: 'simStop' })) await reload(); }}>시뮬레이션 끝내기</button>
+        </div>
+        <p className="muted">‘다음 날로 넘기기’를 누른 뒤 아이 화면을 새로고침하면 일일미션과 포켓로그 새 게임 횟수가 새 날 기준으로 다시 시작해요. 아이 화면 맨 위의 보라색 띠를 누르면 여기로 돌아와요.</p>
+      </> : <>
+        <div className="button-row">
+          <button className="primary small" disabled={busy} onClick={() => void start('copy')}>시험용 기록을 지금 아이 기록으로 복사해서 시작</button>
+          <button className="secondary" disabled={busy} onClick={() => void start('empty')}>빈 기록으로 시작</button>
+        </div>
+        <p className="muted">시작하면 아이 화면으로 이동하고, 화면 맨 위에 ‘시뮬레이션 중’ 띠가 보여요. 끝낼 때는 띠를 눌러 여기로 돌아와 ‘시뮬레이션 끝내기’를 누르면 돼요. 끝내는 걸 잊어도 7일 뒤엔 저절로 풀려요.</p>
+      </>}
+    </section>
   );
 }
 

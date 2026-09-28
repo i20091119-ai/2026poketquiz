@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DAILY_ATTEMPTS, EXP_EXCHANGE, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
+import { applyAction, battleStartsLeft, childView, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -419,4 +419,12 @@ test('포켓로그 기록: 날짜별 최고 웨이브·플레이 시간·새 게
   assert.equal(list.length, 14);
   assert.equal(list[0].date, '2026-10-20');
   assert.ok(!state.battleLog!['2026-09-27']);
+});
+
+test('시뮬레이션 날짜 넘기기: 월말·연말을 넘어가도 하루씩 더한다', () => {
+  assert.equal(shiftDate('2026-09-28', 0), '2026-09-28');
+  assert.equal(shiftDate('2026-09-30', 1), '2026-10-01');
+  assert.equal(shiftDate('2026-12-31', 1), '2027-01-01');
+  assert.equal(shiftDate('2028-02-28', 2), '2028-03-01');
+  assert.equal(shiftDate('이상한 값', 1), '이상한 값');
 });

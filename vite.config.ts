@@ -16,8 +16,11 @@ export default defineConfig(async () => {
   let version = "개발";
   try { version = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim(); } catch { /* git이 없으면 그대로 */ }
 
+  // 올린 날짜 (한국 시간). 화면에는 lib/version.ts 의 버전 이름과 함께 "1.4 (2026-09-28)" 처럼 보입니다.
+  const buildDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
   return {
-    define: { __APP_VERSION__: JSON.stringify(version) },
+    define: { __APP_VERSION__: JSON.stringify(version), __BUILD_DATE__: JSON.stringify(buildDate) },
     plugins: [
       vinext(),
       // Reads bindings (D1 `DB`) from wrangler.jsonc.

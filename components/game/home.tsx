@@ -43,7 +43,6 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
           </div>
         </>}
       </div>
-      <BattleCard left={view.battle.left} perDay={view.battle.perDay} />
       <StatBoard stats={view.stats} />
       {exchanging && <ExchangeDialog view={view} busy={busy} onClose={() => setExchanging(false)} onExchange={onExchange} />}
       <Dialog open={picking} onOpenChange={setPicking}>
@@ -122,10 +121,10 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
   );
 }
 
-/** 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만, 이어하기는 자유입니다. */
-function BattleCard({ left, perDay }: { left: number; perDay: number }) {
+/** [배틀] 탭: 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만, 이어하기는 자유입니다. */
+export function BattleTab({ left, perDay }: { left: number; perDay: number }) {
   return (
-    <div className="battle-card">
+    <section className="panel battle-card">
       <div>
         <h3>⚔️ 포켓로그 배틀</h3>
         <p>내 포켓몬으로 55웨이브까지 싸워 보자! {left > 0 ? <>오늘 새 게임 <b>{left}번</b> 남았어.</> : <>오늘 새 게임은 다 했어. 하던 게임은 이어서 할 수 있어!</>}{perDay > 1 ? ` (하루 ${perDay}번)` : ''}</p>
@@ -134,7 +133,18 @@ function BattleCard({ left, perDay }: { left: number; perDay: number }) {
         <a className="primary" href="/battle/" onClick={goTo('/battle/')}>배틀하러 가기 →</a>
         <a className="text-button" href="/battle/prepare" onClick={goTo('/battle/prepare')}>와이파이에서 미리 받아 두기</a>
       </div>
-    </div>
+    </section>
+  );
+}
+
+/** [이벤트] 탭: 아직 내용이 없어요. */
+export function EventTab() {
+  return (
+    <section className="panel coming-soon">
+      <span className="pill">EVENT</span>
+      <h3>🎁 이벤트는 곧 열려요!</h3>
+      <p>새로운 이벤트를 준비하고 있어. 조금만 기다려 줘.</p>
+    </section>
   );
 }
 
