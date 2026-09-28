@@ -7,6 +7,7 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
+import { SHINY_KEEP_BITS } from "#app/quiz-gifts";
 import { isIos } from "#app/touch-controls";
 import { Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -1567,8 +1568,8 @@ export class GameData {
       const starterEntry = this.starterData[speciesId as StarterSpeciesId];
       if (defaultStarterSpecies.includes(speciesId as StarterSpeciesId)) {
         dexEntry.seenAttr |= DEFAULT_STARTER_ATTR;
-        // 기본 속성으로만 해제. 판 안에서 얻은 이로치·진화형은 다음 실행에 남기지 않음 (SPEC 3·6번)
-        dexEntry.caughtAttr = DEFAULT_STARTER_ATTR;
+        // 기본 속성으로 해제. 이벤트로 받은 이로치(SHINY_KEEP_BITS)만은 "내 것"으로 남깁니다 (SPEC 3·6번, 부모님 결정)
+        dexEntry.caughtAttr = DEFAULT_STARTER_ATTR | (dexEntry.caughtAttr & SHINY_KEEP_BITS);
         if (!dexEntry.natureAttr) {
           dexEntry.natureAttr = 1 << (Nature.HARDY + 1);
         }

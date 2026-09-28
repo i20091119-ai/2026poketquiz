@@ -6,6 +6,7 @@ import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin, isBeta, isDev } from "#constants/app-constants";
 import { getSplashMessages } from "#data/splash-messages";
 import { SpeciesId } from "#enums/species-id";
@@ -116,6 +117,11 @@ export class TitleUiHandler extends OptionSelectUiHandler {
       this.splashMessageText,
       this.appVersionText,
     ]);
+    if (QUIZ_RULES.hideOriginalNotices) {
+      // 원본의 "접속자 수 · 로그인 계정(Guest)" 표시는 우리 게임과 맞지 않아 숨깁니다
+      this.usernameLabel.setVisible(false);
+      this.playerCountLabel.setVisible(false);
+    }
 
     eventBus.on("settings/update/success", ({ key }: SettingsUpdateEventArgs) => {
       if (key === "hideUsername" || key === "playerGender") {

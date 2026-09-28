@@ -2,7 +2,7 @@ import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
-import { makeShinyGiftFromParty } from "#app/quiz-gifts";
+import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { NON_LEGEND_PARADOX_POKEMON, NON_LEGEND_ULTRA_BEASTS } from "#balance/special-species-groups";
 import type { PokemonSpecies } from "#data/pokemon-species";
 import { AbilityId } from "#enums/ability-id";
@@ -223,7 +223,9 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         await transitionMysteryEncounterIntroVisuals();
 
         // "Catch" purchased pokemon
-        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, true, true); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        await catchPokemon(gift, null, PokeballType.POKEBALL, true, true);
+        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
 
         leaveEncounterWithoutBattle(true);
       })

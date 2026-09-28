@@ -69,6 +69,7 @@ export class MenuUiHandler extends OptionSelectUiHandler {
         options: [MenuOptions.EGG_GACHA, MenuOptions.EGG_LIST],
       },
       { excluded: QUIZ_RULES.eggsDisabled, options: [MenuOptions.EGG_GACHA, MenuOptions.EGG_LIST] }, // 알 시스템 제거
+      { excluded: QUIZ_RULES.hideOriginalNotices, options: [MenuOptions.COMMUNITY] }, // 디스코드·위키·후원 등 원본 커뮤니티 메뉴 숨김
       { excluded: bypassLogin, options: [MenuOptions.LOG_OUT] },
       { excluded: !globalScene.currentBattle, options: [MenuOptions.SAVE_AND_QUIT] },
     ];

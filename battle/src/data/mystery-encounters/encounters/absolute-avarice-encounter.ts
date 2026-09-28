@@ -1,7 +1,7 @@
 import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
-import { makeShinyGiftFromParty } from "#app/quiz-gifts";
+import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { modifierTypes } from "#data/data-lists";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
@@ -396,7 +396,9 @@ export const AbsoluteAvariceEncounter: MysteryEncounter = MysteryEncounterBuilde
         greedent.passive = true;
 
         await transitionMysteryEncounterIntroVisuals(true, true, 500);
-        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, false); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
+        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
         leaveEncounterWithoutBattle(true);
       })
       .build(),

@@ -1,7 +1,7 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import { makeShinyGiftFromParty } from "#app/quiz-gifts";
+import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import type { MoveId } from "#enums/move-id";
@@ -230,7 +230,9 @@ export const UncommonBreedEncounter: MysteryEncounter = MysteryEncounterBuilder.
         // Give 1 additional egg move
         givePokemonExtraEggMove(pokemon, encounter.misc.eggMove);
 
-        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, false); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
+        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
         setEncounterRewards({ fillRemaining: true });
         leaveEncounterWithoutBattle();
       })
@@ -264,7 +266,9 @@ export const UncommonBreedEncounter: MysteryEncounter = MysteryEncounterBuilder.
           return newValue > iv ? newValue : iv;
         });
 
-        await catchPokemon(makeShinyGiftFromParty(), null, PokeballType.POKEBALL, false); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
+        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
+        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
         if (encounter.selectedOption?.primaryPokemon?.id) {
           setEncounterExp(encounter.selectedOption.primaryPokemon.id, pokemon.getExpValue(), false);
         }
