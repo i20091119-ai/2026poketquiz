@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { ASSETS } from '@/lib/assets';
 import { TYPE_INFO, type TypeKey } from '@/lib/game-config';
-import { pokemonImages, shinyImages, species } from '@/lib/pokedex';
+import { pokemonImages, shinyImages, shinyName, species } from '@/lib/pokedex';
 
 /** 공식 도감 이미지 → pokemon.com → 임시 이미지 순서로 시도합니다. shiny 면 이로치(색이 다른) 그림을 먼저 시도합니다. */
 export function PokemonImage({ id, className, size, shiny }: { id: number; className?: string; size?: number; shiny?: boolean }) {
@@ -14,7 +14,7 @@ export function PokemonImage({ id, className, size, shiny }: { id: number; class
       key={shiny ? `s${id}` : id}
       className={className}
       src={sources[index]}
-      alt={(shiny ? '이로치 ' : '') + species(id).name}
+      alt={shiny ? shinyName(id) : species(id).name}
       width={size}
       height={size}
       loading="lazy"

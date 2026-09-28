@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, shinyName, species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 import { rootOf } from '@/lib/pokedex';
 
@@ -41,7 +41,7 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
             <div className="dex-cell is-shiny" key={'s' + id}>
               <PokemonImage id={id} shiny />
               <small>{dexNo(id)} ✨</small>
-              <span>이로치 {species(id).name}</span>
+              <span>{shinyName(id)}</span>
             </div>
           ))}
         </div>
@@ -70,10 +70,10 @@ function ShinyCard({ id, view }: { id: number; view: ChildView }) {
       <small>{dexNo(s.id)}</small>
       <span className="shiny-tag">✨ 이로치</span>
       <PokemonImage id={s.id} shiny />
-      <h3>이로치 {s.name}</h3>
+      <h3>{shinyName(id)}</h3>
       <div className="type-row">{s.types.map(t => <TypeBadge key={t} type={t} small />)}</div>
       <BattleLevel level={view.battleLevels[rootOf(s.id)]} />
-      <p className="muted shiny-note">포켓로그 이벤트에서 받은 색이 다른 포켓몬이에요. 포켓로그에서 스타터를 고를 때 이 색으로 출전할 수 있어요.</p>
+      <p className="muted shiny-note">포켓로그 이벤트에서 받은 색이 다른 {s.name}(이로치)예요. 포켓로그에서 스타터를 고를 때 이 색으로 출전할 수 있어요.</p>
     </section>
   );
 }

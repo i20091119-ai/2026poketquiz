@@ -1,4 +1,5 @@
 import raw from './data/pokedex.json' with { type: 'json' };
+import shinyColors from './data/shiny-colors.json' with { type: 'json' };
 import { EVOLUTION_COST, TYPE_INFO, type TypeKey } from './game-config.ts';
 
 export type Species = {
@@ -56,10 +57,17 @@ export function pokemonImages(id: number): string[] {
   ];
 }
 
-/** 이로치(색이 다른 포켓몬) 공식 일러스트 후보: PokeAPI 저장소의 shiny 그림 */
+/** 이로치(색이 다른 포켓몬) 공식 일러스트 후보: 우리 사이트에 둔 그림(빌드 때 받음) → PokeAPI 저장소 */
 export function shinyImages(id: number): string[] {
-  return [`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${id}.png`];
+  return [
+    `/assets/pokemon/shiny/${id}.png`,
+    `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/${id}.png`,
+  ];
 }
+/** 이로치의 색 이름 (scripts/shiny-colors.py 가 그림에서 뽑음). 예: 384 → '블랙' */
+export const shinyColor = (id: number): string => (shinyColors as Record<string, string>)[String(id)] ?? '이로치';
+/** 이로치 이름: 색 이름 + 포켓몬 이름. 예: 블랙레쿠쟈, 레드갸라도스 */
+export const shinyName = (id: number) => `${shinyColor(id)}${species(id).name}`;
 
 /** 진화 계열의 첫 모습(포켓로그의 스타터에 해당). 예: 자포코일 → 코일 */
 export function rootOf(id: number): number {
