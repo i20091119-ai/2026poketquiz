@@ -4,13 +4,34 @@
 // - index.html, asset-manifest.json, /api/ 는 항상 새로 받습니다(새 버전 반영).
 // 원본 포켓로그의 service-worker.js(빈 파일)를 이 파일로 바꿔 넣습니다. 빌드가 __BATTLE_VERSION__ 을 채웁니다.
 const VERSION = "__BATTLE_VERSION__";
+// 파일이 3만 개가 넘어 저장소 하나에 다 넣으면 스마트폰 브라우저가 목록을 읽지 못합니다("Operation too large").
+// 그래서 파일 경로에 따라 저장소 16개에 나눠 넣습니다. 예전 저장소 하나(battle-assets)는 지웁니다.
 const CACHE = "battle-assets";
+const SHARDS = 16;
+const shardOf = path => {
+  let h = 0;
+  for (let i = 0; i < path.length; i++) h = (h * 31 + path.charCodeAt(i)) >>> 0;
+  return h % SHARDS;
+};
+const shardName = n => `${CACHE}-${n}`;
+const cacheFor = path => caches.open(shardName(shardOf(path)));
+const allShards = () => Promise.all(Array.from({ length: SHARDS }, (_, n) => caches.open(shardName(n))));
+/** 저장소의 파일 목록. 너무 커서 못 읽는 브라우저에서는 null */
+const safeKeys = async cache => {
+  try {
+    return await cache.keys();
+  } catch {
+    return null;
+  }
+};
 const SCOPE = new URL(self.registration.scope).pathname; // 예: /battle/
 const MANIFEST_URL = SCOPE + "prefetch-manifest.json";
 const ALWAYS_FRESH = [SCOPE, SCOPE + "index.html", SCOPE + "asset-manifest.json", SCOPE + "prefetch-manifest.json", SCOPE + "prepare", SCOPE + "prepare.html", SCOPE + "login", SCOPE + "service-worker.js"];
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
+self.addEventListener("activate", event =>
+  event.waitUntil(Promise.all([self.clients.claim(), caches.delete(CACHE)])), // 예전 방식의 저장소 하나는 지움
+);
 
 const isCacheable = (req, url) =>
   url.origin === self.location.origin
@@ -26,7 +47,7 @@ self.addEventListener("fetch", event => {
   const url = new URL(req.url);
   if (!isCacheable(req, url)) return;
   event.respondWith(
-    caches.open(CACHE).then(async cache => {
+    cacheFor(url.pathname).then(async cache => {
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
       const res = await fetch(req);
@@ -38,7 +59,6 @@ self.addEventListener("fetch", event => {
 
 /** 미리 받기: 아직 없는 파일만 받고, 진행 상황을 요청한 화면으로 보냅니다. */
 async function prefetch(client) {
-  const cache = await caches.open(CACHE);
   const manifest = await (await fetch(MANIFEST_URL, { cache: "no-store" })).json();
   const files = manifest.files; // [path, size]
   const total = files.length;
@@ -49,12 +69,16 @@ async function prefetch(client) {
   const report = () => client.postMessage({ type: "PROGRESS", done, total, doneBytes, totalBytes, failed, version: VERSION });
   const keep = new Set(files.map(([p]) => self.location.origin + SCOPE + p));
   // 새 버전에서 사라진 파일은 지웁니다.
-  for (const key of await cache.keys()) if (!keep.has(key.url.split("?")[0])) await cache.delete(key);
+  for (const cache of await allShards()) {
+    const keys = await safeKeys(cache);
+    if (keys) for (const key of keys) if (!keep.has(key.url.split("?")[0])) await cache.delete(key);
+  }
   let index = 0;
   const worker = async () => {
     while (index < files.length) {
       const [path, size] = files[index++];
       const url = SCOPE + path;
+      const cache = await cacheFor(url);
       if (!(await cache.match(url))) {
         try {
           const res = await fetch(url, { cache: "no-cache" });
@@ -76,15 +100,27 @@ async function prefetch(client) {
 
 /** 지금 얼마나 받아 두었는지 */
 async function status(client) {
-  const cache = await caches.open(CACHE);
   const manifest = await (await fetch(MANIFEST_URL, { cache: "no-store" })).json();
-  const cached = new Set((await cache.keys()).map(k => k.url.split("?")[0]));
+  const shards = await allShards();
+  const cached = new Set();
+  let listable = true;
+  for (const cache of shards) {
+    const keys = await safeKeys(cache);
+    if (!keys) {
+      listable = false;
+      break;
+    }
+    for (const k of keys) cached.add(k.url.split("?")[0]);
+  }
   let have = 0;
   let haveBytes = 0;
   let totalBytes = 0;
   for (const [path, size] of manifest.files) {
     totalBytes += size;
-    if (cached.has(self.location.origin + SCOPE + path)) {
+    const url = SCOPE + path;
+    // 목록을 못 읽는 브라우저에서는 파일마다 하나씩 물어봅니다 (느리지만 확실함)
+    const has = listable ? cached.has(self.location.origin + url) : !!(await (await cacheFor(url)).match(url));
+    if (has) {
       have++;
       haveBytes += size;
     }
@@ -98,5 +134,10 @@ self.addEventListener("message", event => {
   const type = event.data && event.data.type;
   if (type === "PREFETCH") event.waitUntil(prefetch(client).catch(err => client.postMessage({ type: "ERROR", message: String(err) })));
   else if (type === "STATUS") event.waitUntil(status(client).catch(err => client.postMessage({ type: "ERROR", message: String(err) })));
-  else if (type === "CLEAR") event.waitUntil(caches.delete(CACHE).then(() => client.postMessage({ type: "CLEARED" })));
+  else if (type === "CLEAR")
+    event.waitUntil(
+      Promise.all([caches.delete(CACHE), ...Array.from({ length: SHARDS }, (_, n) => caches.delete(shardName(n)))]).then(() =>
+        client.postMessage({ type: "CLEARED" }),
+      ),
+    );
 });
