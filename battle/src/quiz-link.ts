@@ -296,7 +296,18 @@ export function startProgressReporting(): void {
       return;
     }
     lastWave = wave;
-    const body = JSON.stringify({ wave, seconds });
+    // 파티 포켓몬의 지금 레벨 (퀴즈 도감에 "포켓로그 최고 레벨"로 표시). starter = 진화 전 첫 모습 번호
+    let party: { species: number; starter: number; level: number }[] = [];
+    try {
+      party = globalScene.getPlayerParty().map(p => ({
+        species: p.species.speciesId,
+        starter: speciesDataRegistry.getStarter(p.species.speciesId),
+        level: p.level,
+      }));
+    } catch {
+      party = [];
+    }
+    const body = JSON.stringify({ wave, seconds, party });
     if (useBeacon && navigator.sendBeacon) {
       navigator.sendBeacon(QUIZ_PROGRESS_URL, new Blob([body], { type: "application/json" }));
       return;

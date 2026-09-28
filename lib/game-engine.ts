@@ -76,6 +76,8 @@ export type GameState = {
   candy?: { pending: CandyGift[]; sent: number; lastDate?: string; lastGift?: CandyGift };
   /** 퀴즈 날짜별 기록: 화면을 보며 보낸 초, 푼 문제 수, 첫 시도에 맞힌 수 (최근 ACTIVITY_LOG_DAYS 일) */
   quizLog?: Record<string, QuizDay>;
+  /** 포켓로그에서 도달한 최고 레벨: 진화 계열 첫 모습 번호 → 레벨 (판이 바뀌어도 최고 기록은 남음) */
+  battleLevels?: Record<string, number>;
 };
 export type QuizDay = { seconds: number; answered: number; correct: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
@@ -672,6 +674,15 @@ export function areaReport(state: GameState, bank: ActiveBank): { subject: Subje
   });
 }
 
+/** 게임이 보낸 파티 레벨로 계열별 최고 레벨을 갱신합니다. */
+export function recordBattleLevels(state: GameState, party: { starter: number; level: number }[]): void {
+  for (const p of party) {
+    if (!Number.isInteger(p.starter) || p.starter <= 0 || !Number.isInteger(p.level) || p.level <= 0 || p.level > 200) continue;
+    state.battleLevels ??= {};
+    if ((state.battleLevels[p.starter] ?? 0) < p.level) state.battleLevels[p.starter] = p.level;
+  }
+}
+
 /** 보호자 화면용: 최근 날짜부터 */
 export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
@@ -736,6 +747,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY },
     /** 일일미션으로 포켓로그에 보내는 사탕 */
     candy: candySummary(state, today),
+    /** 포켓로그 최고 레벨 (진화 계열 첫 모습 번호 기준) */
+    battleLevels: state.battleLevels ?? {},
   };
 }
 export type ChildView = ReturnType<typeof childView>;

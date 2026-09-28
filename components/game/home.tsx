@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ASSETS } from '@/lib/assets';
 import { EXP_EXCHANGE, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INFO, type TypeKey } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, species, typesLabel } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, rootOf, species, typesLabel } from '@/lib/pokedex';
 import { dexNo, goTo, PokemonImage, TypeBadge } from './common';
 
 /* eslint-disable @next/next/no-img-element */
@@ -27,6 +27,7 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
             <small>{dexNo(partner.species)} · 나의 파트너</small>
             <h2>{species(partner.species).name}</h2>
             <div className="type-row">{species(partner.species).types.map(t => <TypeBadge key={t} type={t} />)}</div>
+            {view.battleLevels[rootOf(partner.species)] ? <small className="partner-battle-level">⚔️ 포켓로그 최고 Lv.{view.battleLevels[rootOf(partner.species)]}</small> : null}
             <div className="exp-box">
               <img src={ASSETS.exp} alt="" /> 경험치 <strong>{view.exp.toLocaleString()}</strong>
               <button className="exp-exchange" disabled={busy} onClick={() => setExchanging(true)}>스탯으로 바꾸기</button>

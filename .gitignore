@@ -53,3 +53,6 @@ next-env.d.ts
 /battle/locales/
 /battle/dist/
 /battle/node_modules/
+
+# 빌드 전에 내려받는 포켓몬 그림 (scripts/fetch-pokemon-art.mjs)
+/public/assets/pokemon/

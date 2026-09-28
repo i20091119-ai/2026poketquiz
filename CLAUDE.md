@@ -58,7 +58,8 @@
 - **아이 첫 화면 구성:** 파트너·스탯 판 아래에 탭 묶음 두 개. 위 [일일미션 | 탐험 | 포켓몬 도감 | 가방], 아래(항상 보임, 처음엔 배틀) [배틀 | 이벤트]. 배틀 탭 = 포켓로그로 가기·미리 받아 두기·오늘 남은 새 게임 횟수, 이벤트 탭 = "곧 열려요".
 - **버전 표시:** `lib/version.ts`의 `APP_VERSION`(버전 이름)과 `CHANGES`(이번에 바뀐 것)를 새 기능을 올릴 때마다 고칩니다. 날짜는 빌드 때 `__BUILD_DATE__`(한국 시간)로 자동. 화면에는 "1.4 (2026-09-28)" 형식. `__APP_VERSION__`(커밋 앞 7자리)은 자동 새로고침·올린 버전 확인용으로 그대로 씁니다.
 - **보호자 공간 개발자 메뉴 / 시뮬레이션:** 아이의 진짜 기록은 `game_state` 의 `family`, 시험용 기록은 `sim` (`lib/server/store.ts` 의 `PlayerId`). `lib/server/player.ts` 의 `playerOf(request)`가 서명 쿠키 `pq_sim`(보호자 비밀번호로 서명, 7일)을 보고 어느 기록과 어떤 "오늘"(진짜 오늘 + `settings.sim_day_offset`)을 쓸지 정하며, 게임·탐험·포켓로그(`/api/battle`, `/api/battle/progress`, `/api/my-pokemon`) 라우트가 모두 이를 씁니다. 보호자 API 동작: `simStart`(source copy|empty, 쿠키 발급), `simNextDay`, `simStop`(쿠키 삭제). 아이 화면과 포켓로그 첫 화면(`scripts/build-battle.mjs` 의 gate script)은 시뮬레이션 중이면 보라색 띠를 보여 주고 누르면 `/parent`로 갑니다. 포켓로그 게임 자체의 브라우저 저장(진행 중인 판)은 기기별이라 시험용과 나뉘지 않습니다. 보호자 공간의 "아이 게임 처음부터 다시 하기" 칸은 항상 맨 아래에 둡니다.
-- **그림:** 아이템 7종은 부모님이 그린 그림, 랜덤상자는 부모님 그림, 볼 5종과 속성 아이콘 18종은 포켓몬 공식 그림(PokeAPI)입니다. 나머지(배경, 로고)는 임시 그림이고, 부모님이 새 그림을 주면 `public/assets/`에 넣습니다. 포켓몬 이미지는 포켓몬코리아 공식 도감에서 불러옵니다.
+- **그림:** 아이템 7종은 부모님이 그린 그림, 랜덤상자는 부모님 그림, 볼 5종과 속성 아이콘 18종은 포켓몬 공식 그림(PokeAPI)입니다. 나머지(배경, 로고)는 임시 그림이고, 부모님이 새 그림을 주면 `public/assets/`에 넣습니다. 포켓몬 그림은 빌드 전에 `scripts/fetch-pokemon-art.mjs`(`prebuild`)가 PokeAPI 저장소의 공식 일러스트 1,025장을 `public/assets/pokemon/`(git 제외, Actions 캐시)에 받아 우리 사이트에서 직접 내보내고, 없을 때만 포켓몬코리아·pokemon.com 순으로 대신 씁니다(`pokemonImages`).
+- **포켓로그 최고 레벨:** 게임이 1분마다 보내는 진행 보고에 파티 레벨(`party: [{species, starter, level}]`)이 들어 있고, `recordBattleLevels`가 진화 계열 첫 모습(`starter`) 기준 최고 레벨을 `state.battleLevels`에 남깁니다. 도감 카드와 첫 화면 파트너에 "포켓로그 최고 Lv."로 표시(`rootOf`로 계열 첫 모습을 찾음). 판 안 레벨은 원본대로 새 판마다 5부터 다시 시작.
 
 ## 포켓로그(battle/) — 게임용 작업본 `claude/battle-pokerogue`
 

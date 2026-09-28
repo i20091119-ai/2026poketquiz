@@ -70,6 +70,13 @@ jobs:
           echo "기록 저장소 번호: $uuid"
           sed -i "s/\"database_id\": \"[^\"]*\"/\"database_id\": \"$uuid\"/" wrangler.jsonc
 
+      # 포켓몬 그림 1,025장(약 130MB)은 한 번 받아 두고 다음 실행에서 재사용합니다 (npm run build 전에 자동으로 받음).
+      - name: 포켓몬 그림 캐시
+        uses: actions/cache@v4
+        with:
+          path: public/assets/pokemon
+          key: pokemon-art-${{ hashFiles('scripts/fetch-pokemon-art.mjs') }}
+
       - name: 만들기
         run: npm run build
 

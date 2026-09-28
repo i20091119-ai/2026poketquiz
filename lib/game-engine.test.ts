@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
+import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, shiftDate } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from './pokedex.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -505,4 +505,13 @@ test('퀴즈 시간·활동 요약: 1분마다 보낸 초를 하루 단위로 �
   assert.equal(battleTimeUp(state, '2026-09-28', 0), false); // 제한 없음
   assert.equal(battleTimeUp(state, '2026-09-28', 2), true);
   assert.equal(battleTimeUp(state, '2026-09-28', 30), false);
+});
+
+test('포켓로그 최고 레벨: 계열별로 가장 높은 레벨만 남고, 이상한 값은 무시한다', () => {
+  const state = initialState();
+  recordBattleLevels(state, [{ starter: 906, level: 12 }, { starter: 81, level: 7 }]);
+  recordBattleLevels(state, [{ starter: 906, level: 9 }, { starter: 81, level: 15 }, { starter: 0, level: 3 }, { starter: 25, level: 999 }]);
+  assert.deepEqual(state.battleLevels, { 906: 12, 81: 15 });
+  const bank = makeBank(3);
+  assert.equal(childView(state, bank, '2026-09-26').battleLevels[81], 15);
 });

@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
 import { evolutionRequirement, evolutionsOf, species, TOTAL_SPECIES } from '@/lib/pokedex';
 import { dexNo, PokemonImage, TypeBadge } from './common';
+import { rootOf } from '@/lib/pokedex';
 
 export function PokedexTab({ view, busy, onPartner, onEvolve }: {
   view: ChildView; busy: boolean;
@@ -46,6 +47,11 @@ export function PokedexTab({ view, busy, onPartner, onEvolve }: {
   );
 }
 
+/** 포켓로그에서 이 포켓몬(계열)이 도달한 최고 레벨. 새 판은 레벨 5부터 다시 시작하지만 최고 기록은 남습니다. */
+function BattleLevel({ level }: { level?: number }) {
+  return <p className="battle-level">{level ? <>⚔️ 포켓로그 최고 <b>Lv.{level}</b></> : <span className="muted">⚔️ 포켓로그 기록 없음</span>}</p>;
+}
+
 function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
   pokemon: OwnedPokemon; view: ChildView; busy: boolean;
   onPartner: (uid: string) => void; onEvolve: (uid: string, target: number) => void;
@@ -60,6 +66,7 @@ function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
       <PokemonImage id={s.id} />
       <h3>{s.name}</h3>
       <div className="type-row">{s.types.map(t => <TypeBadge key={t} type={t} small />)}</div>
+      <BattleLevel level={view.battleLevels[rootOf(s.id)]} />
       {!isPartner && <button className="secondary" disabled={busy} onClick={() => onPartner(pokemon.uid)}>파트너로 함께하기</button>}
       <div className="evolutions">
         {targets.length === 0 && <p className="final-evolution">더 이상 진화하지 않아요</p>}
