@@ -6,7 +6,7 @@ name: 미리보기 올리기 (게임 작업본)
 
 on:
   push:
-    branches: [claude/battle-pokerogue, claude/dev-menu, claude/insight]
+    branches: [claude/battle-pokerogue, claude/dev-menu, claude/insight, claude/gifts]
   workflow_dispatch:
 
 concurrency:

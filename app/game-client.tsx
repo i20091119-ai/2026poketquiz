@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState } from 'react';
-import { Backpack, BookOpen, Compass, Gift, Settings, Sun, Swords } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Backpack, BookOpen, Compass, Gift, PartyPopper, Settings, Sun, Swords } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
-import { BattleTab, EventTab, HomePanel, StarterPicker } from '@/components/game/home';
+import { BattleTab, EventTab, HomePanel, StarterPicker, type BattleGateView } from '@/components/game/home';
+import { GiftOpenDialog, GiftPopup, GiftTab, ReplyDialog, type GiftOpenResult } from '@/components/game/gifts';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
 import { BagTab } from '@/components/game/bag-tab';
@@ -12,18 +13,21 @@ import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
 import { type Subject } from '@/lib/game-config';
-import type { Action, Ball, ChildView, PublicQuestion } from '@/lib/game-engine';
+import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { versionLabel } from '@/lib/version';
 
 type Quiz = { mode: 'daily' | 'explore'; subject?: Subject; question: PublicQuestion };
 /** 보호자 시뮬레이션 중일 때 서버가 알려 주는 날짜 정보 (아니면 null) */
-type Sim = { today: string; dayOffset: number } | null;
-type GameResponse = { view: ChildView; sim?: Sim };
+type Sim = { today: string; dayOffset: number; clock?: string | null } | null;
+type GameResponse = { view: ChildView; sim?: Sim; battleGate?: BattleGateView };
+/** 화면이 열려 있을 때 새 선물·쉬는 시간을 알아채는 간격 */
+const POLL_MS = 60_000;
 
 export default function Game() {
   const [view, setView] = useState<ChildView | null>(null);
   const [sim, setSim] = useState<Sim>(null);
+  const [gate, setGate] = useState<BattleGateView | null>(null);
   const [tab, setTab] = useState('daily');
   const [tab2, setTab2] = useState('battle');
   const [busy, setBusy] = useState(false);
@@ -33,22 +37,39 @@ export default function Game() {
   const [reward, setReward] = useState<{ kind: RewardKind; subject?: Subject } | null>(null);
   const [ballQueue, setBallQueue] = useState<Ball[]>([]);
   const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
+  // 보호자 선물: 팝업 → 열기 → (볼 열기) → 답장
+  const [giftPopup, setGiftPopup] = useState<PublicGift | null>(null);
+  const [opening, setOpening] = useState<PublicGift | null>(null);
+  const [replying, setReplying] = useState<PublicGift | null>(null);
+  const replyAfterBalls = useRef<PublicGift | null>(null);
+  /** 이번에 이미 팝업으로 보여 준 선물 (닫으면 다시 뜨지 않고, 앱을 다시 열면 다시 알려 줌) */
+  const shownGifts = useRef(new Set<string>());
 
+  const apply = useCallback((data: GameResponse) => { setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
     getJson<GameResponse>('/api/game', signal).then(
-      data => { setView(data.view); setSim(data.sim ?? null); setError(''); return data.view; },
+      data => { apply(data); setError(''); return data.view; },
       e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); return null; },
-    ), []);
+    ), [apply]);
   useEffect(() => {
     const controller = new AbortController();
     getJson<GameResponse>('/api/game', controller.signal).then(
-      data => { setView(data.view); setSim(data.sim ?? null); },
+      data => apply(data),
       e => { if ((e as Error).name !== 'AbortError') setError((e as Error).message); },
     );
     const onFocus = () => { void refresh(); };
     window.addEventListener('focus', onFocus);
-    return () => { controller.abort(); window.removeEventListener('focus', onFocus); };
-  }, [refresh]);
+    // 열려 있는 동안에도 새 선물·쉬는 시간을 알아채도록 1분마다 다시 읽습니다 (화면이 보일 때만)
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, POLL_MS);
+    return () => { controller.abort(); window.removeEventListener('focus', onFocus); window.clearInterval(timer); };
+  }, [refresh, apply]);
+
+  // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
+  useEffect(() => {
+    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length) return;
+    const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
+    if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length]);
 
   // 보호자 화면의 "하루 퀴즈 시간": 화면이 보이는 동안만 세어 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
   useEffect(() => {
@@ -75,8 +96,7 @@ export default function Game() {
     setError('');
     try {
       const data = await postJson<GameResponse & { result: T }>('/api/game', action);
-      setView(data.view);
-      setSim(data.sim ?? null);
+      apply(data);
       return data.result;
     } catch (e) {
       setError((e as Error).message);
@@ -139,6 +159,13 @@ export default function Game() {
   if (!view) {
     return <main><SimBanner sim={sim} /><Header /><div className="workspace">{error ? <ErrorBar message={error} onRetry={() => void refresh()} /> : <section className="panel empty">불러오는 중…</section>}</div></main>;
   }
+  const unopenedGifts = view.gifts.filter(g => !g.opened).length;
+  /** 볼을 다 연 뒤 답장 창으로 이어 갑니다 */
+  const closeBall = () => setBallQueue(q => {
+    const rest = q.slice(1);
+    if (rest.length === 0 && replyAfterBalls.current) { const g = replyAfterBalls.current; replyAfterBalls.current = null; setTimeout(() => setReplying(g), 0); }
+    return rest;
+  });
 
   return (
     <main>
@@ -186,10 +213,12 @@ export default function Game() {
           <Tabs className="tabs-secondary" value={tab2} onValueChange={setTab2}>
             <TabsList className="nav">
               <TabsTrigger value="battle"><Swords />배틀</TabsTrigger>
-              <TabsTrigger value="event"><Gift />이벤트</TabsTrigger>
+              <TabsTrigger value="event"><PartyPopper />이벤트</TabsTrigger>
+              <TabsTrigger value="gift"><Gift />선물{unopenedGifts > 0 && <span className="tab-count">{unopenedGifts}</span>}</TabsTrigger>
             </TabsList>
-            <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} /></TabsContent>
+            <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate} /></TabsContent>
             <TabsContent value="event"><EventTab /></TabsContent>
+            <TabsContent value="gift"><GiftTab gifts={view.gifts} busy={busy} onOpen={g => setOpening(g)} onReply={g => setReplying(g)} /></TabsContent>
           </Tabs>
         </>}
 
@@ -236,8 +265,39 @@ export default function Game() {
         ball={ballQueue[0] ?? null}
         busy={busy}
         onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
-        onClose={() => setBallQueue(q => q.slice(1))}
+        onClose={closeBall}
       />
+
+      <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
+      {opening && (
+        <GiftOpenDialog
+          key={opening.id}
+          gift={opening}
+          busy={busy}
+          onChoose={(g, choice, subject) => act<GiftOpenResult>({ type: 'openGift', id: g.id, choice, subject })}
+          onClose={() => setOpening(null)}
+          onOpenBalls={ids => {
+            const g = view.gifts.find(x => x.id === opening.id) ?? opening;
+            setOpening(null);
+            replyAfterBalls.current = g.reply ? null : g;
+            setBallQueue(ids.map(id => view.balls.find(b => b.id === id)).filter((b): b is Ball => !!b));
+          }}
+          onReply={g => { setOpening(null); setReplying(g); }}
+        />
+      )}
+      {replying && (
+        <ReplyDialog
+          key={replying.id}
+          gift={replying}
+          busy={busy}
+          onLater={() => setReplying(null)}
+          onSend={async (g, sticker, text) => {
+            const r = await act<{ message: string }>({ type: 'replyGift', id: g.id, sticker, text });
+            if (r) { setReplying(null); setNotice(r.message); }
+            return !!r;
+          }}
+        />
+      )}
 
       <Dialog open={!!evolved} onOpenChange={open => { if (!open) setEvolved(null); }}>
         <DialogContent className="reward-dialog">
@@ -257,7 +317,7 @@ function SimBanner({ sim }: { sim: Sim }) {
   if (!sim) return null;
   return (
     <a className="sim-banner" href="/parent" onClick={goTo('/parent')}>
-      🧪 시뮬레이션 중 · 시험용 기록 · 게임 날짜 {sim.today}{sim.dayOffset > 0 ? ` (오늘 +${sim.dayOffset}일)` : ''} · 눌러서 보호자 공간으로
+      🧪 시뮬레이션 중 · 시험용 기록 · 게임 날짜 {sim.today}{sim.dayOffset > 0 ? ` (오늘 +${sim.dayOffset}일)` : ''}{sim.clock ? ` · 시각 ${sim.clock}` : ''} · 눌러서 보호자 공간으로
     </a>
   );
 }

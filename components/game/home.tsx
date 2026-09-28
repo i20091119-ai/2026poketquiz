@@ -122,16 +122,24 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
   );
 }
 
-/** [배틀] 탭: 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만, 이어하기는 자유입니다. */
-export function BattleTab({ left, perDay }: { left: number; perDay: number }) {
+/** 서버가 알려 주는 "지금 포켓로그를 할 수 있는지" (쉬는 시간·하루 시간 제한) */
+export type BattleGateView = { blocked: boolean; message: string | null; restName: string | null; until: string | null; timeUp: boolean; openToday: boolean };
+
+/** [배틀] 탭: 포켓로그(/battle)로 가는 문. 새 게임은 하루 정해진 횟수만(+배틀 추가권), 이어하기는 자유. 쉬는 시간에는 둘 다 잠깁니다. */
+export function BattleTab({ left, perDay, tickets, gate }: { left: number; perDay: number; tickets: number; gate: BattleGateView | null }) {
+  const blocked = !!gate?.blocked;
   return (
-    <section className="panel battle-card">
+    <section className={'panel battle-card' + (blocked ? ' resting' : '')}>
       <div>
         <h3>⚔️ 포켓로그 배틀</h3>
-        <p>내 포켓몬으로 55웨이브까지 싸워 보자! {left > 0 ? <>오늘 새 게임 <b>{left}번</b> 남았어.</> : <>오늘 새 게임은 다 했어. 하던 게임은 이어서 할 수 있어!</>}{perDay > 1 ? ` (하루 ${perDay}번)` : ''}</p>
+        {blocked
+          ? <p className="rest-note"><b>{gate?.message ?? '지금은 쉬는 시간이야.'}</b>{gate?.until ? ` ${gate.until}에 다시 열려.` : ''} 그동안 일일미션이나 탐험을 해 보자!</p>
+          : <p>내 포켓몬으로 55웨이브까지 싸워 보자! {left > 0 ? <>오늘 새 게임 <b>{left}번</b> 남았어.</> : tickets > 0 ? <>오늘 새 게임은 다 했지만 <b>배틀 추가권</b>이 있어!</> : <>오늘 새 게임은 다 했어. 하던 게임은 이어서 할 수 있어!</>}{perDay > 1 ? ` (하루 ${perDay}번)` : ''}{tickets > 0 ? <> 🎟️ 추가권 <b>{tickets}장</b></> : null}</p>}
       </div>
       <div className="battle-actions">
-        <a className="primary" href="/battle/" onClick={goTo('/battle/')}>배틀하러 가기 →</a>
+        {blocked
+          ? <span className="primary disabled" aria-disabled="true">🔒 {gate?.restName ?? '쉬는 시간'}</span>
+          : <a className="primary" href="/battle/" onClick={goTo('/battle/')}>배틀하러 가기 →</a>}
         <a className="text-button" href="/battle/prepare" onClick={goTo('/battle/prepare')}>와이파이에서 미리 받아 두기</a>
       </div>
     </section>

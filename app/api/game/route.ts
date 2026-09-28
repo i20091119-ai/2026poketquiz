@@ -1,8 +1,16 @@
 import { applyAction, childView, ensureDaily, GameError, secureRandom, type Action } from '@/lib/game-engine';
-import { playerOf } from '@/lib/server/player';
+import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
+import { playerOf, type Player } from '@/lib/server/player';
 import { activeBank, json, mutateState } from '@/lib/server/store';
+import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
+
+/** 아이 화면 배틀 탭용: 지금 포켓로그를 할 수 있는지 (쉬는 시간·시간 제한) */
+async function battleInfo(player: Player, state: GameState) {
+  const gate: BattleGate = await battleGate(player, state);
+  return { blocked: gate.blocked, message: gate.message, restName: gate.rest.name, until: gate.rest.until, timeUp: gate.timeUp, openToday: gate.openToday };
+}
 
 export async function GET(request: Request) {
   try {
@@ -10,7 +18,7 @@ export async function GET(request: Request) {
     const { today } = player;
     const { state } = await mutateState(state => ({ result: null, changed: ensureDaily(state, bank, today, secureRandom) }), player.id);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
-    return json({ view: childView(state, bank, today), sim: player.sim });
+    return json({ view: childView(state, bank, today), sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     console.error('게임 기록 읽기 실패', error);
     return json({ error: '게임 기록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }, 503);
@@ -33,7 +41,7 @@ export async function POST(request: Request) {
       result: applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom }),
       changed: true,
     }), player.id);
-    return json({ view: childView(state, bank, today), result, sim: player.sim });
+    return json({ view: childView(state, bank, today), result, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     if (error instanceof GameError) return json({ error: error.message }, 400);
     console.error('게임 요청 실패', error);
