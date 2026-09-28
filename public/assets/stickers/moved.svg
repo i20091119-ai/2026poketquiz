@@ -1,15 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 150" width="160" height="150">
   <title>새싹 동글이 – 감동이야</title>
-  <defs><radialGradient id="g" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#d9f5c4"/><stop offset="1" stop-color="#8fd36a"/></radialGradient></defs>
-  <path d="M60 30 C58 18 62 10 72 6 C74 16 70 24 60 30Z" fill="#4caf50"/>
-  <path d="M60 30 C56 20 48 14 40 14 C40 24 48 30 60 30Z" fill="#66bb6a"/>
-  <line x1="60" y1="30" x2="60" y2="40" stroke="#4e8a3a" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="60" cy="72" r="38" fill="url(#g)" stroke="#5c9a45" stroke-width="3"/>
-  <circle cx="48" cy="68" r="6" fill="#2f4f2a"/><circle cx="72" cy="68" r="6" fill="#2f4f2a"/>
-  <circle cx="50" cy="66" r="2" fill="#fff"/><circle cx="74" cy="66" r="2" fill="#fff"/>
-  <path d="M44 78 q4 8 8 2 M46 76 l-2 10" fill="none" stroke="#5aa9ff" stroke-width="3" stroke-linecap="round"/>
-  <path d="M76 78 q-4 8 -8 2 M74 76 l2 10" fill="none" stroke="#5aa9ff" stroke-width="3" stroke-linecap="round"/>
-  <path d="M52 88 q8 6 16 0" fill="none" stroke="#2f4f2a" stroke-width="3.5" stroke-linecap="round"/>
-  <path d="M96 40 l3 6 6 1 -4 4 1 6 -6 -3 -6 3 1 -6 -4 -4 6 -1z" fill="#ffd54f"/>
-  <text x="60" y="116" text-anchor="middle" font-size="11" font-family="sans-serif" font-weight="700" fill="#2f6b3a">감동이야</text>
+  <path transform="translate(30 34)" d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#7ad3ff"/><path transform="translate(132 30)" d="M0 -8 L2 -2 L8 0 L2 2 L0 8 L-2 2 L-8 0 L-2 -2 Z" fill="#7ad3ff"/>
+  <g transform="translate(0 0) rotate(0 80 95)">
+    <ellipse cx="80" cy="140" rx="38" ry="5" fill="#000" opacity=".08"/>
+    <path d="M80 38 q-4 -14 -18 -16 q2 14 18 16 z" fill="#4caf6a"/>
+    <path d="M80 38 q4 -18 22 -18 q-2 16 -22 18 z" fill="#6cc684"/>
+    <line x1="80" y1="38" x2="80" y2="48" stroke="#3d8f55" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="80" cy="92" r="46" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3.5"/>
+    <ellipse cx="80" cy="106" rx="28" ry="22" fill="#d9f5e6"/>
+    <circle cx="64" cy="86" r="7" fill="#1f2d27"/><circle cx="96" cy="86" r="7" fill="#1f2d27"/>
+       <circle cx="66" cy="83" r="2.6" fill="#fff"/><circle cx="98" cy="83" r="2.6" fill="#fff"/>
+       <path d="M60 94 q-4 16 -2 30" stroke="#5bb8ff" stroke-width="6" stroke-linecap="round" fill="none" opacity=".85"/>
+       <path d="M100 94 q4 16 2 30" stroke="#5bb8ff" stroke-width="6" stroke-linecap="round" fill="none" opacity=".85"/>
+       <path d="M74 104 q6 -5 12 0" fill="none" stroke="#1f2d27" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="42" cy="96" r="9" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3"/><circle cx="118" cy="96" r="9" fill="#9fe0bf" stroke="#2f6e52" stroke-width="3"/>
+  </g>
 </svg>

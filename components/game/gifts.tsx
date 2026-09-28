@@ -142,7 +142,10 @@ function ChoiceIcon({ choice }: { choice: GiftChoice }) {
   }
 }
 
-/** 답장 화면: 새싹 동글이 스티커 하나 + (선택) 30자 글 */
+/**
+ * 답장 화면 (부모님 샘플 구성): 누가 무엇 때문에 보냈는지 → 받은 것 → 편지 → "○○에게 답장할까?"
+ * → 새싹 동글이 스티커 5개(3칸 격자) → 30자 글(선택) → [나중에 | 답장 보내기] → 보냈어! 화면
+ */
 export function ReplyDialog({ gift, busy, onSend, onLater }: {
   gift: PublicGift | null; busy: boolean;
   onSend: (gift: PublicGift, sticker: ReplySticker, text: string) => Promise<boolean>;
@@ -150,28 +153,45 @@ export function ReplyDialog({ gift, busy, onSend, onLater }: {
 }) {
   const [sticker, setSticker] = useState<ReplySticker | null>(null);
   const [text, setText] = useState('');
+  const [sent, setSent] = useState(false);
   if (!gift) return null;
+  const picked = REPLY_STICKERS.find(s => s.key === sticker);
   return (
     <Dialog open onOpenChange={o => { if (!o && !busy) onLater(); }}>
       <DialogContent className="reward-dialog reply-dialog">
-        <DialogTitle>{gift.fromLabel}에게 답장할까?</DialogTitle>
-        <DialogDescription>스티커 하나를 고르고, 하고 싶은 말이 있으면 짧게 적어 봐. 답장은 한 번만 보낼 수 있어.</DialogDescription>
-        <div className="sticker-grid">
-          {REPLY_STICKERS.map(s => (
-            <button key={s.key} className={'sticker' + (sticker === s.key ? ' on' : '')} disabled={busy} onClick={() => setSticker(s.key)} aria-pressed={sticker === s.key}>
-              <img src={ASSETS.sticker(s.key)} alt={s.label} />
-              <span>{s.label}</span>
-            </button>
-          ))}
-        </div>
-        <label className="reply-text">
-          <input value={text} maxLength={REPLY_TEXT_MAX} placeholder="하고 싶은 말 (안 써도 돼)" onChange={e => setText(e.target.value.slice(0, REPLY_TEXT_MAX))} />
-          <small>{text.length} / {REPLY_TEXT_MAX}</small>
-        </label>
-        <button className="primary" disabled={busy || !sticker} onClick={async () => { if (sticker) await onSend(gift, sticker, text); }}>
-          <Mail size={18} /> {sticker ? `${gift.fromLabel}에게 보내기` : '스티커를 골라 줘'}
-        </button>
-        <button className="text-button" onClick={onLater}>나중에 (선물 탭에서 답장할 수 있어)</button>
+        {sent && picked ? <>
+          <DialogTitle className="sr-only">{gift.fromLabel}에게 답장을 보냈어!</DialogTitle>
+          <DialogDescription className="sr-only">{picked.label}</DialogDescription>
+          <div className="reply-sent">
+            <img src={ASSETS.sticker(picked.key)} alt="" />
+            <h2>{picked.label}</h2>
+            <h3>{gift.fromLabel}에게 답장을 보냈어!</h3>
+            {text.trim() && <p className="reply-from">&ldquo;{text.trim()}&rdquo;</p>}
+          </div>
+          <button className="primary" onClick={onLater}>좋아!</button>
+        </> : <>
+          <p className="reply-from">{gift.fromLabel}가 보낸 선물 · {gift.reason}</p>
+          <DialogTitle className="reply-title">🎁 {gift.opened ? `${gift.opened.got}${gift.opened.got.endsWith('개') || gift.opened.got.endsWith('장') ? '를' : '을'} 받았어!` : `${GIFT_SIZES[gift.size].label}을 받았어!`}</DialogTitle>
+          <DialogDescription className="sr-only">스티커 하나를 고르고, 하고 싶은 말이 있으면 30자까지 적을 수 있어.</DialogDescription>
+          {gift.letter && <p className="reply-letter">&ldquo;{gift.letter}&rdquo;</p>}
+          <h3 className="reply-ask">{gift.fromLabel}에게 답장할까?</h3>
+          <div className="sticker-grid">
+            {REPLY_STICKERS.map(s => (
+              <button key={s.key} className={'sticker' + (sticker === s.key ? ' on' : '')} disabled={busy} onClick={() => setSticker(s.key)} aria-pressed={sticker === s.key}>
+                <img src={ASSETS.sticker(s.key)} alt="" />
+                <span>{s.label}</span>
+              </button>
+            ))}
+          </div>
+          <textarea className="reply-text" rows={2} value={text} maxLength={REPLY_TEXT_MAX} placeholder="하고 싶은 말을 써도 돼 (안 써도 괜찮아)"
+            onChange={e => setText(e.target.value.slice(0, REPLY_TEXT_MAX))} />
+          <div className="reply-count">{text.length}/{REPLY_TEXT_MAX}</div>
+          <div className="reply-actions">
+            <button className="reply-later" onClick={onLater}>나중에</button>
+            <button className="reply-send" disabled={busy || !sticker}
+              onClick={async () => { if (sticker && await onSend(gift, sticker, text)) setSent(true); }}>답장 보내기</button>
+          </div>
+        </>}
       </DialogContent>
     </Dialog>
   );

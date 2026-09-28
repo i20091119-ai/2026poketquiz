@@ -292,8 +292,8 @@ export default function Game() {
           busy={busy}
           onLater={() => setReplying(null)}
           onSend={async (g, sticker, text) => {
+            // 보내면 답장 창 안에서 "보냈어!" 화면을 보여 주고, "좋아!"를 누르면 닫힘
             const r = await act<{ message: string }>({ type: 'replyGift', id: g.id, sticker, text });
-            if (r) { setReplying(null); setNotice(r.message); }
             return !!r;
           }}
         />
