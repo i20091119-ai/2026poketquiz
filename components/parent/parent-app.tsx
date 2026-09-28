@@ -141,18 +141,28 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 }
 
 // ---------------- 대시보드 ----------------
-/** 보호자 공간 탭 5개 (한 줄) */
+/** 보호자 공간 탭: 아이 화면처럼 위 묶음(자주 보는 것)과 아래 묶음(설정·개발) */
 const MAIN_TABS = [
   { key: 'report', label: '📊 학습 현황' },
   { key: 'gift', label: '🎁 선물' },
   { key: 'banks', label: '📚 문제은행' },
+] as const;
+const LOWER_TABS = [
   { key: 'battle', label: '⚔️ 배틀 설정' },
   { key: 'dev', label: '🛠️ 업데이트·개발' },
 ] as const;
 type MainTab = typeof MAIN_TABS[number]['key'];
-const TAB_KEY = 'pq-parent-tab2';
-function loadTab(): MainTab {
-  try { const v = localStorage.getItem(TAB_KEY); return MAIN_TABS.some(t => t.key === v) ? v as MainTab : 'report'; } catch { return 'report'; }
+type LowerTab = typeof LOWER_TABS[number]['key'];
+const TAB_KEY = 'pq-parent-tab3';
+function loadTabs(): { top: MainTab; low: LowerTab } {
+  const fallback = { top: 'report' as MainTab, low: 'battle' as LowerTab };
+  try {
+    const v = JSON.parse(localStorage.getItem(TAB_KEY) ?? 'null') as { top?: string; low?: string } | null;
+    return {
+      top: MAIN_TABS.some(t => t.key === v?.top) ? v!.top as MainTab : fallback.top,
+      low: LOWER_TABS.some(t => t.key === v?.low) ? v!.low as LowerTab : fallback.low,
+    };
+  } catch { return fallback; }
 }
 
 function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
@@ -163,8 +173,11 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
   const [battleLimit, setBattleLimit] = useState(overview.battle.limit);
   const [creating, setCreating] = useState(false);
   // 고른 탭은 이 기기에 기억해 두었다가 다음에 열 때 그대로 보여 줍니다
-  const [tab, setTab] = useState<MainTab>(loadTab);
-  const go = (t: MainTab) => { setTab(t); try { localStorage.setItem(TAB_KEY, t); } catch { /* 저장 못 해도 진행 */ } };
+  const [tabs, setTabs] = useState(loadTabs);
+  const save = (next: { top: MainTab; low: LowerTab }) => { setTabs(next); try { localStorage.setItem(TAB_KEY, JSON.stringify(next)); } catch { /* 저장 못 해도 진행 */ } };
+  const go = (top: MainTab) => save({ ...tabs, top });
+  const goLow = (low: LowerTab) => save({ ...tabs, low });
+  const tab = tabs.top, low = tabs.low;
   const { child, active } = overview;
   const newReplies = overview.gifts.newReplies;
 
@@ -192,7 +205,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         )}
       </section>
 
-      {/* 탭 한 줄 */}
+      {/* 위 탭 묶음 */}
       <div className="parent-tabs" role="tablist">
         {MAIN_TABS.map(t => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} className={'parent-tab' + (tab === t.key ? ' on' : '')} onClick={() => go(t.key)}>
@@ -273,7 +286,14 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
 
       {tab === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
 
-      {tab === 'battle' && <>
+      {/* 아래 탭 묶음 (항상 보임, 처음엔 배틀 설정): 아이 화면의 [배틀 | 이벤트 | 선물] 처럼 */}
+      <div className="parent-lower">
+      <div className="parent-tabs" role="tablist">
+        {LOWER_TABS.map(t => (
+          <button key={t.key} role="tab" aria-selected={low === t.key} className={'parent-tab' + (low === t.key ? ' on' : '')} onClick={() => goLow(t.key)}>{t.label}</button>
+        ))}
+      </div>
+      {low === 'battle' && <>
         <section className="panel parent-section">
           <RestEditor rest={overview.battle.rest} busy={busy} call={call} reload={reload} />
         </section>
@@ -313,7 +333,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </section>
       </>}
 
-      {tab === 'dev' && <>
+      {low === 'dev' && <>
         <DevMenu part="version" sim={overview.sim} busy={busy} call={call} reload={reload} />
         <DevMenu part="sim" sim={overview.sim} busy={busy} call={call} reload={reload} />
         {/* 이 칸은 항상 맨 아래에 둡니다 (업데이트·개발 탭의 마지막). 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
@@ -326,6 +346,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
           }}>초기화하기</button></div>
         </section>
       </>}
+      </div>
 
       <NewBankDialog open={creating} grade={overview.grade} busy={busy} error={error} call={call}
         onClose={() => setCreating(false)} onCreated={(id, issues) => { setCreating(false); onOpenBank(id, issues); }} />

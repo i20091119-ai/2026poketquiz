@@ -613,3 +613,5 @@ select { width: auto; min-width: 120px; }
   .parent-tab { flex: 1 1 30%; justify-content: center; padding: 9px 4px; font-size: 13.5px; border: 1px solid #dbe5d9; border-radius: 10px; margin-bottom: 0; background: #fff; }
   .parent-tab.on { background: #17674e; color: #fff; border-color: #17674e; }
 }
+/* 보호자 공간 아래 탭 묶음 (아이 화면의 두 번째 탭 묶음처럼 점선으로 나눔) */
+.parent-lower { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 2px dashed #dbe5d9; }
