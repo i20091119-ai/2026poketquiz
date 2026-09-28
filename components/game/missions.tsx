@@ -4,6 +4,7 @@ import { Progress } from '@/components/ui/progress';
 import { ASSETS } from '@/lib/assets';
 import { DAILY_BOX_RULES, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, type Subject } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
+import { species } from '@/lib/pokedex';
 import { TypeBadge } from './common';
 
 /* eslint-disable @next/next/no-img-element */
@@ -21,6 +22,8 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
   const canOpen = d.boxPicks > 0 && !d.claimed;
   const missed = d.finished && d.boxPicks === 0;
   const picksLeft = d.boxPicks - (d.box?.picks.length ?? 0);
+  const candy = view.candy;
+  const partner = view.owned.find(p => p.uid === view.partner);
   return (
     <section className="panel mission">
       <div className="section-heading"><span className="pill">TODAY&apos;S MISSION</span><span>{d.date}</span></div>
@@ -43,6 +46,10 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
           );
         })}
       </div>
+      <p className="candy-note">🍬 {candy.today
+        ? <>오늘 미션을 다 풀어서 <b>{species(candy.today.species).name}</b>에게 포켓로그 사탕 <b>{candy.today.amount}개</b>를 보냈어! 포켓로그를 켜면 들어가.</>
+        : <>다 풀면 {partner ? <b>{species(partner.species).name}</b> : '파트너'}에게 포켓로그 사탕 <b>{candy.rule.finished}개</b>, 모두 맞히면 <b>{candy.rule.perfect}개</b>!</>}
+        {candy.pending > 0 && !candy.today ? <small> (아직 안 가져간 사탕 {candy.pending}개)</small> : null}</p>
       <div className="mission-footer"><span><b>{done}</b> / {total} 문제 풀었어</span><span>맞힘 {d.correct.length} · 틀림 {d.wrong.length}</span></div>
       <Progress value={total ? (done / total) * 100 : 0} />
       {d.claimed

@@ -3,6 +3,7 @@ import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { Phase } from "#app/phase";
+import { applyQuizCandyGifts } from "#app/quiz-link";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { bypassLogin } from "#constants/app-constants";
 import { PlayerGender } from "#enums/player-gender";
@@ -46,6 +47,11 @@ export class LoginPhase extends Phase {
     }
 
     await gameData.loadSystem();
+    try {
+      await applyQuizCandyGifts(); // 퀴즈 앱 일일미션 사탕 (SPEC 11번). 실패해도 게임은 켜져야 함
+    } catch (err) {
+      console.warn("일일미션 사탕을 넣지 못했어요:", err);
+    }
     if (success || bypassLogin) {
       await this.end();
       return;

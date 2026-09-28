@@ -1,6 +1,6 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
-  BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
+  BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   type BallKind, type PotionKind, type Subject, type TypeKey,
 } from './game-config.ts';
@@ -65,8 +65,12 @@ export type GameState = {
   battle?: { date: string; starts: number };
   /** 포켓로그 날짜별 기록: 최고 웨이브, 플레이한 초, 새 게임 횟수 (최근 BATTLE_LOG_DAYS 일만 보관) */
   battleLog?: Record<string, BattleDay>;
+  /** 일일미션으로 받은 포켓로그 사탕: 아직 게임이 가져가지 않은 것(pending), 지금까지 보낸 총량, 마지막으로 준 날 */
+  candy?: { pending: CandyGift[]; sent: number; lastDate?: string; lastGift?: CandyGift };
 };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
+/** 포켓로그에 보낼 사탕 한 묶음. species = 퀴즈 도감 번호(게임이 진화 전 첫 모습으로 바꿈) */
+export type CandyGift = { id: string; date: string; species: number; amount: number };
 
 export class GameError extends Error {}
 function fail(message: string): never { throw new GameError(message); }
@@ -327,6 +331,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         return {
           correct: false, final: true, answer: q.answer, explanation: q.explanation,
           message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 다른 날 다시 나올 거야.`,
+          candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
         };
       }
 
@@ -347,6 +352,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         correct: true, explanation: q.explanation, reviewed,
         gained: rewarded ? { type: q.type, amount: statGain, exp: REWARD_PER_ANSWER.exp } : undefined,
         message: reviewed ? '지난번에 틀린 문제, 이번엔 맞혔어!' : '정답이야!',
+        /** 이 답으로 오늘의 미션이 끝나 사탕을 보냈으면 그 내용 */
+        candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
       };
     }
 
@@ -525,6 +532,46 @@ export function recordBattleProgress(state: GameState, today: string, wave: numb
   return day;
 }
 
+// ---------- 일일미션 → 포켓로그 사탕 (SPEC 11번) ----------
+/**
+ * 오늘의 미션을 다 풀었고 오늘 아직 안 줬으면 파트너에게 사탕을 줍니다. 새로 줬을 때만 그 묶음을 돌려줍니다.
+ * (모두 맞히면 DAILY_CANDY.perfect, 아니면 finished)
+ */
+export function settleDailyCandy(state: GameState, today: string): CandyGift | null {
+  const d = state.daily;
+  if (!d || d.date !== today || !dailyFinished(state)) return null;
+  const candy = state.candy ??= { pending: [], sent: 0 };
+  if (candy.lastDate === today) return null;
+  const partner = state.owned.find(p => p.uid === state.partner);
+  if (!partner) return null;
+  const perfect = d.questionIds.every(id => d.correct.includes(id));
+  const gift: CandyGift = { id: nextId(state, 'c'), date: today, species: partner.species, amount: perfect ? DAILY_CANDY.perfect : DAILY_CANDY.finished };
+  candy.pending.push(gift);
+  candy.sent += gift.amount;
+  candy.lastDate = today;
+  candy.lastGift = gift;
+  return gift;
+}
+/** 게임이 가져간 사탕 묶음을 목록에서 뺍니다. 실제로 뺀 개수를 돌려줍니다. */
+export function claimCandy(state: GameState, ids: string[]): number {
+  const candy = state.candy;
+  if (!candy) return 0;
+  const before = candy.pending.length;
+  const set = new Set(ids);
+  candy.pending = candy.pending.filter(g => !set.has(g.id));
+  return before - candy.pending.length;
+}
+/** 아이·보호자 화면용 요약 */
+export const candySummary = (state: GameState, today: string) => ({
+  /** 오늘 보낸 사탕 (없으면 null) */
+  today: state.candy?.lastDate === today ? state.candy.lastGift ?? null : null,
+  /** 게임이 아직 가져가지 않은 사탕 수 */
+  pending: (state.candy?.pending ?? []).reduce((sum, g) => sum + g.amount, 0),
+  /** 지금까지 보낸 사탕 총량 */
+  sent: state.candy?.sent ?? 0,
+  rule: DAILY_CANDY,
+});
+
 /** 보호자 화면용: 최근 날짜부터 */
 export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
@@ -587,6 +634,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     masterClaimed: prog?.masterClaimed ?? false,
     /** 포켓로그(/battle): 오늘 남은 새 게임 횟수 */
     battle: { left: battleStartsLeft(state, today), perDay: BATTLE_STARTS_PER_DAY },
+    /** 일일미션으로 포켓로그에 보내는 사탕 */
+    candy: candySummary(state, today),
   };
 }
 export type ChildView = ReturnType<typeof childView>;

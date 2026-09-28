@@ -1,6 +1,6 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { BATTLE_PASSWORD_MIN, GRADES, SUBJECTS, type Subject } from '@/lib/game-config';
-import { battleLogList, battleStartsLeft, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
+import { battleLogList, battleStartsLeft, candySummary, initialState, shiftDate, todayKorea } from '@/lib/game-engine';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
 import { hashBattlePassword } from '@/lib/server/battle-auth';
 import { checkPassword, isParent, loginCookie, logoutCookie, passwordConfigured } from '@/lib/server/parent-auth';
@@ -41,7 +41,7 @@ async function overview(request: Request) {
   return {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
-    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, todayKorea()) },
+    battle: { log: battleLogList(state), leftToday: battleStartsLeft(state, todayKorea()), candy: candySummary(state, todayKorea()) },
     sim,
     banks,
     child: {

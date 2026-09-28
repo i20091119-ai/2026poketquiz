@@ -100,6 +100,84 @@ export async function consumeNewBattleStart(): Promise<BattleStartResult> {
   }
 }
 
+// ---- 일일미션 사탕 (SPEC 11번) ----
+export const QUIZ_CANDY_URL = "/api/battle/candy";
+const APPLIED_KEY = "quizCandyApplied";
+
+interface CandyGift {
+  id: string;
+  date: string;
+  /** 퀴즈 도감 번호 (진화형일 수 있음 → 스타터로 바꿈) */
+  species: number;
+  amount: number;
+}
+
+/**
+ * 퀴즈 앱에서 아직 안 가져간 사탕 묶음을 받아 스타터에게 넣고 저장한 뒤, 가져갔다고 알립니다.
+ * 저장 데이터를 읽은 직후(LoginPhase)에 부릅니다. 알림이 실패해도 같은 묶음을 두 번 넣지 않도록 넣은 묶음 번호를 기기에 적어 둡니다.
+ */
+export async function applyQuizCandyGifts(): Promise<void> {
+  let gifts: CandyGift[] = [];
+  try {
+    const res = await fetch(QUIZ_CANDY_URL, { cache: "no-store" });
+    if (!res.ok) {
+      return;
+    }
+    const body = (await res.json()) as { gifts?: CandyGift[] };
+    gifts = Array.isArray(body.gifts) ? body.gifts : [];
+  } catch (err) {
+    console.warn("퀴즈 앱에서 사탕 목록을 받지 못했어요:", err);
+    return;
+  }
+  if (gifts.length === 0) {
+    return;
+  }
+
+  let applied: string[] = [];
+  try {
+    applied = JSON.parse(localStorage.getItem(APPLIED_KEY) ?? "[]") as string[];
+  } catch {
+    applied = [];
+  }
+  const appliedSet = new Set(applied);
+  let added = 0;
+  for (const gift of gifts) {
+    if (appliedSet.has(gift.id) || !(gift.amount > 0)) {
+      continue;
+    }
+    try {
+      const starterId = speciesDataRegistry.getStarter(gift.species);
+      globalScene.gameData.addStarterCandy(starterId, Math.floor(gift.amount));
+      added += gift.amount;
+    } catch {
+      console.warn("포켓로그에 없는 포켓몬 번호라 사탕을 건너뜁니다:", gift.species);
+    }
+    appliedSet.add(gift.id);
+  }
+  if (added > 0) {
+    console.log(`퀴즈 일일미션 사탕 ${added}개를 넣었어요`);
+    try {
+      await globalScene.gameData.saveSystem();
+    } catch (err) {
+      console.warn("사탕을 넣은 뒤 저장 실패 (다음 저장 때 함께 저장됨):", err);
+    }
+  }
+  // 넣은 묶음 번호는 최근 200개만 기억
+  localStorage.setItem(APPLIED_KEY, JSON.stringify([...appliedSet].slice(-200)));
+  try {
+    const res = await fetch(QUIZ_CANDY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: gifts.map(g => g.id) }),
+    });
+    if (!res.ok) {
+      console.warn("사탕 가져갔다는 알림 실패:", res.status);
+    }
+  } catch (err) {
+    console.warn("사탕 가져갔다는 알림 실패:", err);
+  }
+}
+
 // ---- 진행 보고 (보호자 화면의 날짜별 기록) ----
 export const QUIZ_PROGRESS_URL = "/api/battle/progress";
 const REPORT_EVERY_MS = 60_000;

@@ -6,6 +6,8 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2026-05-15",
   "compatibility_flags": ["nodejs_compat"],
+  // Cloudflare 화면에서 직접 넣은 변수(Type: Text)가 자동 올리기 때 지워지지 않게 합니다. (Secret 은 원래 남습니다)
+  "keep_vars": true,
   // 정적 파일 설정. 포켓로그 비밀번호 문(app/battle/[[...path]]/route.ts)은 게임을 켜는 데 꼭 필요한 파일
   // (게임 코드, 시작 목록, 준비 페이지, 서비스 워커)만 Worker 가 먼저 받아 지킵니다.
   // 그림·소리·번역 수만 개는 검문 없이 정적으로 바로 나가야 로딩이 빠릅니다.

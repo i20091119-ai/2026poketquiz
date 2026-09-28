@@ -14,7 +14,7 @@ type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
-  battle: { log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number };
+  battle: { log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } } };
   /** 개발자 메뉴 시뮬레이션: 이 브라우저가 시뮬레이션 중인지, 시험용 기록의 날짜와 요약 */
   sim: {
     active: boolean; today: string; dayOffset: number;
@@ -160,6 +160,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <section className="panel parent-section">
         <h2>포켓로그 기록</h2>
         <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음.</p>
+        <p className="muted">🍬 일일미션 사탕: 다 풀면 {overview.battle.candy.rule.finished}개, 모두 맞히면 {overview.battle.candy.rule.perfect}개를 파트너에게 보내요. 지금까지 {overview.battle.candy.sent}개{overview.battle.candy.pending ? ` (게임이 아직 안 가져간 ${overview.battle.candy.pending}개)` : ''}. 사탕은 포켓로그 안에서 패시브 특성 해제·스타터 비용 낮추기에 써요.</p>
         {overview.battle.log.length === 0
           ? <p className="muted">아직 기록이 없어요. 아이가 포켓로그를 시작하면 여기에 쌓여요.</p>
           : <table className="battle-log">
