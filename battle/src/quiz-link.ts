@@ -624,7 +624,7 @@ function showLandscapeOverlay(): void {
     if (ok) {
       hideLandscapeOverlay();
     } else {
-      text.textContent = "이 휴대폰은 저절로 못 돌려. 휴대폰 설정에서 '자동 회전'을 켜고 옆으로 눕혀 줘.";
+      text.textContent = "휴대폰을 옆으로 눕혀 줘. 그래도 안 돌아가면 엄마 아빠에게 알려 줘!";
     }
   });
   stay.addEventListener("click", e => {
