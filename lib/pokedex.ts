@@ -1,6 +1,7 @@
 import raw from './data/pokedex.json' with { type: 'json' };
 import shinyColors from './data/shiny-colors.json' with { type: 'json' };
-import { EVOLUTION_COST, TYPE_INFO, type TypeKey } from './game-config.ts';
+import { EVOLUTION_COST, EVOLUTION_COST_STRONG, TYPE_INFO, type TypeKey } from './game-config.ts';
+import { POPULAR_STRONG, THIRD_TYPE } from './strong-pokemon.ts';
 
 export type Species = {
   id: number;
@@ -34,9 +35,27 @@ export const evolutionsOf = (id: number) => nextOf.get(id) ?? [];
 
 export type Requirement = { type: TypeKey; amount: number }[];
 
-/** 진화 후 포켓몬(target)의 속성을 기준으로 필요한 스탯을 계산합니다. */
+const POPULAR = new Set(POPULAR_STRONG);
+/** 센 포켓몬: 희귀 등급 이상의 진화형이거나, 인기 포켓몬 목록(lib/strong-pokemon.ts)에 있는 진화형 */
+export function isStrong(id: number): boolean {
+  const s = byId.get(id);
+  return !!s && s.from !== null && (s.tier >= 2 || POPULAR.has(id));
+}
+/** 센 포켓몬의 도전 속성 (없으면 undefined) */
+export const thirdTypeOf = (id: number): TypeKey | undefined => (isStrong(id) ? THIRD_TYPE[id] : undefined);
+
+/** 진화 후 포켓몬(target)의 속성을 기준으로 필요한 스탯을 계산합니다. 센 포켓몬은 더 많이, 도전 속성이 있으면 3과목. */
 export function evolutionRequirement(target: number): Requirement {
   const s = species(target);
+  if (isStrong(target)) {
+    const cost = EVOLUTION_COST_STRONG[s.stage] ?? EVOLUTION_COST_STRONG[3];
+    const third = thirdTypeOf(target);
+    if (third && s.types.length === 2) {
+      return [{ type: s.types[0], amount: cost.triple[0] }, { type: s.types[1], amount: cost.triple[1] }, { type: third, amount: cost.triple[2] }];
+    }
+    if (s.types.length === 1) return [{ type: s.types[0], amount: cost.single }];
+    return [{ type: s.types[0], amount: cost.dual[0] }, { type: s.types[1], amount: cost.dual[1] }];
+  }
   const cost = EVOLUTION_COST[s.stage] ?? EVOLUTION_COST[3];
   if (s.types.length === 1) return [{ type: s.types[0], amount: cost.single }];
   return [{ type: s.types[0], amount: cost.dual[0] }, { type: s.types[1], amount: cost.dual[1] }];
