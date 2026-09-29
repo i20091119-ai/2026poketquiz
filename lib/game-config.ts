@@ -120,8 +120,9 @@ export const DAILY_BOX_RULES: { minCorrect: number | 'all'; picks: number }[] = 
  * dual = [첫째 속성, 둘째 속성], single = 속성이 하나일 때.
  */
 export const EVOLUTION_COST: Record<number, { dual: [number, number]; single: number }> = {
-  2: { dual: [10, 5], single: 15 },
-  3: { dual: [25, 12], single: 35 },
+  // 부모님 결정(2026-09-29): 3일 만에 도감 36마리를 채울 만큼 빨라서 2배로. 센 모습(3단계)일수록 훨씬 많이 필요하게
+  2: { dual: [20, 10], single: 30 },
+  3: { dual: [55, 25], single: 80 },
 };
 
 // ---- 아이템 (열매·상처약) ----
