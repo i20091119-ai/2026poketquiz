@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, shinyName, species, TOTAL_SPECIES } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, isStrong, shinyName, species, thirdTypeOf, TOTAL_SPECIES } from '@/lib/pokedex';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 import { rootOf } from '@/lib/pokedex';
 
@@ -103,7 +103,7 @@ function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
             <div className="evolution" key={target}>
               <div className="evolution-head">
                 <PokemonImage id={target} className="evolution-img" />
-                <span>→ <b>{species(target).name}</b></span>
+                <span>→ <b>{species(target).name}</b>{isStrong(target) && <em className="strong-tag" title="센 포켓몬은 스탯이 더 많이 필요해요">⭐ 센 포켓몬</em>}</span>
               </div>
               <div className="requirements">
                 {req.map(r => (
@@ -113,6 +113,7 @@ function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
                   </span>
                 ))}
               </div>
+              {thirdTypeOf(target) && <p className="strong-note">도전 속성까지 모으면 진화해! 3과목을 골고루 풀어 보자.</p>}
               <button className="primary" disabled={busy || !ready} onClick={() => onEvolve(pokemon.uid, target)}>
                 {ready ? '진화!' : '스탯을 더 모아 줘'}
               </button>

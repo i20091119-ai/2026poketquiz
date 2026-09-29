@@ -125,6 +125,15 @@ export const EVOLUTION_COST: Record<number, { dual: [number, number]; single: nu
   3: { dual: [55, 25], single: 80 },
 };
 
+/**
+ * 센 포켓몬(lib/strong-pokemon.ts: 희귀 등급 진화형 + 인기 포켓몬)으로 진화할 때 필요한 스탯. 보통의 약 1.2배.
+ * triple = 도전 속성이 있는 포켓몬(원래 두 속성 + 다른 과목의 도전 속성 = 3과목).
+ */
+export const EVOLUTION_COST_STRONG: Record<number, { dual: [number, number]; single: number; triple: [number, number, number] }> = {
+  2: { dual: [24, 12], single: 36, triple: [20, 10, 6] },
+  3: { dual: [66, 30], single: 96, triple: [55, 25, 16] },
+};
+
 // ---- 아이템 (열매·상처약) ----
 // 보상으로 받으면 가방에 들어가고, 아이가 포켓몬에게 먹이면 적힌 속성 스탯이 모두 오릅니다.
 // 열매는 과목 계열 하나(속성 3개), 상처약은 모든 속성을 올립니다.

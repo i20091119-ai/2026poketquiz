@@ -386,6 +386,8 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .partner-tag { position: absolute; top: 16px; right: 16px; border-radius: 8px; background: #e5f2da; color: #47713a; font-size: 12px; padding: 2px 8px; font-weight: 700; }
 .pokemon-card.is-shiny { border: 2px solid #e6c45a; background: linear-gradient(180deg, #fffdf3, #fff); }
 .shiny-tag { position: absolute; top: 16px; right: 16px; border-radius: 8px; background: #fff3c4; color: #8a6a12; font-size: 12px; padding: 2px 8px; font-weight: 700; }
+.strong-tag { margin-left: 6px; border-radius: 8px; background: #fde7e7; color: #a33; font-size: 11px; padding: 1px 6px; font-weight: 700; font-style: normal; white-space: nowrap; }
+.strong-note { margin: 4px 0 6px; font-size: 12px; color: #a33; }
 .shiny-note { font-size: 13px; margin: 0; }
 .shiny-count { margin: 6px 0 0; font-size: 14px; color: #8a6a12; }
 .dex-cell.is-shiny { border-color: #e6c45a; background: #fffdf3; }

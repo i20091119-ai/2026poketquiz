@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
 import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, shinyColor, shinyName, species, TOTAL_SPECIES } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
+import { THIRD_TYPE } from './strong-pokemon.ts';
 import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -31,8 +32,8 @@ test('도감 데이터: 1025종, 시작 포켓몬 진화 조건', () => {
   assert.equal(TOTAL_SPECIES, 1025);
   assert.equal(species(906).name, '나오하');
   assert.deepEqual(evolutionsOf(906), [907]);
-  assert.deepEqual(evolutionRequirement(907), [{ type: 'grass', amount: 30 }]);
-  assert.deepEqual(evolutionRequirement(908), [{ type: 'grass', amount: 55 }, { type: 'dark', amount: 25 }]);
+  assert.deepEqual(evolutionRequirement(907), [{ type: 'grass', amount: 36 }]); // 시작 포켓몬 계열은 센 포켓몬
+  assert.deepEqual(evolutionRequirement(908), [{ type: 'grass', amount: 55 }, { type: 'dark', amount: 25 }, { type: 'psychic', amount: 16 }]);
   assert.equal(evolutionsOf(133).length, 8); // 이브이
   for (const pool of CATCH_POOLS) assert.ok(pool.length > 0);
 });
@@ -97,7 +98,7 @@ test('진화: 스탯이 모자라면 실패, 충분하면 소모하고 진화', 
   const uid = state.owned[0].uid;
   assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /부족/);
   assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 908 }, ctx(bank)), /진화할 수 없어요/);
-  state.stats.grass = 35;
+  state.stats.grass = 41;
   applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank));
   assert.equal(state.stats.grass, 5);
   assert.equal(state.owned[0].species, 907);
@@ -313,7 +314,7 @@ test('일일미션만 2주(정답률 80%, 상자 보상 제외) 풀면 시작 �
       const today = `2026-10-${String(day + 1).padStart(2, '0')}`;
       playDaily(state, bank, { bank, today, now: today, random }, () => random() < 0.8);
     }
-    // 시작 포켓몬(풀/불꽃/물) 각각 첫 진화 조건(30)을 넘었는지
+    // 시작 포켓몬(풀/불꽃/물) 각각 첫 진화 조건(센 포켓몬 36)을 넘었는지
     for (const starter of STARTERS) {
       const [target] = evolutionsOf(starter);
       if (evolutionRequirement(target).every(r => state.stats[r.type] >= r.amount)) ok++;
@@ -329,9 +330,28 @@ test('센 모습일수록 진화에 스탯이 더 많이 든다 (1→2단계보�
   assert.ok(c3.dual[0] + c3.dual[1] > (c2.dual[0] + c2.dual[1]) * 2, '속성 2개 합계');
 });
 
+test('센 포켓몬: 1.2배쯤 더 들고, 절반쯤은 이야기에 맞는 도전 속성으로 3과목이 필요', () => {
+  const subjectOf = (t: string) => SUBJECTS.find(sub => (SUBJECT_TYPES[sub] as string[]).includes(t));
+  assert.deepEqual(evolutionRequirement(6), [{ type: 'fire', amount: 55 }, { type: 'flying', amount: 25 }, { type: 'dark', amount: 16 }]); // 리자몽 불꽃·비행 + 악
+  assert.deepEqual(evolutionRequirement(130), [{ type: 'water', amount: 24 }, { type: 'flying', amount: 12 }]); // 갸라도스: 센 포켓몬, 도전 속성 없음
+  assert.deepEqual(evolutionRequirement(25), [{ type: 'electric', amount: 36 }]); // 피카츄: 인기 포켓몬
+  assert.deepEqual(evolutionRequirement(2), [{ type: 'grass', amount: 24 }, { type: 'poison', amount: 12 }]); // 이상해풀
+  assert.ok(!isStrong(20) && evolutionRequirement(20).reduce((a, r) => a + r.amount, 0) === 30, '레트라: 보통 포켓몬');
+  for (const [id, third] of Object.entries(THIRD_TYPE)) {
+    const s = species(Number(id));
+    assert.ok(isStrong(s.id), `${s.name}: 센 포켓몬이어야 함`);
+    assert.equal(s.types.length, 2, `${s.name}: 속성 2개`);
+    const subjects = new Set([...s.types, third].map(subjectOf));
+    assert.equal(subjects.size, 3, `${s.name}: 3과목이어야 함 (${s.types.join('/')} + ${third})`);
+  }
+  const strongFinals = SPECIES.filter(s => isStrong(s.id) && evolutionsOf(s.id).length === 0 && s.tier >= 2);
+  const share = Object.keys(THIRD_TYPE).length / strongFinals.length;
+  assert.ok(share >= 0.4 && share <= 0.6, `도전 속성이 있는 센 포켓몬 비율 ${share.toFixed(2)}`);
+});
+
 test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성이 모두 오른다', () => {
   const bank = makeBank();
-  const state = started(bank); // 나오하(풀) — 다음 진화 나로테(풀 30)
+  const state = started(bank); // 나오하(풀) — 다음 진화 나로테(풀 36)
   state.potions.push({ id: 'm1', kind: 'apple' }, { id: 'm2', kind: 'potion' }, { id: 'm3', kind: 'apple' });
   const uid = state.owned[0].uid;
   const r = applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, ctx(bank)) as unknown as { types: string[]; amount: number };
@@ -345,7 +365,7 @@ test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성�
   assert.equal(state.stats.grass, 15);
   assert.equal(state.potions.length, 0);
   assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /부족/); // 아이템 3개(15)만으로는 모자람
-  state.stats = { ...state.stats, grass: 30 }; // 문제를 더 풀어서 30이 됨
+  state.stats = { ...state.stats, grass: 36 }; // 문제를 더 풀어서 36이 됨
   applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank));
   assert.equal(state.owned[0].species, 907);
 });
