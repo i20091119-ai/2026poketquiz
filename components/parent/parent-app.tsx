@@ -9,13 +9,16 @@ import { ASSETS } from '@/lib/assets';
 import type { RestRule } from '@/lib/battle-rest';
 import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
 import type { ActivityDay, AreaReport, PublicGift, Question } from '@/lib/game-engine';
-import { species, TOTAL_SPECIES } from '@/lib/pokedex';
+import { defaultStrong, defaultThird, evolutionRequirement, isStrong, setStrongOverrides, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
+import { PokemonImage } from '@/components/game/common';
 import { aiRequestText } from '@/lib/question-import';
 import { APP_VERSION, CHANGES, versionLabel } from '@/lib/version';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
 type Overview = {
+  /** 속성 변경(센 포켓몬·도전 속성)에서 바꾼 것 */
+  strong: StrongOverrides;
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
   battle: {
     log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } };
@@ -74,6 +77,7 @@ export default function ParentApp() {
   const load = useCallback(() =>
     getJson<Overview | { loggedIn: false; passwordConfigured: boolean }>('/api/parent').then(data => {
       if (!data.loggedIn) { setPasswordConfigured(data.passwordConfigured); setAuth('login'); return; }
+      setStrongOverrides(data.strong);
       setOverview(data);
       setAuth('ok');
     }, e => setError((e as Error).message)), []);
@@ -343,6 +347,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       {low === 'dev' && <>
         <DevMenu part="version" sim={overview.sim} busy={busy} call={call} reload={reload} />
         <DevMenu part="sim" sim={overview.sim} busy={busy} call={call} reload={reload} />
+        <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
         {/* 이 칸은 항상 맨 아래에 둡니다 (업데이트·개발 탭의 마지막). 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
         <section className="panel parent-section danger-zone">
           <h2>아이 게임 처음부터 다시 하기</h2>
@@ -921,4 +926,84 @@ function QuestionForm({ initial, busy, onSave }: { initial: Question; busy: bool
     </label>
     <button className="primary" disabled={busy} onClick={() => onSave(q)}>저장</button>
   </>;
+}
+
+type StrongFilter = 'third' | 'strong' | 'changed';
+/**
+ * 속성 변경: 센 포켓몬(진화에 스탯이 더 드는 포켓몬)과 도전 속성(3과목이 되게 더 모아야 하는 속성)을 바꿉니다.
+ * 기본값은 lib/strong-pokemon.ts, 바꾼 것은 기록 저장소 settings.strong_overrides 에 남습니다.
+ */
+function StrongEditor({ overview, busy, call, reload }: { overview: Overview; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<StrongFilter>('third');
+  const changed = new Set([...Object.keys(overview.strong.strong), ...Object.keys(overview.strong.third)].map(Number));
+  const q = query.trim();
+  const all = SPECIES.filter(s => s.from !== null);
+  const list = (q
+    ? all.filter(s => s.name.includes(q))
+    : all.filter(s => filter === 'third' ? !!thirdTypeOf(s.id) : filter === 'strong' ? isStrong(s.id) : changed.has(s.id))
+  );
+  const shown = list.slice(0, 40);
+  const act = async (body: Record<string, unknown>) => { if (await call(body)) await reload(); };
+  const reqText = (id: number) => evolutionRequirement(id).map(r => `${TYPE_INFO[r.type].label} ${r.amount}`).join(' + ');
+  const thirdCount = all.filter(s => thirdTypeOf(s.id)).length;
+  const strongCount = all.filter(s => isStrong(s.id)).length;
+  return (
+    <section className="panel parent-section strong-editor">
+      <h2>속성 변경 (센 포켓몬 💥)</h2>
+      <p className="muted">
+        센 포켓몬은 진화에 스탯이 약 1.2배 들어요. 도전 속성이 있으면 원래 두 속성과 다른 과목의 스탯까지 모아야 해요(3과목).
+        지금 센 포켓몬 {strongCount}종, 그중 도전 속성 {thirdCount}종.
+      </p>
+      <div className="strong-tools">
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="포켓몬 이름으로 찾기 (예: 리자몽)" />
+        {!q && (
+          <div className="button-row">
+            {([['third', '3과목 포켓몬'], ['strong', '센 포켓몬 전체'], ['changed', `바꾼 것 ${changed.size}`]] as const).map(([k, label]) => (
+              <button key={k} className={filter === k ? 'primary small' : 'secondary'} onClick={() => setFilter(k)}>{label}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      {shown.length === 0 && <p className="muted">해당하는 포켓몬이 없어요.</p>}
+      <ul className="strong-list">
+        {shown.map(s => {
+          const strong = isStrong(s.id);
+          const third = thirdTypeOf(s.id) ?? '';
+          const choices = thirdTypeChoices(s.id);
+          const isChanged = changed.has(s.id);
+          return (
+            <li key={s.id} className={isChanged ? 'changed' : ''}>
+              <PokemonImage id={s.id} className="strong-img" />
+              <div className="strong-info">
+                <b>{s.name}</b> <small className="muted">No.{String(s.id).padStart(4, '0')} · {species(s.from!).name}에서 진화</small>
+                <div className="type-row">{s.types.map(t => <TypeBadge key={t} type={t} small />)}{third && <><span className="plus">+</span><TypeBadge type={third} small /></>}</div>
+                <small className="strong-cost">진화에 필요: {reqText(s.id)}</small>
+              </div>
+              <div className="strong-controls">
+                <label><input type="checkbox" checked={strong} disabled={busy} onChange={e => act({ action: 'setStrongPokemon', id: s.id, strong: e.target.checked })} /> 💥 센 포켓몬</label>
+                {strong && choices.length > 0 && (
+                  <select value={third} disabled={busy} onChange={e => act({ action: 'setThirdType', id: s.id, type: e.target.value })}>
+                    <option value="">도전 속성 없음</option>
+                    {choices.map(t => <option key={t} value={t}>{TYPE_INFO[t].label} ({subjectOf(t)})</option>)}
+                  </select>
+                )}
+                {isChanged && (
+                  <button className="secondary small" disabled={busy} title={`처음 값: ${defaultStrong(s.id) ? '센 포켓몬' : '보통'}${defaultThird(s.id) ? ` · 도전 ${TYPE_INFO[defaultThird(s.id) as TypeKey].label}` : ''}`}
+                    onClick={async () => { await act({ action: 'setStrongPokemon', id: s.id, strong: null }); await act({ action: 'setThirdType', id: s.id, type: null }); }}>처음 값으로</button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {list.length > shown.length && <p className="muted">{list.length}종 중 40종만 보여요. 이름으로 찾아 주세요.</p>}
+      {changed.size > 0 && (
+        <div><button className="secondary danger" disabled={busy} onClick={async () => {
+          if (!window.confirm('바꾼 센 포켓몬·도전 속성을 모두 처음 값으로 되돌릴까요?')) return;
+          await act({ action: 'resetStrong' });
+        }}>모두 처음 값으로</button></div>
+      )}
+    </section>
+  );
 }

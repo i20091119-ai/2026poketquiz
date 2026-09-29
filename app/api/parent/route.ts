@@ -1,6 +1,7 @@
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
-import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GIFT_SIZES, GRADES, SUBJECTS, type GiftLimits, type Subject } from '@/lib/game-config';
+import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, GIFT_SIZES, GRADES, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
+import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { activityList, areaReport, battleLogList, eventsReport, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
@@ -12,6 +13,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -41,8 +43,8 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen] = await Promise.all([
-    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(),
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(),
   ]);
   const today = player.today;
   const gate = await battleGate(player, state);
@@ -59,6 +61,8 @@ async function overview(request: Request) {
     },
     /** 도전 이벤트 진행 상황과 부활권 */
     events: eventsReport(state, bank, today),
+    /** 보호자 "속성 변경"에서 바꾼 센 포켓몬·도전 속성 */
+    strong,
     /** 보호자 선물: 기록(최근 것부터), 오늘·이번 주 보낸 수, 한도, 아직 안 본 답장 수 */
     gifts: { list: giftList(state), counts: giftCounts(state, today), limits: giftLimits, newReplies: unseenReplies(state), today },
     /** 최근 4주 날짜별 활동 (퀴즈 시간·푼 문제·포켓로그 시간) — 주간 그래프용 */
@@ -193,6 +197,37 @@ export async function POST(request: Request) {
         const allowed = body.allowed === true;
         await setBattleEvolutionAllowed(allowed);
         return json({ message: allowed ? '배틀 중 진화를 허용했어요. 게임에는 1분 안에 반영돼요.' : '배틀 중 진화를 막았어요. 레벨이 올라도 진화하지 않고, 진화 아이템도 보상에 나오지 않아요.' });
+      }
+
+      // ---- 속성 변경 (센 포켓몬·도전 속성) ----
+      case 'setStrongPokemon': {
+        const id = Number(body.id);
+        const s = isSpecies(id) ? species(id) : null;
+        if (!s || s.from === null) throw new ParentError('진화해서 나오는 포켓몬만 바꿀 수 있어요.');
+        const ov = await getStrongOverrides();
+        const strong = body.strong === true ? true : body.strong === false ? false : null;
+        if (strong === null || strong === defaultStrong(id)) delete ov.strong[id]; else ov.strong[id] = strong;
+        await saveStrongOverrides(ov);
+        setStrongOverrides(ov);
+        return json({ message: `${s.name}: ${isStrong(id) ? '센 포켓몬으로 정했어요. 진화에 스탯이 더 많이 들어요.' : '보통 포켓몬으로 정했어요.'}` });
+      }
+      case 'setThirdType': {
+        const id = Number(body.id);
+        const s = isSpecies(id) ? species(id) : null;
+        if (!s || s.from === null) throw new ParentError('진화해서 나오는 포켓몬만 바꿀 수 있어요.');
+        const type = body.type === null || body.type === undefined ? null : String(body.type) as TypeKey | '';
+        if (type && !isValidThird(id, type)) throw new ParentError('도전 속성은 원래 두 속성과 다른 과목의 속성만 고를 수 있어요.');
+        const ov = await getStrongOverrides();
+        if (type === null || type === defaultThird(id)) delete ov.third[id]; else ov.third[id] = type;
+        await saveStrongOverrides(ov);
+        setStrongOverrides(ov);
+        const t = thirdTypeOf(id);
+        return json({ message: `${s.name}: ${t ? `도전 속성을 ${TYPE_INFO[t].label}(${subjectOf(t)})로 정했어요.` : '도전 속성을 없앴어요.'}` });
+      }
+      case 'resetStrong': {
+        await saveStrongOverrides({ strong: {}, third: {} });
+        setStrongOverrides(null);
+        return json({ message: '센 포켓몬과 도전 속성을 처음 값으로 되돌렸어요.' });
       }
 
       // ---- 보호자 선물 ----

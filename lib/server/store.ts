@@ -5,6 +5,7 @@ import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SUBJECTS, type GiftLimits, t
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
+import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
 export type PlayerId = 'family' | 'sim';
@@ -90,6 +91,26 @@ export async function setBattleLimitMinutes(minutes: number) {
 }
 
 // ---------- 포켓로그(/battle) 판 안 진화 허용 (기본 꺼짐: 레벨이 올라도 진화하지 않고, 진화 아이템도 보상에 안 나옴) ----------
+/** 보호자 공간 "속성 변경"에서 바꾼 센 포켓몬·도전 속성 (lib/pokedex.ts StrongOverrides) */
+export async function getStrongOverrides(): Promise<StrongOverrides> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'strong_overrides'").first<{ value: string }>();
+  try {
+    const v = row ? JSON.parse(row.value) as Partial<StrongOverrides> : {};
+    return { strong: v.strong ?? {}, third: v.third ?? {} };
+  } catch {
+    return { strong: {}, third: {} };
+  }
+}
+export async function saveStrongOverrides(ov: StrongOverrides) {
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('strong_overrides', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(ov)).run();
+}
+/** 요청을 처리하기 전에 센 포켓몬 설정을 맞춥니다 (진화 조건 계산에 씀) */
+export async function loadStrongOverrides(): Promise<StrongOverrides> {
+  const ov = await getStrongOverrides();
+  setStrongOverrides(ov);
+  return ov;
+}
+
 export async function getBattleEvolutionAllowed(): Promise<boolean> {
   const row = await db().prepare("SELECT value FROM settings WHERE key = 'battle_evolution_allowed'").first<{ value: string }>();
   return row?.value === '1';
