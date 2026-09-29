@@ -558,43 +558,121 @@ export function showExitButton(): void {
   }
 }
 
-// ---- 가로 화면 (홈 화면 앱) ----
+// ---- 가로 화면 ----
 type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void> };
 
-/** 홈 화면에 설치한 앱(주소창 없는 창)으로 열려 있는지 */
-function isInstalledApp(): boolean {
-  return (
-    window.matchMedia?.("(display-mode: standalone)").matches
-    || window.matchMedia?.("(display-mode: fullscreen)").matches
-    || (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
+const LANDSCAPE_OVERLAY_ID = "quiz-landscape-overlay";
+/** "그냥 세로로 할래"를 누르면 이번에 켠 동안은 다시 묻지 않음 */
+let landscapeDismissed = false;
+
+const isPortrait = () => window.innerHeight > window.innerWidth;
+const isTouchPhone = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
+
+/** 전체 화면으로 바꾼 뒤 가로로 고정. 사용자가 누른 순간에 불러야 휴대폰이 허락합니다. */
+async function goLandscape(): Promise<boolean> {
+  const orientation = screen.orientation as LockableOrientation | undefined;
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+    }
+    await orientation?.lock?.("landscape");
+    return true;
+  } catch (err) {
+    console.warn("가로 화면으로 바꾸지 못했어요:", err);
+    return false;
+  }
+}
+
+function hideLandscapeOverlay(): void {
+  document.getElementById(LANDSCAPE_OVERLAY_ID)?.remove();
+}
+
+/** 세로 화면일 때 게임 위에 띄우는 "가로로 크게 보기" 안내 */
+function showLandscapeOverlay(): void {
+  if (landscapeDismissed || document.getElementById(LANDSCAPE_OVERLAY_ID) || !document.body) {
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.id = LANDSCAPE_OVERLAY_ID;
+  wrap.style.cssText =
+    "position:fixed;inset:0;z-index:2147483500;background:rgba(10,14,24,.82);display:flex;align-items:center;justify-content:center;padding:24px;font-family:sans-serif";
+  const box = document.createElement("div");
+  box.style.cssText =
+    "background:#fff;border-radius:20px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)";
+  const icon = document.createElement("div");
+  icon.textContent = "📱↻";
+  icon.style.cssText = "font-size:44px;margin-bottom:8px";
+  const title = document.createElement("div");
+  title.textContent = "가로로 크게 보자!";
+  title.style.cssText = "font-size:22px;font-weight:800;color:#17202a;margin-bottom:6px";
+  const text = document.createElement("div");
+  text.textContent = "버튼을 누르고 휴대폰을 옆으로 눕혀 줘.";
+  text.style.cssText = "font-size:16px;color:#444;margin-bottom:18px";
+  const go = document.createElement("button");
+  go.type = "button";
+  go.textContent = "가로로 크게 보기";
+  go.style.cssText =
+    "display:block;width:100%;padding:16px;border:0;border-radius:14px;background:#17674e;color:#fff;font-size:20px;font-weight:800;margin-bottom:10px;touch-action:manipulation";
+  const stay = document.createElement("button");
+  stay.type = "button";
+  stay.textContent = "그냥 세로로 할래";
+  stay.style.cssText =
+    "display:block;width:100%;padding:10px;border:0;background:none;color:#666;font-size:15px;text-decoration:underline;touch-action:manipulation";
+  go.addEventListener("click", async e => {
+    e.stopPropagation();
+    const ok = await goLandscape();
+    if (ok) {
+      hideLandscapeOverlay();
+    } else {
+      text.textContent = "휴대폰을 옆으로 눕혀 줘. 그래도 안 돌아가면 엄마 아빠에게 알려 줘!";
+    }
+  });
+  stay.addEventListener("click", e => {
+    e.stopPropagation();
+    landscapeDismissed = true;
+    hideLandscapeOverlay();
+  });
+  box.append(icon, title, text, go, stay);
+  wrap.append(box);
+  // 게임이 터치를 가로채지 않도록 안내 창 안의 입력은 여기서 멈춤
+  for (const type of ["pointerdown", "pointerup", "touchstart", "touchend", "keydown"]) {
+    wrap.addEventListener(type, e => e.stopPropagation());
+  }
+  document.body.append(wrap);
+}
+
+function checkLandscape(): void {
+  if (isPortrait()) {
+    showLandscapeOverlay();
+  } else {
+    hideLandscapeOverlay();
+  }
 }
 
 /**
- * 설치한 앱으로 열면 게임 화면을 가로로 돌립니다. 휴대폰의 "자동 회전"이 꺼져 있어도 가로가 됩니다.
- * 바로 돌리지 못하는 휴대폰이면 첫 터치 때 전체 화면으로 바꾼 뒤 다시 돌려 봅니다. 그래도 안 되면 그냥 둡니다(방향은 자유).
+ * 휴대폰에서 게임 화면을 가로로 크게 보여 줍니다 (부모님 요청).
+ * 먼저 조용히 가로 고정을 시도하고(설치한 앱은 되는 휴대폰도 있음), 그래도 세로면 "가로로 크게 보기" 버튼을 띄웁니다.
+ * 그 버튼을 누르는 순간 전체 화면 + 가로 고정을 해서, 휴대폰 "자동 회전"이 꺼져 있어도 가로가 됩니다.
  */
 export function lockLandscape(): void {
-  if (!QUIZ_RULES.landscapeInApp || !isInstalledApp()) {
+  if (!QUIZ_RULES.landscapeInApp || !isTouchPhone()) {
     return;
   }
   const orientation = screen.orientation as LockableOrientation | undefined;
-  if (!orientation?.lock) {
-    return;
-  }
-  const lock = () => orientation.lock!("landscape");
-  lock().catch(() => {
-    const retry = () => {
-      window.removeEventListener("pointerup", retry, true);
-      const full = document.fullscreenElement
-        ? Promise.resolve()
-        : (document.documentElement.requestFullscreen?.({ navigationUI: "hide" }) ?? Promise.reject());
-      full.then(lock).catch(() => {
-        /* 이 휴대폰은 방향을 못 바꿈: 손으로 돌리면 됨 */
-      });
-    };
-    window.addEventListener("pointerup", retry, true);
+  orientation?.lock?.("landscape").catch(() => {
+    /* 전체 화면이 아니면 거절하는 휴대폰이 많음 → 안내 버튼으로 */
   });
+  const start = () => {
+    // 가로 고정이 되면 잠깐 뒤 화면 크기가 바뀌므로 조금 기다렸다 확인
+    setTimeout(checkLandscape, 600);
+    window.addEventListener("resize", () => setTimeout(checkLandscape, 300));
+    document.addEventListener("fullscreenchange", () => setTimeout(checkLandscape, 300));
+  };
+  if (document.body) {
+    start();
+  } else {
+    document.addEventListener("DOMContentLoaded", start);
+  }
 }
 
 // ---- 일일미션 사탕 (SPEC 11번) ----

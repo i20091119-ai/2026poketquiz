@@ -37,8 +37,8 @@ export const QUIZ_RULES = {
    */
   reviveTickets: true,
   /**
-   * 부모님 요청: 홈 화면에 설치한 앱으로 열면 게임 화면을 가로로 돌려 크게 보여 줌 (quiz-link.ts lockLandscape).
-   * 앱 정보 파일은 "any"(방향 자유), 퀴즈 화면은 components/pwa.tsx 가 세로로 고정.
+   * 부모님 요청: 휴대폰에서 게임 화면을 가로로 크게 (quiz-link.ts lockLandscape).
+   * 세로면 "가로로 크게 보기" 안내를 띄우고, 누르면 전체 화면 + 가로 고정. 퀴즈 화면은 components/pwa.tsx 가 세로로 고정.
    */
   landscapeInApp: true,
   /** 원본 안내 정리(부모님 결정): 제목 화면의 "접속자 수·로그인 계정" 표시와 메뉴의 커뮤니티(디스코드 등) 항목을 숨김. 안내 문장은 battle-extras/locales-ko 로 바꿈 */
