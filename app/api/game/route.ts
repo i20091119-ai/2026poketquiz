@@ -1,7 +1,7 @@
 import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, json, latestDefeat, mutateState } from '@/lib/server/store';
+import { activeBank, json, latestDefeat, loadStrongOverrides, mutateState } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ async function battleInfo(player: Player, state: GameState) {
 
 export async function GET(request: Request) {
   try {
-    const [bank, player] = await Promise.all([activeBank(), playerOf(request)]);
+    const [bank, player, strong] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides()]);
     const { today } = player;
     const { state } = await mutateState(state => {
       const a = ensureDaily(state, bank, today, secureRandom);
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       return { result: null, changed: a || b };
     }, player.id);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
-    return json({ view: childView(state, bank, today), sim: player.sim, battleGate: await battleInfo(player, state) });
+    return json({ view: childView(state, bank, today), strong, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     console.error('게임 기록 읽기 실패', error);
     return json({ error: '게임 기록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' }, 503);
@@ -43,14 +43,15 @@ export async function POST(request: Request) {
     try { action = JSON.parse(body); } catch { return json({ error: '요청을 읽지 못했어요.' }, 400); }
     if (!action || typeof action !== 'object') return json({ error: '요청을 확인해 주세요.' }, 400);
 
-    const [bank, player] = await Promise.all([activeBank(), playerOf(request)]);
+    // strong: 보호자가 바꾼 센 포켓몬·도전 속성 (진화 조건 계산 전에 맞춤)
+    const [bank, player, strong] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides()]);
     const { today } = player;
     const { state, result } = await mutateState(state => {
       const result = applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom });
       syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
       return { result, changed: true };
     }, player.id);
-    return json({ view: childView(state, bank, today), result, sim: player.sim, battleGate: await battleInfo(player, state) });
+    return json({ view: childView(state, bank, today), result, strong, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     if (error instanceof GameError) return json({ error: error.message }, 400);
     console.error('게임 요청 실패', error);

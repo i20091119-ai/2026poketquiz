@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
 import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
@@ -347,6 +347,23 @@ test('센 포켓몬: 1.2배쯤 더 들고, 절반쯤은 이야기에 맞는 도�
   const strongFinals = SPECIES.filter(s => isStrong(s.id) && evolutionsOf(s.id).length === 0 && s.tier >= 2);
   const share = Object.keys(THIRD_TYPE).length / strongFinals.length;
   assert.ok(share >= 0.4 && share <= 0.6, `도전 속성이 있는 센 포켓몬 비율 ${share.toFixed(2)}`);
+});
+
+test('속성 변경: 보호자가 바꾼 센 포켓몬·도전 속성이 진화 조건에 반영되고, 3과목이 안 되는 속성은 무시', () => {
+  try {
+    setStrongOverrides({ strong: { 130: false, 20: true }, third: { 6: 'psychic', 448: '', 3: 'fire' } });
+    assert.deepEqual(evolutionRequirement(130), [{ type: 'water', amount: 20 }, { type: 'flying', amount: 10 }]); // 갸라도스 → 보통
+    assert.deepEqual(evolutionRequirement(20), [{ type: 'normal', amount: 36 }]); // 레트라 → 센 포켓몬
+    assert.deepEqual(evolutionRequirement(6).map(r => r.type), ['fire', 'flying', 'psychic']); // 리자몽 도전 속성 바꿈
+    assert.deepEqual(evolutionRequirement(448).map(r => r.type), ['fighting', 'steel']); // 루카리오 도전 속성 없앰
+    assert.deepEqual(evolutionRequirement(3).map(r => r.type), ['grass', 'poison', 'fire']); // 불꽃(한자)은 3과목이 되므로 가능
+    setStrongOverrides({ strong: {}, third: { 3: 'bug' } }); // 벌레 = 풀과 같은 상식 → 3과목이 안 돼서 무시
+    assert.deepEqual(evolutionRequirement(3).map(r => r.type), ['grass', 'poison']);
+    assert.ok(!isValidThird(3, 'bug') && isValidThird(3, 'fire'));
+  } finally {
+    setStrongOverrides(null);
+  }
+  assert.deepEqual(evolutionRequirement(6).map(r => r.type), ['fire', 'flying', 'dark']);
 });
 
 test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성이 모두 오른다', () => {

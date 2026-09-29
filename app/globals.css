@@ -386,7 +386,7 @@ footer a { color: #607e54; display: inline-flex; align-items: center; gap: 4px; 
 .partner-tag { position: absolute; top: 16px; right: 16px; border-radius: 8px; background: #e5f2da; color: #47713a; font-size: 12px; padding: 2px 8px; font-weight: 700; }
 .pokemon-card.is-shiny { border: 2px solid #e6c45a; background: linear-gradient(180deg, #fffdf3, #fff); }
 .shiny-tag { position: absolute; top: 16px; right: 16px; border-radius: 8px; background: #fff3c4; color: #8a6a12; font-size: 12px; padding: 2px 8px; font-weight: 700; }
-.strong-tag { margin-left: 6px; border-radius: 8px; background: #fde7e7; color: #a33; font-size: 11px; padding: 1px 6px; font-weight: 700; font-style: normal; white-space: nowrap; }
+.strong-tag { margin-left: 4px; font-size: 16px; font-style: normal; }
 .strong-note { margin: 4px 0 6px; font-size: 12px; color: #a33; }
 .shiny-note { font-size: 13px; margin: 0; }
 .shiny-count { margin: 6px 0 0; font-size: 14px; color: #8a6a12; }
@@ -646,3 +646,18 @@ select { width: auto; min-width: 120px; }
 .revive-card p { margin: 4px 0 0; font-size: 14px; color: #6b4a52; }
 .revive-card .primary.small { background: #e5484d; box-shadow: 0 3px 0 #b3341f; }
 .ticket-icon { font-size: 64px; line-height: 90px; height: 90px; }
+
+/* 보호자 공간: 속성 변경 (센 포켓몬) */
+.strong-editor .strong-tools { display: grid; gap: 8px; }
+.strong-editor .strong-tools input { width: 100%; padding: 10px 12px; border: 1px solid #cfd8d2; border-radius: 10px; font-size: 15px; }
+.strong-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.strong-list li { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; border: 1px solid #e3e8e4; border-radius: 12px; padding: 8px 10px; background: #fff; }
+.strong-list li.changed { border-color: #f0b35a; background: #fffaf0; }
+.strong-list .strong-img { width: 56px; height: 56px; object-fit: contain; }
+.strong-info { display: grid; gap: 4px; min-width: 0; }
+.strong-info .plus { margin: 0 4px; font-weight: 800; color: #a33; }
+.strong-cost { color: #4b5563; font-size: 12px; }
+.strong-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+.strong-controls select { padding: 6px 8px; border-radius: 8px; border: 1px solid #cfd8d2; font-size: 14px; }
+.strong-controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.strong-controls label input { width: 18px; height: 18px; }

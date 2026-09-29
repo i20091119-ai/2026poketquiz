@@ -18,11 +18,12 @@ import { type Subject } from '@/lib/game-config';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { versionLabel } from '@/lib/version';
+import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 type Quiz = { mode: 'daily' | 'explore'; subject?: Subject; question: PublicQuestion };
 /** 보호자 시뮬레이션 중일 때 서버가 알려 주는 날짜 정보 (아니면 null) */
 type Sim = { today: string; dayOffset: number; clock?: string | null } | null;
-type GameResponse = { view: ChildView; sim?: Sim; battleGate?: BattleGateView };
+type GameResponse = { view: ChildView; strong?: StrongOverrides; sim?: Sim; battleGate?: BattleGateView };
 /** 화면이 열려 있을 때 새 선물·쉬는 시간을 알아채는 간격 */
 const POLL_MS = 60_000;
 
@@ -47,7 +48,7 @@ export default function Game() {
   /** 이번에 이미 팝업으로 보여 준 선물 (닫으면 다시 뜨지 않고, 앱을 다시 열면 다시 알려 줌) */
   const shownGifts = useRef(new Set<string>());
 
-  const apply = useCallback((data: GameResponse) => { setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
+  const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
     getJson<GameResponse>('/api/game', signal).then(
       data => { apply(data); setError(''); return data.view; },

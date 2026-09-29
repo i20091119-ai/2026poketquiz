@@ -103,7 +103,7 @@ function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
             <div className="evolution" key={target}>
               <div className="evolution-head">
                 <PokemonImage id={target} className="evolution-img" />
-                <span>→ <b>{species(target).name}</b>{isStrong(target) && <em className="strong-tag" title="센 포켓몬은 스탯이 더 많이 필요해요">⭐ 센 포켓몬</em>}</span>
+                <span>→ <b>{species(target).name}</b>{isStrong(target) && <em className="strong-tag" title="센 포켓몬은 스탯이 더 많이 필요해요" aria-label="센 포켓몬">💥</em>}</span>
               </div>
               <div className="requirements">
                 {req.map(r => (
