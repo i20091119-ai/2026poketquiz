@@ -558,6 +558,45 @@ export function showExitButton(): void {
   }
 }
 
+// ---- 가로 화면 (홈 화면 앱) ----
+type LockableOrientation = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+
+/** 홈 화면에 설치한 앱(주소창 없는 창)으로 열려 있는지 */
+function isInstalledApp(): boolean {
+  return (
+    window.matchMedia?.("(display-mode: standalone)").matches
+    || window.matchMedia?.("(display-mode: fullscreen)").matches
+    || (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+/**
+ * 설치한 앱으로 열면 게임 화면을 가로로 돌립니다. 휴대폰의 "자동 회전"이 꺼져 있어도 가로가 됩니다.
+ * 바로 돌리지 못하는 휴대폰이면 첫 터치 때 전체 화면으로 바꾼 뒤 다시 돌려 봅니다. 그래도 안 되면 그냥 둡니다(방향은 자유).
+ */
+export function lockLandscape(): void {
+  if (!QUIZ_RULES.landscapeInApp || !isInstalledApp()) {
+    return;
+  }
+  const orientation = screen.orientation as LockableOrientation | undefined;
+  if (!orientation?.lock) {
+    return;
+  }
+  const lock = () => orientation.lock!("landscape");
+  lock().catch(() => {
+    const retry = () => {
+      window.removeEventListener("pointerup", retry, true);
+      const full = document.fullscreenElement
+        ? Promise.resolve()
+        : (document.documentElement.requestFullscreen?.({ navigationUI: "hide" }) ?? Promise.reject());
+      full.then(lock).catch(() => {
+        /* 이 휴대폰은 방향을 못 바꿈: 손으로 돌리면 됨 */
+      });
+    };
+    window.addEventListener("pointerup", retry, true);
+  });
+}
+
 // ---- 일일미션 사탕 (SPEC 11번) ----
 export const QUIZ_CANDY_URL = "/api/battle/candy";
 const APPLIED_KEY = "quizCandyApplied";
