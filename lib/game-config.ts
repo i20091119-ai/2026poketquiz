@@ -37,6 +37,17 @@ export const eulReul = (word: string) => {
   return word + (code >= 0 && code <= 11171 && code % 28 ? '을' : '를');
 };
 
+/** 받침에 따라 은/는 (예: 국어는, 수학은) */
+export const eunNeun = (word: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return word + (code >= 0 && code <= 11171 && code % 28 ? '은' : '는');
+};
+/** 받침에 따라 이/가 (예: 피카츄가, 이상해꽃이) */
+export const iGa = (word: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return word + (code >= 0 && code <= 11171 && code % 28 ? '이' : '가');
+};
+
 export const SUBJECTS = ['국어', '수학', '영어', '한자', '역사', '상식'] as const;
 export type Subject = typeof SUBJECTS[number];
 

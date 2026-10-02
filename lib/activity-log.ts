@@ -33,6 +33,7 @@ export const LOG_KINDS = {
   reset: '아이 게임 처음부터 다시 하기',
   revive: '부활권 사용',
   day: '하루 활동 요약',
+  limited: '기간 한정 이벤트(레인보우) 진행',
 } as const;
 
 export type Before = {
@@ -42,6 +43,7 @@ export type Before = {
   tries: number;
   candySent: number;
   events: string;
+  limited: string;
   ballKind?: string;
 };
 
@@ -55,6 +57,7 @@ export function beforeAction(state: GameState, action: Action, today: string): B
     tries: action.type === 'answer' && state.daily?.date === today ? state.daily.tries?.[action.questionId] ?? 0 : 0,
     candySent: state.candy?.sent ?? 0,
     events: JSON.stringify(state.events ?? null),
+    limited: JSON.stringify(state.limited ?? null),
     ballKind: action.type === 'openBall' ? state.balls.find(b => b.id === action.ballId)?.kind : undefined,
   };
 }
@@ -64,7 +67,10 @@ const statLabel = (t: string) => TYPE_INFO[t as TypeKey]?.label ?? t;
 /** 도전 이벤트 진도가 바뀌었는지 (아이 화면을 열 때도 부름) */
 export function eventsChange(before: Before, state: GameState): LogEntry[] {
   const now = JSON.stringify(state.events ?? null);
-  return now === before.events ? [] : [{ kind: 'event', data: { events: state.events ?? null } }];
+  const out: LogEntry[] = now === before.events ? [] : [{ kind: 'event', data: { events: state.events ?? null } }];
+  // 기간 한정 이벤트: 조각·연속 수·이로치 변신·정산이 바뀌면 그때의 모습을 남김
+  if (JSON.stringify(state.limited ?? null) !== before.limited) out.push({ kind: 'limited', data: { limited: state.limited ?? null } });
+  return out;
 }
 
 /** 행동 뒤에 부릅니다. 이 행동으로 남길 기록 목록을 돌려줍니다. */

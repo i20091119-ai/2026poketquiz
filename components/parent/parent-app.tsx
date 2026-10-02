@@ -7,7 +7,7 @@ import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
 import { ASSETS } from '@/lib/assets';
 import type { RestRule } from '@/lib/battle-rest';
-import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
+import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECT_INFO, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
 import type { ActivityDay, AreaReport, PublicGift, Question } from '@/lib/game-engine';
 import { defaultStrong, defaultThird, evolutionRequirement, isStrong, setStrongOverrides, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
 import { PokemonImage } from '@/components/game/common';
@@ -38,7 +38,16 @@ type Overview = {
     allClear: { accepted: boolean; acceptedAt: string | null; mastered: Subject[]; completedAt: string | null };
     streak: { accepted: boolean; acceptedAt: string | null; count: number; best: number; completedAt: string | null; boxOpened: boolean };
     reviveTickets: number;
+    /** 기간 한정 이벤트 (레인보우 등): 조각·과목별 연속 수·완료·변신·정산 */
+    limited: {
+      id: string; title: string; start: string; end: string; phase: 'before' | 'active' | 'ended';
+      seen: string | null; acceptedAt: string | null; goal: number; pieces: Subject[]; streak: Record<Subject, number>;
+      completedAt: string | null; changed: { species: number; name: string; at: string } | null;
+      ended: { date: string; pieces: number; candy: number } | null; shinyMultiplier: number; partial: { minPieces: number; candy: number };
+    }[];
   };
+  /** 시뮬레이션에서 고를 기간 한정 이벤트 */
+  limitedEvents: { id: string; title: string; start: string; end: string; reminderAt: string; after: string }[];
   /** 보호자 선물 */
   gifts: { list: PublicGift[]; counts: GiftLimits; limits: GiftLimits; newReplies: number; today: string };
   /** 최근 28일 날짜별 활동 (오래된 날부터) */
@@ -362,7 +371,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       {low === 'update' && <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />}
 
       {low === 'dev' && <>
-        <DevMenu part="sim" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />
+        <DevMenu part="sim" sim={overview.sim} shinyAll={overview.shiny.simAll} limitedEvents={overview.limitedEvents} busy={busy} call={call} reload={reload} />
         <ExportSection busy={busy} call={call} />
         {/* 이 칸은 항상 개발 탭의 맨 아래에 둡니다. 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
         <section className="panel parent-section danger-zone">
@@ -406,7 +415,28 @@ function EventsSection({ events }: { events: Overview['events'] }) {
         </tbody>
       </table>
       <p className="muted">남은 부활권 {events.reviveTickets}장. 아이가 이벤트 탭에서 &lsquo;도전할래!&rsquo;를 눌러야 시작돼요.</p>
+      {events.limited.map(l => <LimitedRow key={l.id} l={l} />)}
     </section>
+  );
+}
+
+/** 기간 한정 이벤트 한 줄: 기간·상태, 조각, 과목별 연속 수, 완료·이로치 변신, 끝난 뒤 정산 */
+function LimitedRow({ l }: { l: Overview['events']['limited'][number] }) {
+  const status = l.phase === 'before' ? '시작 전 (아이 화면에는 안 보여요)' : l.phase === 'ended' ? '끝남' : '진행 중';
+  return (
+    <div className="limited-report">
+      <h3>🌈 {l.title} <small className="muted">기간 한정 · {l.start} ~ {l.end} · {status}</small></h3>
+      <p className="muted">탐험에서 과목마다 {l.goal}문제 연속 정답이면 그 과목 조각. 6개 = 포켓몬 하나를 이로치로, 끝날 때 {l.partial.minPieces}개 이상이면 사탕 {l.partial.candy}개. 기간 동안 볼 이로치 확률 {l.shinyMultiplier}배.</p>
+      <table className="battle-log">
+        <tbody>
+          <tr><td>참여</td><td>{l.acceptedAt ? `${l.acceptedAt} 도전 시작` : l.seen ? `${l.seen} 팝업 봄 · 아직 시작 안 함` : '아직'}</td></tr>
+          <tr><td>조각</td><td>{l.pieces.length} / {SUBJECTS.length}{l.pieces.length ? ` (${l.pieces.join(', ')})` : ''}</td></tr>
+          <tr><td>과목별 연속</td><td>{SUBJECTS.map(s => `${s} ${l.streak[s] ?? 0}/${l.goal}`).join(' · ')}</td></tr>
+          <tr><td>완료</td><td>{l.completedAt ? `${l.completedAt} 무지개 완성` : '-'}{l.changed ? ` · ✨ ${l.changed.name}(으)로 변신` : l.completedAt ? ' · 아직 포켓몬 안 고름' : ''}</td></tr>
+          {l.ended && <tr><td>정산</td><td>{l.ended.date} · 조각 {l.ended.pieces}개 · {l.ended.candy ? `사탕 ${l.ended.candy}개 보냄` : '사탕 없음'}</td></tr>}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -602,6 +632,9 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
 /** 과목마다 영역별 정답률·틀린 수·약점 표시, 반복 오답 문제 */
 function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[] }[] }) {
   const weakAreas = report.flatMap(r => r.areas.filter(a => a.weak).map(a => `${r.subject} · ${a.area}`));
+  // 처음엔 약점이 있는 과목, 없으면 첫 과목
+  const [pick, setPick] = useState<Subject | null>(null);
+  const shown = pick ?? report.find(r => r.areas.some(a => a.weak))?.subject ?? report[0]?.subject;
   const rate = (a: AreaReport) => (a.correct + a.wrong ? Math.round((a.correct / (a.correct + a.wrong)) * 100) : null);
   const level = (a: AreaReport) => a.weak ? 'weak' : rate(a) === null ? 'none' : rate(a)! >= 80 ? 'good' : 'mid';
   return (
@@ -613,10 +646,22 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
       {weakAreas.length > 0
         ? <p className="focus-note">🎯 지금 집중 중인 영역: <b>{weakAreas.join(', ')}</b> — 일일미션에 이 영역 문제가 더 자주 나와요. 최근 5번 중 4번 이상 맞히면 보통으로 돌아가요.</p>
         : <p className="muted">지금 약점으로 잡힌 영역은 없어요. (문제에 &lsquo;영역&rsquo;이 적혀 있어야 나눠 보여요. 영역이 없는 문제는 &lsquo;기타&rsquo;로 묶여요.)</p>}
-      <div className="area-grid">
-        {report.map(r => (
+      {/* 과목별 탭: 한 번에 한 과목의 영역만 (약점 영역이 있는 과목에는 빨간 점) */}
+      <div className="area-tabs" role="tablist">
+        {report.map(r => {
+          const solvedN = r.areas.reduce((n, a) => n + a.correct + a.wrong, 0);
+          return (
+            <button key={r.subject} role="tab" aria-selected={shown === r.subject} className={'area-tab' + (shown === r.subject ? ' on' : '')}
+              style={{ ['--c' as string]: SUBJECT_INFO[r.subject].color }} onClick={() => setPick(r.subject)}>
+              {r.subject}{r.areas.some(a => a.weak) && <i className="weak-dot" aria-label="약점 있음" />}
+              <small>{solvedN ? `${solvedN}번` : '-'}</small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="area-grid single">
+        {report.filter(r => r.subject === shown).map(r => (
           <div className="area-subject" key={r.subject}>
-            <b>{r.subject}</b>
             {r.areas.length === 0 && <span className="muted">문제 없음</span>}
             {r.areas.map(a => (
               <div className={'area-row ' + level(a)} key={a.area} title={`맞힘 ${a.correct} · 틀림 ${a.wrong} · 최근 ${a.recent.split('').map(c => c === 'o' ? 'O' : 'X').join('') || '-'}`}>
@@ -646,7 +691,7 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
 const dayLabel = (date: string) => { const [, m, d] = date.split('-'); return `${Number(m)}월 ${Number(d)}일`; };
 
 /** 버전 표시와 시뮬레이션(아이 기록을 건드리지 않는 시험용 기록으로 앱 전체를 해 보기) */
-function DevMenu({ part, sim, shinyAll, busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; shinyAll: boolean; busy: boolean; call: Call; reload: () => Promise<void> }) {
+function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; shinyAll: boolean; limitedEvents?: Overview['limitedEvents']; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const childScreen = '/';
   const start = async (source: 'copy' | 'empty') => {
     if (source === 'copy' && !window.confirm('지금 아이 기록을 시험용으로 복사해서 시뮬레이션을 시작할까요? 아이의 진짜 기록은 바뀌지 않아요.')) return;
@@ -702,6 +747,22 @@ function DevMenu({ part, sim, shinyAll, busy, call, reload }: { part: 'version' 
           <button className={shinyAll ? 'primary small' : 'secondary small'} disabled={busy} onClick={async () => { if (await call({ action: 'simShinyAll', on: !shinyAll })) await reload(); }}>{shinyAll ? '✨ 이로치 100% 켜짐 (누르면 끔)' : '볼 열 때 이로치 100%로 켜기'}</button>
         </div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
+        {limitedEvents.map(l => (
+          <div key={l.id} className="sim-limited">
+            <b>🌈 {l.title} 시험 ({l.start} ~ {l.end})</b>
+            <div className="button-row">
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simDate', date: l.start, clock: '10:00' })) await reload(); }}>첫날(토) 10:00으로</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simDate', date: l.end, clock: l.reminderAt })) await reload(); }}>마지막 날(일) {l.reminderAt}으로</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simDate', date: l.after, clock: '10:00' })) await reload(); }}>끝난 다음 날로</button>
+            </div>
+            <div className="button-row">
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'streak9' })) await reload(); }}>못 모은 과목 연속 9로</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'pieces5' })) await reload(); }}>조각 5개로</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (window.confirm('시험용 기록의 이 이벤트 기록을 지울까요? (진짜 기록은 그대로)') && await call({ action: 'simLimited', id: l.id, op: 'reset' })) await reload(); }}>이벤트 기록 지우기</button>
+            </div>
+            <p className="muted">순서 예: ‘첫날로’ → 아이 화면 새로고침(팝업 3장) → 탐험에서 조각 얻기·틀려서 다시 세기 → ‘조각 5개로’ + ‘연속 9로’ → 1문제 맞혀 무지개 완성·변신 연출 → ‘마지막 날 {l.reminderAt}으로’(저녁 안내, 조각을 덜 모았을 때만) → ‘끝난 다음 날로’(결과·사탕). 날짜·시각은 시험용 기록에만 적용돼요.</p>
+          </div>
+        ))}
         <p className="muted">도전 이벤트 확인용이에요. &lsquo;연속 기록 9일로 맞추기&rsquo; 뒤 오늘 일일미션을 다 풀면 10일 연속이 돼요(이벤트를 먼저 수락해야 해요). 끊김은 &lsquo;다음 날로 넘기기&rsquo;를 두 번 누르면 확인돼요.</p>
         <p className="muted">‘다음 날로 넘기기’를 누른 뒤 아이 화면을 새로고침하면 일일미션과 포켓로그 새 게임 횟수가 새 날 기준으로 다시 시작해요. 아이 화면 맨 위의 보라색 띠를 누르면 여기로 돌아와요.</p>
       </> : <>

@@ -109,6 +109,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
         답장: g.reply ? { 시각: kst(g.reply.at), 스티커: g.reply.sticker, 글: g.reply.text } : null,
       })),
       이벤트: { 지금: state.events ?? null, 부활권: state.reviveTickets ?? 0, 진행기록: of('event').map(plain) },
+      기간한정이벤트: { 지금: state.limited ?? null, 진행기록: of('limited').map(plain) },
     },
     ...(beforeReset.length ? { 처음부터다시하기_이전기록: { 설명: '아이 게임을 처음부터 다시 하기 전에 쌓인 활동 기록(원본 그대로)', 기록: beforeReset.map(plain) } } : {}),
   };

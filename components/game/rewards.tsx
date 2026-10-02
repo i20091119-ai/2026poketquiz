@@ -103,7 +103,7 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
 }
 
 /** 이로치가 나왔을 때 사방으로 퍼지는 반짝이 (CSS 애니메이션) */
-function ShinyBurst() {
+export function ShinyBurst() {
   return (
     <div className="shiny-burst" aria-hidden>
       {Array.from({ length: 12 }, (_, i) => (
