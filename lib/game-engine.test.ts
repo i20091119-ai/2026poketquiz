@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
@@ -793,4 +793,21 @@ test('아이 기록 내보내기: 판·하루 활동·보유 포켓몬이 들어
   
   assert.ok(file.기록시작.항목별.every(i => i.since === '2026-09-26'));
   assert.doesNotThrow(() => JSON.stringify(file));
+});
+
+test('영역별 성적: 영역 기능 전에 푼 문제도 지난 기록으로 한 번 채워진다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  const kor = bank.questions.filter(q => q.subject === '국어');
+  state.banks[bank.id] = { solved: kor.slice(0, 3).map(q => q.id), wrong: { [kor[0].id]: 2, [kor[4].id]: 1 }, review: {}, subjectRewards: [], masterClaimed: false };
+  const report = areaReport(state, bank).find(r => r.subject === '국어')!.areas;
+  const correct = report.reduce((n, a) => n + a.correct, 0);
+  const wrong = report.reduce((n, a) => n + a.wrong, 0);
+  assert.equal(correct, 3);
+  assert.equal(wrong, 3);
+  assert.ok(report.every(a => !a.weak)); // 언제 틀렸는지 몰라 약점으로는 잡지 않음
+  // 한 번만: 이후 풀이는 그대로 쌓이고 다시 채우지 않음
+  const before = JSON.stringify(state.banks[bank.id].areas);
+  assert.equal(seedAreaStats(state, bank), false);
+  assert.equal(JSON.stringify(state.banks[bank.id].areas), before);
 });

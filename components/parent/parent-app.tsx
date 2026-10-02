@@ -157,6 +157,8 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 const MAIN_TABS = [
   { key: 'report', label: '📊 학습 현황' },
   { key: 'gift', label: '🎁 선물' },
+  { key: 'events', label: '🏆 이벤트 기록' },
+  { key: 'battlelog', label: '⚔️ 포켓로그 기록' },
   { key: 'banks', label: '📚 문제은행' },
 ] as const;
 const LOWER_TABS = [
@@ -220,7 +222,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       </section>
 
       {/* 위 탭 묶음 */}
-      <div className="parent-tabs" role="tablist">
+      <div className="parent-tabs main" role="tablist">
         {MAIN_TABS.map(t => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} className={'parent-tab' + (tab === t.key ? ' on' : '')} onClick={() => go(t.key)}>
             {t.label}{t.key === 'gift' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}
@@ -243,6 +245,11 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <AreaBoard report={active.areas} />
           </section>
         ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
+      </>}
+
+      {tab === 'events' && <EventsSection events={overview.events} />}
+
+      {tab === 'battlelog' && <>
         <section className="panel parent-section">
           <h2>포켓로그 기록</h2>
           <p>아이가 포켓로그(전투 게임)를 날짜별로 어디까지, 얼마나 했는지예요. 게임이 1분마다 알려 주는 값이라 1~2분 차이는 날 수 있어요. 오늘 새 게임 {overview.battle.leftToday}번 남음{overview.battle.tickets ? ` · 배틀 추가권 ${overview.battle.tickets}장` : ''}.</p>
@@ -263,7 +270,6 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
                 </tbody>
               </table>}
         </section>
-        <EventsSection events={overview.events} />
       </>}
 
       {tab === 'banks' && <>
