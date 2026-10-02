@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
 import { ASSETS } from '@/lib/assets';
 import { evolutionRequirement, evolutionsOf, isStrong, shinyName, species, thirdTypeOf, TOTAL_SPECIES } from '@/lib/pokedex';
-import { megaByKey, megaImages, megaLabel, TOTAL_MEGAS, type MegaForm } from '@/lib/megas';
+import { megaByKey, megaImages, megaLabel, MEGA_EMOJI, TOTAL_MEGAS, type MegaForm } from '@/lib/megas';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 import { rootOf } from '@/lib/pokedex';
 
@@ -13,7 +13,7 @@ type DexKind = 'basic' | 'shiny' | 'mega';
 const DEX_TABS: { key: DexKind; label: string }[] = [
   { key: 'basic', label: '기본 도감' },
   { key: 'shiny', label: '✨ 이로치 도감' },
-  { key: 'mega', label: '메가 도감' },
+  { key: 'mega', label: `${MEGA_EMOJI} 메가 도감` },
 ];
 
 /** 포켓몬 도감: [기본 도감 | 이로치 도감 | 메가 도감] 세 개의 작은 탭 */
@@ -116,7 +116,7 @@ function MegaDex({ view }: { view: ChildView }) {
       <section className="panel dex-summary">
         <div>
           <span className="pill">MEGA</span>
-          <h2>메가 도감 {got.length} / {TOTAL_MEGAS}</h2>
+          <h2>{MEGA_EMOJI} 메가 도감 {got.length} / {TOTAL_MEGAS}</h2>
           <Progress value={(got.length / TOTAL_MEGAS) * 100} />
         </div>
       </section>
