@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACTIVITY_LOG_DAYS, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
+import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
+import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
+import { readFileSync } from 'node:fs';
 import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -113,8 +115,11 @@ test('이미 가진 포켓몬이 또 나오면 스탯 보너스', () => {
     state.balls.push({ id: 'b' + i, kind: 'poke' });
     applyAction(state, { type: 'openBall', ballId: 'b' + i }, ctx(null, random));
   }
-  const species = state.owned.map(p => p.species);
-  assert.equal(new Set(species).size, species.length);
+  // 기본 모습끼리, 이로치끼리는 겹치지 않음 (이로치는 기본 모습과 따로 한 마리)
+  for (const shiny of [false, true]) {
+    const species = state.owned.filter(p => !!p.shiny === shiny).map(p => p.species);
+    assert.equal(new Set(species).size, species.length);
+  }
 });
 
 test('부모가 지운 문제는 오늘의 미션에서 빠진다', () => {
@@ -366,6 +371,74 @@ test('속성 변경: 보호자가 바꾼 센 포켓몬·도전 속성이 진화 
   assert.deepEqual(evolutionRequirement(6).map(r => r.type), ['fire', 'flying', 'dark']);
 });
 
+test('이로치: 볼에서 확률로 나오고, 이미 가진 포켓몬이어도 이로치는 새로 얻고, 진화하면 이로치 도감에 추가', () => {
+  const bank = makeBank();
+  const state = started(bank); // 나오하
+  const open = (kind: 'poke' | 'shiny', chance: number, random: () => number) => {
+    state.balls.push({ id: 'bx' + state.balls.length, kind });
+    const id = state.balls[state.balls.length - 1].id;
+    return applyAction(state, { type: 'openBall', ballId: id }, { ...ctx(bank), random, shinyChance: { poke: chance } }) as { caught: number; shiny: boolean; duplicate: boolean; message: string };
+  };
+  // 확률 0%면 이로치 없음
+  assert.equal(open('poke', 0, () => 0.5).shiny, false);
+  // 확률 100%면 항상 이로치: 새로 얻고 이로치 도감에 들어감, 기본 도감에는 이로치 칸이 따로 섞이지 않음
+  const r = open('poke', 100, () => 0.5);
+  assert.equal(r.shiny, true);
+  assert.ok(state.owned.some(p => p.shiny && p.species === r.caught));
+  assert.ok(state.shiny!.includes(r.caught));
+  assert.match(r.message, /이로치다/);
+  // 이미 기본 모습을 가진 포켓몬이 이로치로 나와도 새로 얻음(스탯 보너스 아님)
+  const before = { ...state.stats };
+  const starterShiny = open('shiny', 0, () => 0); // 이로치 볼: 가진 포켓몬의 첫 모습 → 이로치 확정 (나오하 계열은 아직 이로치 없음)
+  assert.equal(starterShiny.shiny, true);
+  assert.equal(starterShiny.caught, 906);
+  assert.equal(starterShiny.duplicate, false);
+  assert.deepEqual(state.stats, before);
+  assert.equal(state.owned.filter(p => p.species === 906).length, 2); // 기본 + 이로치 각각 한 마리
+  // 같은 이로치가 또 나오면 우정 보너스
+  const again = open('shiny', 0, () => 0);
+  assert.equal(again.duplicate, true);
+  // 이로치를 진화시키면 진화한 모습도 이로치 도감에 (기본 도감에는 안 들어감)
+  const shinyP = state.owned.find(p => p.shiny && p.species === 906)!;
+  state.stats.grass = 100;
+  applyAction(state, { type: 'evolve', uid: shinyP.uid, target: 907 }, ctx(bank));
+  assert.equal(shinyP.species, 907);
+  assert.ok(state.shiny!.includes(907) && state.shiny!.includes(906));
+  assert.ok(!state.dex.includes(907));
+});
+
+test('이로치 확률: 기본값(몬스터볼 2·슈퍼볼 4·하이퍼볼 7·마스터볼·럭셔리볼·희귀 볼 12)', () => {
+  assert.deepEqual(SHINY_CHANCE_DEFAULT, { poke: 2, great: 4, ultra: 7, master: 12, luxury: 12, rare: 12 });
+});
+
+test('이로치 볼: 보호자 큰 선물과 일일미션 상자에 들어 있고, 시뮬레이션 도우미가 이로치를 넣는다', () => {
+  assert.ok((GIFT_SIZES.large.options as readonly string[]).includes('shinyBall'));
+  assert.ok(DAILY_BOX_TABLE.some(r => r.item.kind === 'ball' && r.item.ball === 'shiny'));
+  const bank = makeBank();
+  const state = started(bank);
+  assert.equal(simGiveShinies(state, '2026-10-02'), 1);
+  assert.equal(simGiveShinies(state, '2026-10-02'), 0);
+  assert.ok(state.owned.some(p => p.shiny) && state.owned.some(p => !p.shiny));
+  const n = state.balls.length;
+  assert.equal(simGiveBalls(state), Object.keys(BALLS).length);
+  assert.equal(state.balls.length, n + Object.keys(BALLS).length);
+});
+
+test('메가 도감: 포켓로그의 메가 모습 96개, 키가 겹치지 않고 모두 도감에 있는 포켓몬이며 지금은 0마리', () => {
+  assert.equal(TOTAL_MEGAS, 96);
+  assert.equal(new Set(MEGAS.map(m => m.key)).size, 96);
+  for (const m of MEGAS) {
+    assert.ok(species(m.species), `${m.name}: 도감 번호`);
+    assert.ok(m.name.startsWith('메가'), m.name);
+    assert.ok(m.art > 10000, `${m.name}: PokeAPI 그림 번호`);
+    assert.ok(megaImages(m.art)[0].endsWith(`/mega/${m.art}.png`));
+  }
+  assert.equal(megaByKey('6-mega-x')?.name, '메가리자몽X');
+  assert.equal(megaByKey('978-mega-curly')?.name, '메가싸리용(젖힌 모습)');
+  const state = started(makeBank());
+  assert.deepEqual(childView(state, makeBank(), '2026-10-02').megas, []);
+});
+
 test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성이 모두 오른다', () => {
   const bank = makeBank();
   const state = started(bank); // 나오하(풀) — 다음 진화 나로테(풀 36)
@@ -599,7 +672,7 @@ test('보호자 선물: 한도 안에서 보내고, 아이가 열어 고른 것�
   assert.ok(r1.gift.opened);
   assert.throws(() => applyAction(state, { type: 'openGift', id: g1.id, choice: 'exp' }, at(today)), /이미 연/);
   // 크기에 없는 선택은 거부, 열매는 계열 필요
-  assert.throws(() => applyAction(state, { type: 'openGift', id: g2.id, choice: 'exp' }, at(today)), /둘 중 하나/);
+  assert.throws(() => applyAction(state, { type: 'openGift', id: g2.id, choice: 'exp' }, at(today)), /선물 중 하나/);
   const r2 = applyAction(state, { type: 'openGift', id: g2.id, choice: 'candy' }, at(today)) as { gift: { opened: { got: string } } };
   assert.match(r2.gift.opened.got, /사탕 3개/);
   assert.equal(state.candy?.pending.reduce((s, c) => s + c.amount, 0), GIFT_CANDY);
@@ -636,4 +709,12 @@ test('선물 열매는 고른 계열 열매가 가방에 들어가고, 몬스터
   assert.equal(r.ballIds.length, 1);
   assert.equal(state.balls[0].id, r.ballIds[0]);
   assert.equal(state.balls[0].kind, 'poke');
+});
+
+test('포켓로그의 이로치 색 이름 파일이 퀴즈 앱과 같고, 메가 이름에 이모지가 붙는다', () => {
+  const a = readFileSync(new URL('./data/shiny-colors.json', import.meta.url), 'utf8');
+  const b = readFileSync(new URL('../battle/src/data/quiz-shiny-colors.json', import.meta.url), 'utf8');
+  assert.equal(a, b);
+  assert.ok(megaLabel(MEGAS[0]).endsWith(MEGAS[0].name));
+  assert.notEqual(megaLabel(MEGAS[0]), MEGAS[0].name);
 });

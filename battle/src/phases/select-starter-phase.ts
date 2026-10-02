@@ -3,7 +3,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
-import { consumeNewBattleStart, quizStartingSpecies } from "#app/quiz-link";
+import { consumeNewBattleStart, hasQuizShinyStarter, quizStartingSpecies } from "#app/quiz-link";
 import { SpeciesFormChangeMoveLearnedTrigger } from "#data/form-change-triggers";
 import { Gender } from "#data/gender";
 import { ChallengeType } from "#enums/challenge-type";
@@ -64,7 +64,11 @@ export class SelectStarterPhase extends Phase {
         starter.speciesId = activeOverrides.STARTER_SPECIES_OVERRIDE;
       }
       // 퀴즈에서 진화시킨 포켓몬은 진화한 모습으로 출전 (부모님 결정). 종이 바뀌면 모습(form)은 기본으로.
-      const species = quizStartingSpecies(speciesDataRegistry.getStarter(starter.speciesId));
+      // 이로치도 같은 규칙: 퀴즈 이로치 도감에 있는 이로치만, 공식 이로치 색(1단계 색)으로. 퀴즈에서 진화시킨 이로치는 진화한 모습의 이로치로 출전.
+      const starterId = speciesDataRegistry.getStarter(starter.speciesId);
+      const shiny = !!starter.shiny && hasQuizShinyStarter(starterId);
+      const variant = shiny ? 0 : starter.variant;
+      const species = quizStartingSpecies(starterId, shiny);
       let starterFormIndex = species.speciesId === starter.speciesId ? starter.formIndex : 0;
       if (
         starter.speciesId in activeOverrides.STARTER_FORM_OVERRIDES
@@ -85,8 +89,8 @@ export class SelectStarterPhase extends Phase {
         starter.abilityIndex,
         starterFormIndex,
         starterGender,
-        starter.shiny,
-        starter.variant,
+        shiny,
+        variant,
         starter.ivs,
         starter.nature,
       );

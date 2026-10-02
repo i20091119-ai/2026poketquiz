@@ -18,6 +18,8 @@ export class StarterContainer extends Phaser.GameObjects.Container {
   public candyUpgradeIcon: Phaser.GameObjects.Image;
   public candyUpgradeOverlayIcon: Phaser.GameObjects.Image;
   public cost = 0;
+  /** 퀴즈 연동(SPEC.md 3번): 이 칸이 이로치 칸인지 (같은 스타터의 기본 칸과 따로 보여 줌) */
+  public shinyCell = false;
 
   constructor(speciesId: SpeciesId) {
     super(globalScene, 0, 0);

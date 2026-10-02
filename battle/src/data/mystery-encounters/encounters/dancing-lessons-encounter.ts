@@ -1,19 +1,18 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
-import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { EncounterBattleAnim } from "#data/battle-anims";
 import { modifierTypes } from "#data/data-lists";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
 import { BiomeId } from "#enums/biome-id";
 import { EncounterAnim } from "#enums/encounter-anims";
+import { ModifierTier } from "#enums/modifier-tier";
 import { MoveId } from "#enums/move-id";
 import { MoveUseMode } from "#enums/move-use-mode";
 import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
 import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { PokeballType } from "#enums/pokeball";
 import { SpeciesId } from "#enums/species-id";
 import { Stat } from "#enums/stat";
 import { TrainerSlot } from "#enums/trainer-slot";
@@ -29,7 +28,6 @@ import {
   setEncounterRewards,
 } from "#mystery-encounters/encounter-phase-utils";
 import {
-  catchPokemon,
   getEncounterPokemonLevelForWave,
   STANDARD_ENCOUNTER_BOOSTED_LEVEL_MODIFIER,
 } from "#mystery-encounters/encounter-pokemon-utils";
@@ -309,9 +307,8 @@ export const DancingLessonsEncounter: MysteryEncounter = MysteryEncounterBuilder
         }
 
         await hideOricorioPokemon();
-        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
-        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
-        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
+        // 퀴즈 연동판(SPEC 3번): 포켓몬(이로치)은 퀴즈에서만 얻으므로, 같은 등급의 다른 보상(아이템)을 줌
+        setEncounterRewards({ guaranteedModifierTiers: [ModifierTier.GREAT], fillRemaining: true });
         leaveEncounterWithoutBattle(true);
       })
       .build(),

@@ -114,7 +114,7 @@ export function GiftOpenDialog({ gift, busy, onChoose, onClose, onOpenBalls, onR
           <button className="text-button" onClick={() => setStep('choose')}>← 다시 고르기</button>
         </> : <>
           <DialogTitle>{gift.fromLabel}의 {GIFT_SIZES[gift.size].label} {GIFT_SIZES[gift.size].emoji}</DialogTitle>
-          <DialogDescription>{gift.reason} 잘했어! 둘 중 하나를 골라 봐.</DialogDescription>
+          <DialogDescription>{gift.reason} 잘했어! 하나를 골라 봐.</DialogDescription>
           {gift.letter && <p className="gift-letter big">💌 {gift.letter}</p>}
           <div className="gift-choices">
             {options.map(c => (
@@ -138,6 +138,7 @@ function ChoiceIcon({ choice }: { choice: GiftChoice }) {
     case 'box': return <img src={ASSETS.boxClosed} alt="" />;
     case 'candy': return <span className="gift-big">🍬</span>;
     case 'ball': return <img src={ASSETS.ball.poke} alt="" />;
+    case 'shinyBall': return <img src={ASSETS.ball.shiny} alt="" />;
     case 'ticket': return <span className="gift-big">🎟️</span>;
   }
 }

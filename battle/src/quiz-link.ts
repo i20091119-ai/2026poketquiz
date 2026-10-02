@@ -13,57 +13,96 @@ import type { PokemonSpecies } from "#data/pokemon-species";
 import type { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 import { decrypt, encrypt } from "#utils/data";
+import shinyColors from "./data/quiz-shiny-colors.json";
 
 /** 퀴즈 앱 서버 주소. 게임이 퀴즈 앱의 /battle/ 아래에서 열리므로 같은 주소를 씁니다. */
 export const QUIZ_MY_POKEMON_URL = "/api/my-pokemon";
 const CACHE_KEY = "quizOwnedSpecies";
 
-/** 퀴즈 앱에서 받은 보유 포켓몬의 전국도감 번호 (진화형 그대로) */
+/** 퀴즈 앱에서 받은 보유 포켓몬(기본 모습)의 전국도감 번호 (진화형 그대로) */
 export const quizOwnedSpecies: number[] = [];
+/**
+ * 퀴즈 앱 이로치 도감(퀴즈 볼에서 얻은 이로치, 진화한 모습 포함)의 전국도감 번호.
+ * 이 목록에 있는 것만 포켓로그에서 이로치로 쓸 수 있습니다 (SPEC.md 3번). 포켓로그 안에서는 이로치를 얻을 수 없어요.
+ */
+export const quizShinySpecies: number[] = [];
+const SHINY_CACHE_KEY = "quizShinySpecies";
+
+const validIds = (list: unknown): number[] | null =>
+  Array.isArray(list) ? list.filter((n): n is number => Number.isInteger(n) && n > 0) : null;
 
 /**
- * 퀴즈 앱에서 보유 포켓몬 목록을 받아 옵니다. 실패하면 마지막으로 받아 둔 목록을 씁니다.
+ * 퀴즈 앱에서 보유 포켓몬·이로치 목록을 받아 옵니다. 실패하면 마지막으로 받아 둔 목록을 씁니다.
  * 게임 시작 전에 한 번 호출합니다.
  */
 export async function loadQuizOwnedSpecies(): Promise<void> {
   let ids: number[] | null = null;
+  let shinies: number[] | null = null;
   try {
     const res = await fetch(QUIZ_MY_POKEMON_URL, { cache: "no-store" });
     if (res.ok) {
-      const body = (await res.json()) as { species?: unknown };
-      if (Array.isArray(body.species)) {
-        ids = body.species.filter((n): n is number => Number.isInteger(n) && n > 0);
+      const body = (await res.json()) as { species?: unknown; shiny?: unknown };
+      ids = validIds(body.species);
+      if (ids) {
         localStorage.setItem(CACHE_KEY, JSON.stringify(ids));
+        shinies = validIds(body.shiny) ?? [];
+        localStorage.setItem(SHINY_CACHE_KEY, JSON.stringify(shinies));
       }
     }
   } catch (err) {
     console.warn("퀴즈 앱에서 보유 포켓몬 목록을 받지 못했어요:", err);
   }
-  if (ids == null) {
+  const cached = (key: string): number[] => {
     try {
-      ids = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "[]") as number[];
+      return JSON.parse(localStorage.getItem(key) ?? "[]") as number[];
     } catch {
-      ids = [];
+      return [];
     }
-  }
-  quizOwnedSpecies.splice(0, quizOwnedSpecies.length, ...ids);
+  };
+  quizOwnedSpecies.splice(0, quizOwnedSpecies.length, ...(ids ?? cached(CACHE_KEY)));
+  quizShinySpecies.splice(0, quizShinySpecies.length, ...(shinies ?? cached(SHINY_CACHE_KEY)));
+  // 예전 버전이 포켓로그 이로치를 퀴즈 앱에 알리려고 기기에 적어 두던 것은 이제 쓰지 않으니 지움
+  localStorage.removeItem("quizShinyPending");
 }
+
+/** 퀴즈에서 얻은 기본 모습 포켓몬이 있는 스타터(진화 전 첫 모습) 목록과, 이로치가 있는 스타터 목록 */
+const quizNormalStarters = new Set<number>();
+const quizShinyStarters = new Set<number>();
+export const hasQuizNormalStarter = (starterId: number): boolean => quizNormalStarters.has(starterId);
+export const hasQuizShinyStarter = (starterId: number): boolean => quizShinyStarters.has(starterId);
 
 /**
  * 보유 포켓몬을 포켓로그 스타터(진화 전 첫 모습)로 바꿔 기본 스타터 목록을 채웁니다.
  * 종 데이터가 준비된 뒤(initSpeciesDataRegistry 다음)에 호출해야 합니다.
  */
 export function applyQuizStarters(): void {
-  const starters = new Set<StarterSpeciesId>();
-  for (const id of quizOwnedSpecies) {
+  const starterOf = (id: number): StarterSpeciesId | null => {
     try {
-      starters.add(speciesDataRegistry.getStarter(id));
+      return speciesDataRegistry.getStarter(id as SpeciesId);
     } catch {
       console.warn("포켓로그에 없는 포켓몬 번호라 건너뜁니다:", id);
+      return null;
+    }
+  };
+  quizNormalStarters.clear();
+  quizShinyStarters.clear();
+  for (const id of quizOwnedSpecies) {
+    const starter = starterOf(id);
+    if (starter != null) {
+      quizNormalStarters.add(starter);
     }
   }
+  for (const id of quizShinySpecies) {
+    const starter = starterOf(id);
+    if (starter != null) {
+      quizShinyStarters.add(starter);
+    }
+  }
+  const starters = new Set<StarterSpeciesId>([...quizNormalStarters, ...quizShinyStarters] as StarterSpeciesId[]);
   defaultStarterSpecies.splice(0, defaultStarterSpecies.length, ...starters);
-  console.log(`퀴즈 앱 보유 포켓몬 ${quizOwnedSpecies.length}마리 → 스타터 ${starters.size}종`);
+  console.log(
+    `퀴즈 앱 보유 포켓몬 ${quizOwnedSpecies.length}마리, 이로치 ${quizShinySpecies.length}마리 → 스타터 ${starters.size}종 (이로치 ${quizShinyStarters.size}종)`,
+  );
 }
 
 /** 진화 단계 깊이 (스타터 0, 1단계 진화 1, …) */
@@ -81,15 +120,22 @@ function evolutionDepth(speciesId: SpeciesId): number {
   return depth;
 }
 
+/** 이로치 이름: 퀴즈 앱과 같은 색 이름을 앞에 붙임 (예: 오렌지피카츄). 색 이름이 없으면 그대로. */
+export function quizShinyName(speciesId: number, baseName: string): string {
+  const color = (shinyColors as Record<string, string>)[String(speciesId)];
+  return color ? `${color}${baseName}` : baseName;
+}
+
 /**
  * 고른 스타터로 실제 출전할 종. 퀴즈에서 그 스타터 계열의 진화형을 갖고 있으면 가장 많이 진화한 모습을 돌려줍니다.
  * (부모님 결정: 진화한 포켓몬은 진화한 모습으로, 레벨은 시작 레벨 그대로)
+ * 이로치(shiny = true)는 퀴즈 이로치 도감 기준으로 같은 규칙을 씁니다: 이로치를 진화시켰다면 진화한 모습의 이로치로 출전.
  */
-export function quizStartingSpecies(starterId: StarterSpeciesId): PokemonSpecies {
+export function quizStartingSpecies(starterId: StarterSpeciesId, shiny = false): PokemonSpecies {
   let best: SpeciesId = starterId;
   let bestDepth = 0;
   if (QUIZ_RULES.startEvolved) {
-    for (const id of quizOwnedSpecies) {
+    for (const id of shiny ? quizShinySpecies : quizOwnedSpecies) {
       try {
         if (speciesDataRegistry.getStarter(id as SpeciesId) !== starterId) {
           continue;
@@ -754,50 +800,6 @@ export async function applyQuizCandyGifts(): Promise<void> {
   } catch (err) {
     console.warn("사탕 가져갔다는 알림 실패:", err);
   }
-}
-
-// ---- 이벤트 이로치 → 퀴즈 도감 (SPEC 3번) ----
-export const QUIZ_SHINY_URL = "/api/battle/shiny";
-const SHINY_PENDING_KEY = "quizShinyPending";
-
-function pendingShinies(): number[] {
-  try {
-    return JSON.parse(localStorage.getItem(SHINY_PENDING_KEY) ?? "[]") as number[];
-  } catch {
-    return [];
-  }
-}
-
-/** 아직 퀴즈 앱에 알리지 못한 이로치를 보냅니다. 성공하면 목록을 비웁니다. */
-export async function flushQuizShinies(): Promise<void> {
-  const ids = pendingShinies();
-  if (ids.length === 0) {
-    return;
-  }
-  try {
-    const res = await fetch(QUIZ_SHINY_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ species: ids }),
-    });
-    if (res.ok) {
-      localStorage.removeItem(SHINY_PENDING_KEY);
-    } else {
-      console.warn("이로치를 퀴즈 도감에 알리지 못했어요:", res.status);
-    }
-  } catch (err) {
-    console.warn("이로치를 퀴즈 도감에 알리지 못했어요:", err);
-  }
-}
-
-/** 이벤트에서 이로치를 받으면 퀴즈 도감에도 남기도록 알립니다 (실패하면 기기에 적어 두고 다음에 다시 보냄). */
-export function reportQuizShiny(speciesId: number): void {
-  const ids = pendingShinies();
-  if (!ids.includes(speciesId)) {
-    ids.push(speciesId);
-  }
-  localStorage.setItem(SHINY_PENDING_KEY, JSON.stringify(ids.slice(-50)));
-  flushQuizShinies().catch(() => {});
 }
 
 // ---- 진행 보고 (보호자 화면의 날짜별 기록) ----

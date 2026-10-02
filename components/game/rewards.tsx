@@ -4,19 +4,19 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ASSETS } from '@/lib/assets';
 import { BALLS, POTIONS, potionTargets, TIER_LABELS, TYPE_INFO, TYPE_KEYS, type PotionKind, type TypeKey } from '@/lib/game-config';
 import type { Ball, BoxItem } from '@/lib/game-engine';
-import { species } from '@/lib/pokedex';
+import { shinyName, species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 
 export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event';
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
-export type CatchResult = { caught: number; tier: number; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
+export type CatchResult = { caught: number; tier: number; shiny?: boolean; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
   daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
   explore: { title: '아이템 3개 중 하나를 골라!', description: '열매나 상처약이 들어 있어. 가방에 넣었다가 포켓몬에게 먹여 줘.', closed: ASSETS.boxClosed, label: '선물' },
   exp: { title: '경험치 선물! 볼 3개 중 하나를 골라!', description: '볼 안에 어떤 포켓몬이 있을까?', closed: ASSETS.ball.poke, label: '볼' },
   master: { title: '탐험 마스터! 볼 3개 중 하나를 골라!', description: '절반의 확률로 전설이나 희귀한 포켓몬이 나와.', closed: ASSETS.ball.master, label: '볼' },
-  event: { title: '10일 연속 성공! 랜덤박스 3개 중 하나를 골라!', description: '희귀 포켓몬 볼이나 배틀 추가권이 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
+  event: { title: '10일 연속 성공! 랜덤박스 3개 중 하나를 골라!', description: '희귀 포켓몬 볼, 배틀 추가권, 이로치 볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
 };
 
 /* eslint-disable @next/next/no-img-element */
@@ -102,6 +102,17 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
   );
 }
 
+/** 이로치가 나왔을 때 사방으로 퍼지는 반짝이 (CSS 애니메이션) */
+function ShinyBurst() {
+  return (
+    <div className="shiny-burst" aria-hidden>
+      {Array.from({ length: 12 }, (_, i) => (
+        <span key={i} style={{ ['--a' as string]: `${i * 30}deg`, animationDelay: `${(i % 4) * 0.12}s` }}>{i % 3 === 0 ? '✨' : i % 3 === 1 ? '⭐' : '💫'}</span>
+      ))}
+    </div>
+  );
+}
+
 /** 볼을 눌러 포켓몬을 만납니다. */
 export function BallDialog({ ball, busy, onOpen, onClose }: {
   ball: Ball | null;
@@ -115,13 +126,19 @@ export function BallDialog({ ball, busy, onOpen, onClose }: {
     <Dialog open={!!ball || !!result} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent className="reward-dialog">
         {result ? <>
-          <DialogTitle>{result.duplicate ? '또 만났네!' : '새로운 친구를 만났어!'}</DialogTitle>
+          <DialogTitle>{result.shiny ? '✨ 이로치다! ✨' : result.duplicate ? '또 만났네!' : '새로운 친구를 만났어!'}</DialogTitle>
           <DialogDescription>{result.message}</DialogDescription>
-          <PokemonImage id={result.caught} className="celebration-img" />
-          <h3 className="caught-name">{species(result.caught).name} <span className={'tier tier-' + result.tier}>{TIER_LABELS[result.tier]}</span></h3>
+          <div className={result.shiny ? 'shiny-reveal' : undefined}>
+            {result.shiny && <ShinyBurst />}
+            <PokemonImage id={result.caught} shiny={result.shiny} className="celebration-img" />
+          </div>
+          <h3 className={'caught-name' + (result.shiny ? ' shiny-name' : '')}>
+            {result.shiny ? <>✨ {shinyName(result.caught)}</> : species(result.caught).name}{' '}
+            <span className={'tier tier-' + result.tier}>{TIER_LABELS[result.tier]}</span>
+          </h3>
           <div className="type-row">{species(result.caught).types.map(t => <TypeBadge key={t} type={t} />)}</div>
           {result.bonus && <p>이미 있는 친구라서 <TypeBadge type={result.bonus.type} amount={'+' + result.bonus.amount} small /> 보너스!</p>}
-          <button className="primary" onClick={close}>도감에 저장했어!</button>
+          <button className="primary" onClick={close}>{result.shiny ? '이로치 도감에 저장했어!' : '도감에 저장했어!'}</button>
         </> : ball && <>
           <DialogTitle>{BALLS[ball.kind].label}을 눌러 봐!</DialogTitle>
           <DialogDescription>어떤 포켓몬이 들어 있을까?</DialogDescription>

@@ -1,7 +1,7 @@
 // D1 저장소 접근. 서버(라우트)에서만 사용합니다.
 import { env } from 'cloudflare:workers';
 import { defaultRules, normalizeRules, type RestRule } from '../battle-rest.ts';
-import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SUBJECTS, type GiftLimits, type Subject } from '../game-config.ts';
+import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SHINY_CHANCE_MAX, SUBJECTS, type GiftLimits, type ShinyBallKind, type Subject } from '../game-config.ts';
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
@@ -69,6 +69,38 @@ export async function getSimDayOffset(): Promise<number> {
 }
 export async function setSimDayOffset(days: number) {
   await db().prepare("INSERT INTO settings (key, value) VALUES ('sim_day_offset', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(days)).run();
+}
+
+// ---------- 이로치 확률 ----------
+export type ShinyChances = Record<ShinyBallKind, number>;
+/** 보호자 개발자 메뉴에서 정한 볼별 이로치 확률(%). 정하지 않은 볼은 기본값 */
+export async function getShinyChance(): Promise<ShinyChances> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'shiny_chance'").first<{ value: string }>();
+  const out = { ...SHINY_CHANCE_DEFAULT };
+  try {
+    const v = row ? JSON.parse(row.value) as Record<string, unknown> : {};
+    for (const k of SHINY_CHANCE_BALLS) { const n = Number(v[k]); if (v[k] !== undefined && Number.isFinite(n)) out[k] = Math.max(0, Math.min(SHINY_CHANCE_MAX, n)); }
+  } catch { /* 기본값 */ }
+  return out;
+}
+export async function setShinyChance(values: Partial<ShinyChances> | null) {
+  if (values === null) { await db().prepare("DELETE FROM settings WHERE key = 'shiny_chance'").run(); return; }
+  const clean: Partial<ShinyChances> = {};
+  for (const k of SHINY_CHANCE_BALLS) { const n = Number(values[k]); if (values[k] !== undefined && Number.isFinite(n)) clean[k] = Math.max(0, Math.min(SHINY_CHANCE_MAX, Math.round(n * 10) / 10)); }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('shiny_chance', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 시뮬레이션에서만: 이로치 확률을 모두 100%로 (볼 열기 시험용). 진짜 기록에는 영향 없음 */
+export async function getSimShinyAll(): Promise<boolean> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'sim_shiny_all'").first<{ value: string }>();
+  return row?.value === '1';
+}
+export async function setSimShinyAll(on: boolean) {
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('sim_shiny_all', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(on ? '1' : '0').run();
+}
+/** 이 기록에서 볼을 열 때 쓸 이로치 확률 */
+export async function shinyChanceFor(player: PlayerId): Promise<ShinyChances> {
+  if (player === SIM_PLAYER && (await getSimShinyAll())) return Object.fromEntries(SHINY_CHANCE_BALLS.map(k => [k, SHINY_CHANCE_MAX])) as ShinyChances;
+  return getShinyChance();
 }
 
 // ---------- 설정 ----------

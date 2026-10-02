@@ -5,6 +5,8 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
+import { hasQuizNormalStarter, hasQuizShinyStarter } from "#app/quiz-link";
+import { QUIZ_RULES } from "#app/quiz-rules";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
 import {
@@ -159,6 +161,11 @@ export class StarterSelectUiHandler extends MessageUiHandler {
   private starterSelectScrollBar: ScrollBar;
   private scrollCursor: number;
   private filteredStarterIds: StarterSpeciesId[] = [];
+  /**
+   * 퀴즈 연동(SPEC.md 3번): 격자 칸마다 "이로치 칸"인지 (filteredStarterIds 와 같은 길이).
+   * 퀴즈에서 기본 모습과 이로치를 둘 다 가진 스타터는 같은 번호가 두 칸으로 나오고, 두 번째가 이로치 칸입니다.
+   */
+  private filteredShinyCells: boolean[] = [];
   private lastStarterId: StarterSpeciesId;
 
   private partyColumn: GameObjects.Container;
@@ -1071,7 +1078,11 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
         const currentPartyValue = getPartyValue(this.partyStarterIds);
         const validStarters = this.filteredStarterIds.filter(starterId => {
-          const [isDupe] = this.isInParty(starterId);
+          // 무작위 추가는 기본 모습만 (이로치는 칸을 직접 골라서 추가)
+          if (!hasQuizNormalStarter(starterId) && hasQuizShinyStarter(starterId)) {
+            return false;
+          }
+          const [isDupe] = this.isInParty(starterId, false);
           const starterCost = globalScene.gameData.getSpeciesStarterValue(starterId);
           const isValidForChallenge = checkStarterValidForChallenge(
             starterId,
@@ -1088,6 +1099,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
         }
 
         const randomStarterId = validStarters[Math.floor(Math.random() * validStarters.length)];
+        this.applyCellShinyPreference(randomStarterId, false);
         this.setStarter(randomStarterId);
 
         // TODO: this might not be needed if we change .addToParty
@@ -1572,7 +1584,11 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       // if species is in filtered starters, get the starter container from the filtered starters, it can be undefined if the species is not in the filtered starters
       starterContainer =
         this.starterContainers[
-          this.starterContainers.findIndex(container => container.species.speciesId === this.lastStarterId)
+          this.starterContainers.findIndex(
+            container =>
+              container.species.speciesId === this.lastStarterId
+              && container.shinyCell === (this.starterPreferences[this.lastStarterId]?.shiny === true),
+          )
         ];
     } else {
       starterContainer = this.starterContainers[this.cursor];
@@ -2166,14 +2182,19 @@ export class StarterSelectUiHandler extends MessageUiHandler {
    * Checks whether a given starter is already in the party.
    *
    * @param starterId - The starter to check
+   * @param shiny - 이로치 칸인지 (기본값: 지금 고른 칸의 설정)
    * @returns A tuple with a boolean indicating whether the starter is a duplicate
    * and the index of the starter if it is a duplicate
    */
-  private isInParty(starterId: StarterSpeciesId): [isDupe: boolean, removeIndex: number] {
+  private isInParty(
+    starterId: StarterSpeciesId,
+    shiny: boolean = this.starterPreferences[starterId]?.shiny === true,
+  ): [isDupe: boolean, removeIndex: number] {
     let removeIndex = 0;
     let isDupe = false;
     for (let s = 0; s < this.partyStarterIds.length; s++) {
-      if (this.partyStarterIds[s] === starterId) {
+      // 퀴즈 연동(SPEC.md 3번): 같은 종이라도 기본 모습과 이로치는 따로 팀에 넣을 수 있음
+      if (this.partyStarterIds[s] === starterId && !!this.partyStarters[s].shiny === shiny) {
         isDupe = true;
         removeIndex = s;
         break;
@@ -2315,12 +2336,14 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     this.filterBar.updateFilterLabels();
 
     this.filterStarters();
+    this.expandShinyCells();
 
     this.starterSelectScrollBar.setTotalRows(Math.max(Math.ceil(this.filteredStarterIds.length / 9), 1));
     this.starterSelectScrollBar.setScrollCursor(0);
 
     const sort = this.filterBar.getVals(DropDownColumn.SORT)[0];
     sortStarterSpecies(this.filteredStarterIds, sort.val, sort.dir);
+    this.markShinyCells();
 
     this.updateScroll();
     this.tryUpdateValue();
@@ -2328,6 +2351,44 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     this.starterContainers.forEach(container => {
       this.setUpgradeAnimation(container);
     });
+  }
+
+  /**
+   * 퀴즈 연동(SPEC.md 3번): 퀴즈에서 이로치를 가진 스타터는 이로치 칸을 따로 둡니다.
+   * - 기본 모습도 있으면: 같은 번호를 두 번 넣음 (기본 칸 + 이로치 칸)
+   * - 이로치만 있으면: 이로치 칸 하나만 (기본 모습은 퀴즈에서 얻지 않았으니 출전할 수 없음)
+   */
+  private expandShinyCells(): void {
+    const ids: StarterSpeciesId[] = [];
+    for (const starterId of this.filteredStarterIds) {
+      ids.push(starterId);
+      if (hasQuizShinyStarter(starterId) && hasQuizNormalStarter(starterId)) {
+        ids.push(starterId);
+      }
+    }
+    this.filteredStarterIds = ids;
+  }
+
+  /** 정렬이 끝난 뒤, 어느 칸이 이로치 칸인지 표시합니다 (같은 번호의 두 번째 칸, 또는 이로치만 있는 스타터의 한 칸). */
+  private markShinyCells(): void {
+    const seen = new Set<number>();
+    this.filteredShinyCells = this.filteredStarterIds.map(starterId => {
+      const again = seen.has(starterId);
+      seen.add(starterId);
+      return again || (hasQuizShinyStarter(starterId) && !hasQuizNormalStarter(starterId));
+    });
+  }
+
+  /**
+   * 이로치 칸을 고르면 그 스타터의 "이로치" 설정을 켜고, 기본 칸을 고르면 끕니다.
+   * (이로치 색은 공식 이로치 색 하나뿐이고, 원본의 이로치 바꾸기 버튼은 쓰지 않습니다.)
+   */
+  private applyCellShinyPreference(starterId: StarterSpeciesId, shinyCell: boolean): void {
+    for (const prefs of [this.starterPreferences, this.originalStarterPreferences]) {
+      prefs[starterId] ??= {};
+      prefs[starterId]!.shiny = shinyCell;
+      prefs[starterId]!.variant = shinyCell ? 0 : undefined;
+    }
   }
 
   private filterStarters(): void {
@@ -2540,7 +2601,13 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       const starterId = this.filteredStarterIds[offset_i];
       const species = speciesDataRegistry.getSpecies(starterId);
       const { dexEntry, starterDataEntry } = getStarterData(starterId);
-      const { female, formIndex, shiny, variant } = this.getStarterDexAttrPropsFromPreferences(starterId);
+      const isShinyCell = this.filteredShinyCells[offset_i] ?? false;
+      const props = this.getStarterDexAttrPropsFromPreferences(starterId);
+      const { female, formIndex } = props;
+      // 이로치 칸은 이로치 모습(공식 색)으로, 기본 칸은 기본 모습으로 처음부터 보여 줌
+      const shiny = isShinyCell;
+      const variant: Variant = isShinyCell ? 0 : props.variant;
+      container.shinyCell = isShinyCell;
 
       container.setSpecies(starterId, { female, formIndex, shiny, variant });
 
@@ -2566,19 +2633,16 @@ export class StarterSelectUiHandler extends MessageUiHandler {
         pokerusCursorIndex++;
       }
 
-      if (this.partyStarterIds.includes(starterId)) {
-        this.starterCursorObjs[this.partyStarterIds.indexOf(starterId)]
-          .setPosition(container.x - 1, container.y + 1)
-          .setVisible(true);
+      const [inParty, partyIndex] = this.isInParty(starterId, isShinyCell);
+      if (inParty) {
+        this.starterCursorObjs[partyIndex].setPosition(container.x - 1, container.y + 1).setVisible(true);
       }
 
       this.updateStarterValueLabel(container);
 
       container.label.setVisible(true);
-      const speciesVariants =
-        starterId && dexEntry.caughtAttr & DexAttr.SHINY
-          ? [DexAttr.DEFAULT_VARIANT, DexAttr.VARIANT_2, DexAttr.VARIANT_3].filter(v => !!(dexEntry.caughtAttr & v))
-          : [];
+      // 이로치 칸에만 이로치 별 표시 (색은 공식 이로치 색 하나)
+      const speciesVariants: bigint[] = isShinyCell ? [DexAttr.DEFAULT_VARIANT] : [];
       for (let v = 0; v < 3; v++) {
         const hasVariant = speciesVariants.length > v;
         container.shinyIcons[v].setVisible(hasVariant);
@@ -2636,6 +2700,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       const species = this.starterContainers[cursor].species;
 
       if (species) {
+        this.applyCellShinyPreference(species.speciesId as StarterSpeciesId, this.starterContainers[cursor].shinyCell);
         this.setStarter(species.speciesId as StarterSpeciesId);
         this.updateInstructions();
       } else {
@@ -2670,6 +2735,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     );
     if (this.partyStarterIds.length > 0) {
       this.partyCursorObj.setVisible(true);
+      this.applyCellShinyPreference(this.partyStarterIds[index], !!this.partyStarters[index].shiny);
       this.setPartyStarter(this.partyStarterIds[index]);
     } else {
       this.partyCursorObj.setVisible(false);
@@ -2792,13 +2858,13 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
     this.starterSummary.setStarterDetails(starterId, starterDetails);
 
-    const [isInParty, partyIndex]: [boolean, number] = this.isInParty(starterId);
+    const [isInParty, partyIndex]: [boolean, number] = this.isInParty(starterId, shiny);
     if (isInParty) {
       this.updatePartyIcon(starterId, partyIndex);
     }
 
     // If the starter is in the party, update the information in the party
-    const starterIndex = this.partyStarterIds.indexOf(starterId);
+    const starterIndex = isInParty ? partyIndex : -1;
     if (starterIndex > -1) {
       const starter = this.partyStarters[starterIndex];
       starter.shiny = shiny;
@@ -2810,7 +2876,9 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       starter.teraType = teraType;
     }
 
-    const currentContainer = this.starterContainers.find(p => p.species.speciesId === starterId);
+    const currentContainer = this.starterContainers.find(
+      p => p.species.speciesId === starterId && p.shinyCell === shiny,
+    );
     if (currentContainer) {
       const starterSprite = currentContainer.icon;
       const species = speciesDataRegistry.getSpecies(starterId);
@@ -2853,7 +2921,10 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     const isShinyCaught = !!(caughtAttr & DexAttr.SHINY);
 
     const caughtVariants = [DexAttr.DEFAULT_VARIANT, DexAttr.VARIANT_2, DexAttr.VARIANT_3].filter(v => caughtAttr & v);
-    this.canCycle.shiny = (isNonShinyCaught && isShinyCaught) || (isShinyCaught && caughtVariants.length > 1);
+    // 퀴즈 연동(SPEC.md 3번): 기본·이로치는 격자의 칸으로 고르므로 이로치 바꾸기 버튼은 쓰지 않음
+    this.canCycle.shiny =
+      !QUIZ_RULES.shinyFromQuizOnly
+      && ((isNonShinyCaught && isShinyCaught) || (isShinyCaught && caughtVariants.length > 1));
 
     const isMaleCaught = !!(caughtAttr & DexAttr.MALE);
     const isFemaleCaught = !!(caughtAttr & DexAttr.FEMALE);
@@ -2956,7 +3027,10 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     for (let s = 0; s < this.partyStarterIds.length; s++) {
       const starterId = this.partyStarterIds[s];
       const species = speciesDataRegistry.getSpecies(starterId);
-      const { female, formIndex, shiny, variant } = this.getStarterDexAttrPropsFromPreferences(starterId);
+      // 같은 종의 기본·이로치가 함께 있을 수 있어서, 설정이 아니라 팀 칸에 저장된 모습으로 그립니다
+      const { formIndex, variant } = this.partyStarters[s];
+      const female = !!this.partyStarters[s].female;
+      const shiny = !!this.partyStarters[s].shiny;
       this.partyIcons[s]
         .setTexture(species.getIconAtlasKey(formIndex, shiny, variant))
         .setFrame(species.getIconId(female, formIndex, shiny, variant));
@@ -3093,7 +3167,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
       // this will get the value of `isDupe` from `isInParty`.
       // This will let us see if the pokemon in question is in our party already so we don't grey out the sprites if they're invalid
-      const isPokemonInParty = this.isInParty(starterId)[0];
+      const isPokemonInParty = this.isInParty(starterId, container.shinyCell)[0];
 
       /*
        * This code does a check to tell whether or not a sprite should be lit up or greyed out. There are 3 ways a pokemon's sprite should be lit up:

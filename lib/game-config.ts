@@ -177,9 +177,21 @@ export const BALLS = {
   luxury: { label: '럭셔리볼', odds: [20, 30, 25, 25] },
   // 일일미션 연속 이벤트 보상: lib/rare-pokemon.ts 후보에서만 나옴 (odds 는 쓰지 않음)
   rare: { label: '희귀 포켓몬 볼', odds: [0, 0, 100, 0] },
+  // 이로치 볼: 열면 아이가 가진 포켓몬(1단계 기준) 중 하나의 이로치가 확정으로 나옴 (odds 는 쓰지 않음)
+  shiny: { label: '이로치 볼', odds: [0, 0, 0, 0] },
 } as const;
 export type BallKind = keyof typeof BALLS;
 export const TIER_LABELS = ['흔함', '조금 드묾', '희귀', '전설'];
+
+/**
+ * 볼을 열 때 이로치(색이 다른 포켓몬)가 나올 확률(%). 이로치는 퀴즈에서만 얻습니다(포켓로그에서는 안 줌).
+ * 보호자 공간 개발자 메뉴에서 바꿀 수 있고(settings.shiny_chance), 시뮬레이션에서는 100%로 바꿔 볼 수 있습니다.
+ * 이로치 볼은 확률과 상관없이 항상 이로치입니다.
+ */
+export type ShinyBallKind = Exclude<BallKind, 'shiny'>;
+export const SHINY_CHANCE_BALLS: ShinyBallKind[] = ['poke', 'great', 'ultra', 'master', 'luxury', 'rare'];
+export const SHINY_CHANCE_DEFAULT: Record<ShinyBallKind, number> = { poke: 2, great: 4, ultra: 7, master: 12, luxury: 12, rare: 12 };
+export const SHINY_CHANCE_MAX = 100;
 
 /** 일일미션 랜덤상자 내용물 확률(가중치, 합 100) */
 export const DAILY_BOX_TABLE: { item: { kind: 'potion'; potion: PotionKind } | { kind: 'ball'; ball: BallKind }; weight: number }[] = [
@@ -194,6 +206,8 @@ export const DAILY_BOX_TABLE: { item: { kind: 'potion'; potion: PotionKind } | {
   { item: { kind: 'ball', ball: 'great' }, weight: 14 },
   { item: { kind: 'ball', ball: 'ultra' }, weight: 7 },
   { item: { kind: 'ball', ball: 'master' }, weight: 2 },
+  // 이로치 볼은 아주 가끔 (퀘스트 보상에 추가)
+  { item: { kind: 'ball', ball: 'shiny' }, weight: 1 },
 ];
 
 /** 탐험에서 과목을 모두 풀었을 때 3개 중 고르는 아이템 확률(가중치): 그 과목 열매 / 다른 열매 / 상처약 */
@@ -240,10 +254,10 @@ export const GIFT_LETTER_MAX = 60;
 export const GIFT_SIZES = {
   small: { label: '작은 선물', emoji: '🎀', options: ['exp', 'berry'] },
   medium: { label: '보통 선물', emoji: '🎁', options: ['box', 'candy'] },
-  large: { label: '큰 선물', emoji: '🎉', options: ['ball', 'ticket'] },
+  large: { label: '큰 선물', emoji: '🎉', options: ['ball', 'ticket', 'shinyBall'] },
 } as const satisfies Record<string, { label: string; emoji: string; options: readonly GiftChoice[] }>;
 export type GiftSize = keyof typeof GIFT_SIZES;
-export type GiftChoice = 'exp' | 'berry' | 'box' | 'candy' | 'ball' | 'ticket';
+export type GiftChoice = 'exp' | 'berry' | 'box' | 'candy' | 'ball' | 'ticket' | 'shinyBall';
 export const GIFT_EXP = 30;
 export const GIFT_CANDY = 3;
 export const GIFT_BALL: BallKind = 'poke';
@@ -254,6 +268,7 @@ export const GIFT_CHOICE_INFO: Record<GiftChoice, { label: string; description: 
   candy: { label: `포켓로그 사탕 ${GIFT_CANDY}개`, description: '파트너 포켓몬에게 보내. 포켓로그를 켜면 들어가.' },
   ball: { label: '몬스터볼 1개', description: '가방에 넣었다가 열어서 새 포켓몬을 만나.' },
   ticket: { label: '배틀 추가권 1장', description: '포켓로그 새 게임을 한 번 더 할 수 있어. 안 쓰면 남아 있어.' },
+  shinyBall: { label: '이로치 볼 1개', description: '열면 내가 가진 포켓몬 중 하나의 이로치(색이 다른 모습)가 꼭 나와!' },
 };
 /** 하루(작은·보통)·일주일(큰) 한도 기본값. 보호자 공간에서 바꿀 수 있습니다. */
 export const GIFT_LIMIT_DEFAULT = { small: 2, medium: 1, large: 1 };

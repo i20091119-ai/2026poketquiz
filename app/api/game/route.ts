@@ -1,7 +1,7 @@
 import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, json, latestDefeat, loadStrongOverrides, mutateState } from '@/lib/server/store';
+import { activeBank, json, latestDefeat, loadStrongOverrides, mutateState, shinyChanceFor } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
@@ -46,8 +46,9 @@ export async function POST(request: Request) {
     // strong: 보호자가 바꾼 센 포켓몬·도전 속성 (진화 조건 계산 전에 맞춤)
     const [bank, player, strong] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides()]);
     const { today } = player;
+    const shinyChance = await shinyChanceFor(player.id); // 볼을 열 때 이로치 확률 (보호자 개발자 메뉴, 시뮬레이션이면 100%)
     const { state, result } = await mutateState(state => {
-      const result = applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom });
+      const result = applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance });
       syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
       return { result, changed: true };
     }, player.id);
