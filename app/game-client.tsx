@@ -75,7 +75,7 @@ export default function Game() {
   // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
   useEffect(() => {
     if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId) return;
-    if (view.limited.some(e => (e.phase === 'active' && !e.seen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
+    if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
   }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId]);
@@ -187,7 +187,8 @@ export default function Game() {
     + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange).length;
   // 레인보우 팝업: 처음 열면 3장 소개 → 끝났을 때 결과 → 마지막 날 저녁 안내 (다른 창이 없을 때 하나씩)
   const calm = !quiz && !reward && !ballQueue.length && !giftPopup && !opening && !replying && !changeId;
-  const introEv = calm ? view.limited.find(e => e.phase === 'active' && !e.seen && !e.accepted) ?? null : null;
+  // 소개 팝업은 기기마다 한 번: 다른 기기(보호자 폰)에서 봤어도 이 기기에서 처음이면 뜸. 도전을 시작했으면 안 뜸
+  const introEv = calm ? view.limited.find(e => e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) ?? null : null;
   const endEv = calm && !introEv ? view.limited.find(e => e.phase === 'ended' && e.accepted && !e.endSeen) ?? null : null;
   const remindEv = calm && !introEv && !endEv ? view.limited.find(e => e.remind && !e.remindSeen) ?? null : null;
   const changeEv = changeId ? view.limited.find(e => e.id === changeId) ?? null : null;
@@ -328,7 +329,7 @@ export default function Game() {
 
       <RainbowIntro key={introEv ? 'intro-' + introEv.id : 'intro-none'} ev={introEv} busy={busy}
         onAccept={async () => { if (!introEv) return; const r = await act<{ message: string }>({ type: 'limitedAccept', id: introEv.id }); if (r) { setNotice(r.message); setTab('explore'); } }}
-        onLater={() => { if (introEv) void act({ type: 'limitedSeen', id: introEv.id }); }} />
+        onLater={() => { if (introEv) void act({ type: 'limitedSeen', id: introEv.id, device: deviceId() }); }} />
       <RainbowNotice ev={endEv ?? remindEv} kind={endEv ? 'end' : 'remind'}
         onClose={() => { const e = endEv ?? remindEv; if (e) void act({ type: 'limitedNotice', id: e.id, notice: endEv ? 'end' : 'remind' }); }} />
       <ShinyChangeDialog ev={changeEv} owned={view.owned} busy={busy}
@@ -377,6 +378,19 @@ export default function Game() {
       </Dialog>
     </main>
   );
+}
+
+/** 이 기기의 이름표 (기기 브라우저에 한 번 만들어 둠). 기간 한정 이벤트 소개 팝업을 기기마다 한 번씩 띄우는 데만 씀 */
+let memoryDeviceId = '';
+function deviceId(): string {
+  try {
+    let id = localStorage.getItem('pq-device-id');
+    if (!id) { id = (crypto.randomUUID?.() ?? `d${Date.now()}${Math.random().toString(36).slice(2)}`).slice(0, 64); localStorage.setItem('pq-device-id', id); }
+    return id;
+  } catch {
+    // 저장을 못 하는 브라우저(사생활 보호 모드 등)는 이번 실행 동안만
+    return memoryDeviceId ||= `m${Date.now()}${Math.random().toString(36).slice(2)}`;
+  }
 }
 
 /** 보호자 시뮬레이션 중임을 알리는 띠. 누르면 보호자 공간으로 돌아갑니다. */

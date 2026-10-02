@@ -111,6 +111,8 @@ export type GameState = {
  */
 export type LimitedProgress = {
   seen?: string; acceptedAt?: string;
+  /** 소개 팝업을 이미 본 기기(기기마다 한 번씩 뜸: 보호자 폰에서 봐도 아이 폰에는 처음처럼 뜸) */
+  seenDevices?: string[];
   streak: Partial<Record<Subject, number>>;
   used: Partial<Record<Subject, number[]>>;
   missed?: { date: string; ids: number[] };
@@ -507,6 +509,8 @@ export function limitedView(state: GameState, today: string, minutes: number) {
     return [{
       id: def.id, kind: def.kind, title: def.title, phase, start: def.start, end: def.end,
       accepted: !!lp?.acceptedAt, seen: !!lp?.seen || !!lp?.acceptedAt,
+      /** 소개 팝업을 이미 본 기기 (아이 화면은 이 기기가 목록에 없고 도전 전이면 팝업을 띄움) */
+      seenDevices: lp?.seenDevices ?? [],
       goal: def.goal.streak, total: def.goal.subjects.length, pieceCount: pieces.length,
       subjects: def.goal.subjects.map(s => ({
         subject: s, color: SUBJECT_INFO[s].color, colorName: PIECE_INFO[s].color, heart: PIECE_INFO[s].heart,
@@ -599,7 +603,7 @@ export type Action =
   | { type: 'acceptEvent'; event: EventId }
   | { type: 'eventSeen'; event: EventId }
   | { type: 'eventBox'; pick: number }
-  | { type: 'limitedSeen'; id: string }
+  | { type: 'limitedSeen'; id: string; device?: string }
   | { type: 'limitedAccept'; id: string }
   | { type: 'limitedShinyChange'; id: string; uid: string }
   | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' };
@@ -974,7 +978,10 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       // 팝업에서 "나중에": 다시 팝업은 안 띄우고, 이벤트 탭에서 시작할 수 있음
       const def = limitedById(String(action.id));
       if (!def || limitedPhase(def, ctx.today) !== 'active') fail('지금은 열려 있는 이벤트가 아니에요.');
-      limitedProgress(state, def.id).seen ??= ctx.today;
+      const lp = limitedProgress(state, def.id);
+      lp.seen ??= ctx.today;
+      const device = String(action.device ?? '').slice(0, 64);
+      if (device && !(lp.seenDevices ??= []).includes(device)) lp.seenDevices = [...lp.seenDevices, device].slice(-20);
       return { ok: true };
     }
     case 'limitedAccept': {

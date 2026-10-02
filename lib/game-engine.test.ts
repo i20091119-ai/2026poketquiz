@@ -1042,3 +1042,19 @@ test('보호자 "팝업 다시 보이게": 본 것·진행 없는 시작은 되�
   // 4) 아무도 안 봤으면 그대로
   assert.equal(resetLimitedIntro(started(bank), RB.id).changed, false);
 });
+
+test('레인보우 소개 팝업은 기기마다 한 번: 보호자 폰에서 봐도 아이 폰에는 처음처럼', () => {
+  const bank = makeBank(6);
+  const c = rbCtx(bank);
+  const state = started(bank);
+  applyAction(state, { type: 'limitedSeen', id: RB.id, device: 'dad-phone' }, c);
+  const v = limitedView(state, c.today, 0)[0];
+  assert.deepEqual(v.seenDevices, ['dad-phone']);
+  assert.equal(v.seenDevices.includes('kid-phone'), false); // 아이 폰은 아직 → 팝업
+  applyAction(state, { type: 'limitedSeen', id: RB.id, device: 'dad-phone' }, c);
+  assert.deepEqual(limitedView(state, c.today, 0)[0].seenDevices, ['dad-phone']); // 중복 없음
+  // 예전처럼 기기 없이 "봤음"만 있는 기록(오늘 아빠가 본 것)도 아이 폰에는 팝업
+  const old = started(bank);
+  old.limited = { [RB.id]: { seen: c.today, streak: {}, used: {}, pieces: [], pieceAt: {} } };
+  assert.deepEqual(limitedView(old, c.today, 0)[0].seenDevices, []);
+});
