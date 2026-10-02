@@ -524,9 +524,9 @@ export function limitedView(state: GameState, today: string, minutes: number) {
   });
 }
 export type LimitedView = ReturnType<typeof limitedView>[number];
-/** 보호자 화면용 요약 */
+/** 보호자 화면용 요약: 예약된(시작 전) 이벤트도 모두 보여 줌 (아이 화면에는 시작 전엔 안 보임) */
 export function limitedReport(state: GameState, today: string) {
-  return LIMITED_EVENTS.filter(def => limitedPhase(def, today) !== 'before' || state.limited?.[def.id]).map(def => {
+  return LIMITED_EVENTS.map(def => {
     const lp = state.limited?.[def.id];
     return {
       id: def.id, title: def.title, start: def.start, end: def.end, phase: limitedPhase(def, today),

@@ -780,7 +780,7 @@ select { width: auto; min-width: 120px; }
 }
 @keyframes rainbow-pop { 0% { transform: scale(.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .fly-piece, .rainbow-piece.on, .rainbow-remind, .rainbow-intro .intro-page { animation: none; } }
-.limited-report { margin-top: 14px; border-top: 1px dashed #dbe5d9; padding-top: 10px; }
+.limited-report { margin: 4px 0 16px; padding-bottom: 12px; border-bottom: 1px dashed #dbe5d9; }
 .limited-report h3 { margin: 0 0 4px; font-size: 17px; }
 .limited-report td:first-child { white-space: nowrap; font-weight: 700; width: 92px; }
 .sim-limited { margin: 10px 0; padding: 10px; border: 1px dashed #b39ddb; border-radius: 12px; background: #faf7ff; display: grid; gap: 6px; }

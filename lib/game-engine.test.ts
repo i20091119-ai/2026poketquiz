@@ -1004,3 +1004,11 @@ test('레인보우: 마지막 날 저녁 9시 안내, 끝나면 정산(3개 이�
   // 끝난 뒤에는 조각을 더 셀 수 없음
   assert.throws(() => applyAction(s2, { type: 'limitedAccept', id: RB.id }, rbCtx(bank, after)), /열려 있는 이벤트가 아니/);
 });
+
+test('보호자 이벤트 기록에는 예약된(시작 전) 기간 한정 이벤트도 보인다', () => {
+  const state = started(makeBank());
+  const before = shiftDate(RB.start, -1);
+  const r = limitedReport(state, before);
+  assert.ok(r.some(e => e.id === RB.id && e.phase === 'before'));
+  assert.deepEqual(limitedView(state, before, 0), []); // 아이 화면에는 여전히 안 보임
+});

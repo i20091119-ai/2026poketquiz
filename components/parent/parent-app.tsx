@@ -396,6 +396,8 @@ function EventsSection({ events }: { events: Overview['events'] }) {
   const { allClear: a, streak: st } = events;
   return (
     <section className="panel parent-section">
+      {events.limited.length > 0 && <h2>기간 한정 이벤트</h2>}
+      {events.limited.map(l => <LimitedRow key={l.id} l={l} />)}
       <h2>도전 이벤트</h2>
       <table className="battle-log">
         <thead><tr><th>이벤트</th><th>수락</th><th>진도</th><th>완료</th></tr></thead>
@@ -415,14 +417,13 @@ function EventsSection({ events }: { events: Overview['events'] }) {
         </tbody>
       </table>
       <p className="muted">남은 부활권 {events.reviveTickets}장. 아이가 이벤트 탭에서 &lsquo;도전할래!&rsquo;를 눌러야 시작돼요.</p>
-      {events.limited.map(l => <LimitedRow key={l.id} l={l} />)}
     </section>
   );
 }
 
 /** 기간 한정 이벤트 한 줄: 기간·상태, 조각, 과목별 연속 수, 완료·이로치 변신, 끝난 뒤 정산 */
 function LimitedRow({ l }: { l: Overview['events']['limited'][number] }) {
-  const status = l.phase === 'before' ? '시작 전 (아이 화면에는 안 보여요)' : l.phase === 'ended' ? '끝남' : '진행 중';
+  const status = l.phase === 'before' ? '⏳ 예약됨 · 시작 전이라 아이 화면에는 아직 안 보여요' : l.phase === 'ended' ? '끝남' : '진행 중';
   return (
     <div className="limited-report">
       <h3>🌈 {l.title} <small className="muted">기간 한정 · {l.start} ~ {l.end} · {status}</small></h3>
