@@ -4,7 +4,8 @@ import { recordBattleLevels, recordBattleProgress } from '@/lib/game-engine';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { battleGate, gateForGame } from '@/lib/server/battle-gate';
 import { playerOf } from '@/lib/server/player';
-import { getBattleEvolutionAllowed, json, mutateState } from '@/lib/server/store';
+import { daySummary } from '@/lib/activity-log';
+import { appendActivity, getBattleEvolutionAllowed, json, mutateState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
       recordBattleLevels(state, party.map(p => ({ starter: Number(p?.starter), level: Number(p?.level) })));
       return { result: recordBattleProgress(state, today, wave, seconds), changed: true };
     }, player.id);
+    await appendActivity(player.id, today, [daySummary(state, today)]);
     const gate = await battleGate(player, state);
     // blocked 면 게임이 이번 전투를 마친 뒤 저장하고 퀴즈로 돌아갑니다 (하루 시간 제한 또는 쉬는 시간). rest.soon 이면 미리 알림.
     return json({ ok: true, today: result, blocked: gate.blocked, evolution, message: gate.message, ...gateForGame(gate) });

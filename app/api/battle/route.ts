@@ -6,7 +6,8 @@ import { BATTLE_STARTS_PER_DAY } from '@/lib/game-config';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { battleGate, gateForGame } from '@/lib/server/battle-gate';
 import { playerOf } from '@/lib/server/player';
-import { getBattleEvolutionAllowed, json, mutateState, readState } from '@/lib/server/store';
+import { daySummary } from '@/lib/activity-log';
+import { appendActivity, getBattleEvolutionAllowed, json, mutateState, readState } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
       const ok = startBattle(state, today);
       return { result: ok, changed: ok };
     }, player.id);
+    if (result) await appendActivity(player.id, today, [{ kind: 'battleStart', data: { date: today } }, daySummary(state, today)]);
     const left = battleStartsAvailable(state, today);
     return json(result ? { ok: true, left, tickets: battleTickets(state) } : { ok: false, left, message: NO_STARTS_MESSAGE });
   } catch (error) {

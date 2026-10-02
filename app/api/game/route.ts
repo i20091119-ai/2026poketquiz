@@ -1,7 +1,9 @@
+import { afterAction, beforeAction, eventsChange, type LogEntry } from '@/lib/activity-log';
+import { daySummary } from '@/lib/activity-log';
 import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, json, latestDefeat, loadStrongOverrides, mutateState, shinyChanceFor } from '@/lib/server/store';
+import { activeBank, appendActivity, json, latestDefeat, loadStrongOverrides, mutateState, shinyChanceFor } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
@@ -20,11 +22,15 @@ export async function GET(request: Request) {
   try {
     const [bank, player, strong] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides()]);
     const { today } = player;
+    let log: LogEntry[] = [];
     const { state } = await mutateState(state => {
+      const before = beforeAction(state, { type: 'quizTime', seconds: 0 });
       const a = ensureDaily(state, bank, today, secureRandom);
       const b = syncEvents(state, bank, today); // 도전 이벤트 진도 (연속 기록 끊김·올클리어 완료)
+      log = eventsChange(before, state);
       return { result: null, changed: a || b };
     }, player.id);
+    await appendActivity(player.id, today, log);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
     return json({ view: childView(state, bank, today), strong, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
@@ -47,11 +53,16 @@ export async function POST(request: Request) {
     const [bank, player, strong] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides()]);
     const { today } = player;
     const shinyChance = await shinyChanceFor(player.id); // 볼을 열 때 이로치 확률 (보호자 개발자 메뉴, 시뮬레이션이면 100%)
+    let log: LogEntry[] = [];
     const { state, result } = await mutateState(state => {
-      const result = applyAction(state, action, { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance });
+      const ctx = { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance };
+      const before = beforeAction(state, action);
+      const result = applyAction(state, action, ctx);
       syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
+      log = action.type === 'quizTime' ? [daySummary(state, today)] : [...afterAction(before, state, action, result, ctx), ...(action.type === 'answer' ? [daySummary(state, today)] : [])];
       return { result, changed: true };
     }, player.id);
+    await appendActivity(player.id, today, log); // 시험용이면 남기지 않음
     return json({ view: childView(state, bank, today), result, strong, sim: player.sim, battleGate: await battleInfo(player, state) });
   } catch (error) {
     if (error instanceof GameError) return json({ error: error.message }, 400);

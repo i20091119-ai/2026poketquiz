@@ -614,6 +614,8 @@ select { width: auto; min-width: 120px; }
   .parent-tabs { flex-wrap: wrap; border-bottom: 0; gap: 6px; }
   .parent-tab { flex: 1 1 30%; justify-content: center; padding: 9px 4px; font-size: 13.5px; border: 1px solid #dbe5d9; border-radius: 10px; margin-bottom: 0; background: #fff; }
   .parent-tab.on { background: #17674e; color: #fff; border-color: #17674e; }
+  .parent-lower .parent-tabs { flex-wrap: nowrap; }
+  .parent-lower .parent-tab { flex: 1 1 0; min-width: 0; padding: 9px 2px; font-size: 12.5px; gap: 0; }
 }
 /* 보호자 공간 아래 탭 묶음 (아이 화면의 두 번째 탭 묶음처럼 점선으로 나눔) */
 .parent-lower { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; padding-top: 12px; border-top: 2px dashed #dbe5d9; }
@@ -650,17 +652,21 @@ select { width: auto; min-width: 120px; }
 /* 보호자 공간: 속성 변경 (센 포켓몬) */
 .strong-editor .strong-tools { display: grid; gap: 8px; }
 .strong-editor .strong-tools input { width: 100%; padding: 10px 12px; border: 1px solid #cfd8d2; border-radius: 10px; font-size: 15px; }
-.strong-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.strong-list li { display: grid; grid-template-columns: 56px 1fr; gap: 8px 10px; align-items: center; border: 1px solid #e3e8e4; border-radius: 12px; padding: 8px 10px; background: #fff; }
-.strong-list li.changed { border-color: #f0b35a; background: #fffaf0; }
-.strong-list .strong-img { width: 56px; height: 56px; object-fit: contain; }
-.strong-info { display: grid; gap: 4px; min-width: 0; }
-.strong-info .plus { margin: 0 4px; font-weight: 800; color: #a33; }
-.strong-cost { color: #4b5563; font-size: 12px; }
-.strong-controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
-.strong-controls select { padding: 6px 8px; border-radius: 8px; border: 1px solid #cfd8d2; font-size: 14px; }
-.strong-controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.strong-controls label input { width: 18px; height: 18px; }
+.strong-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.strong-card { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border: 1px solid #e3e8e4; border-radius: 12px; background: #fff; cursor: pointer; font: inherit; }
+.strong-card b { font-size: 13px; text-align: center; }
+.strong-card.changed { border-color: #f0b35a; background: #fffaf0; }
+.strong-card .strong-img { width: 64px; height: 64px; object-fit: contain; }
+.strong-card .type-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.plus { margin: 0 2px; font-weight: 800; color: #a33; }
+.strong-dialog-body { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.strong-dialog-body .strong-img-big { width: 140px; height: 140px; object-fit: contain; }
+.strong-dialog-body .type-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.strong-dialog-body label { display: grid; gap: 4px; justify-items: center; font-size: 14px; }
+.strong-dialog-body label.strong-check { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; }
+.strong-dialog-body .strong-check input { width: 20px; height: 20px; }
+.strong-dialog-body select { padding: 8px 10px; border-radius: 8px; border: 1px solid #cfd8d2; font-size: 15px; }
+.strong-cost { color: #4b5563; font-size: 13px; margin: 0; }
 
 /* 이로치가 나왔을 때: 반짝이 + 금빛 이름 */
 .shiny-reveal { position: relative; display: grid; place-items: center; }

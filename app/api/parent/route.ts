@@ -1,3 +1,4 @@
+import { buildChildExport } from '@/lib/child-export';
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
 import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
@@ -14,7 +15,7 @@ import {
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
   getStrongOverrides, loadStrongOverrides, saveStrongOverrides,
-  getShinyChance, getSimShinyAll, setShinyChance, setSimShinyAll,
+  getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
 
@@ -251,6 +252,12 @@ export async function POST(request: Request) {
         return json({ message: '이로치 확률을 처음 값으로 되돌렸어요.' });
 
       // ---- 보호자 선물 ----
+      // ---- 아이 기록 내보내기: 시뮬레이션 중이어도 늘 아이의 진짜 기록만 (시험용은 빠짐) ----
+      case 'exportChild': {
+        const [{ state }, activity] = await Promise.all([readState(REAL_PLAYER), readActivity(REAL_PLAYER)]);
+        const file = buildChildExport({ state, rows: activity.rows, since: activity.since, appVersion: __APP_VERSION__, exportedAt: new Date().toISOString() });
+        return json({ file, message: '내보낼 파일을 만들었어요.' });
+      }
       case 'sendGift': {
         // 시뮬레이션 중인 브라우저에서 보내면 시험용 기록으로만 갑니다 (playerOf)
         const player = await playerOf(request);
@@ -260,6 +267,7 @@ export async function POST(request: Request) {
         const { result } = await mutateState(state => {
           try { return { result: sendGift(state, input, player.today, now, limits), changed: true }; } catch (e) { if (e instanceof GameError) throw new ParentError(e.message); throw e; }
         }, player.id);
+        await appendActivity(player.id, player.today, [{ kind: 'giftSent', data: { id: result.id, from: result.from, reason: result.reason, size: result.size, letter: result.letter } }]);
         return json({ message: `${GIFT_SIZES[result.size].label}을 보냈어요. 아이가 앱을 열면 팝업으로 알려 줘요.${player.sim ? ' (시뮬레이션: 시험용 기록에만 감)' : ''}`, gift: result.id });
       }
       case 'setGiftLimits': {
