@@ -7,7 +7,7 @@ import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
 import { ASSETS } from '@/lib/assets';
 import type { RestRule } from '@/lib/battle-rest';
-import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
+import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECT_INFO, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
 import type { ActivityDay, AreaReport, PublicGift, Question } from '@/lib/game-engine';
 import { defaultStrong, defaultThird, evolutionRequirement, isStrong, setStrongOverrides, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
 import { PokemonImage } from '@/components/game/common';
@@ -632,6 +632,9 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
 /** 과목마다 영역별 정답률·틀린 수·약점 표시, 반복 오답 문제 */
 function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[] }[] }) {
   const weakAreas = report.flatMap(r => r.areas.filter(a => a.weak).map(a => `${r.subject} · ${a.area}`));
+  // 처음엔 약점이 있는 과목, 없으면 첫 과목
+  const [pick, setPick] = useState<Subject | null>(null);
+  const shown = pick ?? report.find(r => r.areas.some(a => a.weak))?.subject ?? report[0]?.subject;
   const rate = (a: AreaReport) => (a.correct + a.wrong ? Math.round((a.correct / (a.correct + a.wrong)) * 100) : null);
   const level = (a: AreaReport) => a.weak ? 'weak' : rate(a) === null ? 'none' : rate(a)! >= 80 ? 'good' : 'mid';
   return (
@@ -643,10 +646,22 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
       {weakAreas.length > 0
         ? <p className="focus-note">🎯 지금 집중 중인 영역: <b>{weakAreas.join(', ')}</b> — 일일미션에 이 영역 문제가 더 자주 나와요. 최근 5번 중 4번 이상 맞히면 보통으로 돌아가요.</p>
         : <p className="muted">지금 약점으로 잡힌 영역은 없어요. (문제에 &lsquo;영역&rsquo;이 적혀 있어야 나눠 보여요. 영역이 없는 문제는 &lsquo;기타&rsquo;로 묶여요.)</p>}
-      <div className="area-grid">
-        {report.map(r => (
+      {/* 과목별 탭: 한 번에 한 과목의 영역만 (약점 영역이 있는 과목에는 빨간 점) */}
+      <div className="area-tabs" role="tablist">
+        {report.map(r => {
+          const solvedN = r.areas.reduce((n, a) => n + a.correct + a.wrong, 0);
+          return (
+            <button key={r.subject} role="tab" aria-selected={shown === r.subject} className={'area-tab' + (shown === r.subject ? ' on' : '')}
+              style={{ ['--c' as string]: SUBJECT_INFO[r.subject].color }} onClick={() => setPick(r.subject)}>
+              {r.subject}{r.areas.some(a => a.weak) && <i className="weak-dot" aria-label="약점 있음" />}
+              <small>{solvedN ? `${solvedN}번` : '-'}</small>
+            </button>
+          );
+        })}
+      </div>
+      <div className="area-grid single">
+        {report.filter(r => r.subject === shown).map(r => (
           <div className="area-subject" key={r.subject}>
-            <b>{r.subject}</b>
             {r.areas.length === 0 && <span className="muted">문제 없음</span>}
             {r.areas.map(a => (
               <div className={'area-row ' + level(a)} key={a.area} title={`맞힘 ${a.correct} · 틀림 ${a.wrong} · 최근 ${a.recent.split('').map(c => c === 'o' ? 'O' : 'X').join('') || '-'}`}>
