@@ -12,7 +12,7 @@ import type { ActivityDay, AreaReport, PublicGift, Question } from '@/lib/game-e
 import { defaultStrong, defaultThird, evolutionRequirement, isStrong, setStrongOverrides, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
 import { PokemonImage } from '@/components/game/common';
 import { aiRequestText } from '@/lib/question-import';
-import { APP_VERSION, CHANGES, versionLabel } from '@/lib/version';
+import { UPDATES, versionLabel } from '@/lib/version';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
@@ -636,6 +636,9 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
 }
 
 // ---------------- 개발자 메뉴 ----------------
+/** '2026-10-02' → '10월 2일' */
+const dayLabel = (date: string) => { const [, m, d] = date.split('-'); return `${Number(m)}월 ${Number(d)}일`; };
+
 /** 버전 표시와 시뮬레이션(아이 기록을 건드리지 않는 시험용 기록으로 앱 전체를 해 보기) */
 function DevMenu({ part, sim, shinyAll, busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; shinyAll: boolean; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const childScreen = '/';
@@ -650,8 +653,19 @@ function DevMenu({ part, sim, shinyAll, busy, call, reload }: { part: 'version' 
       {part === 'version' ? <>
       <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 업데이트 내용</h2>
       <p>버전 <b>{versionLabel(__BUILD_DATE__)}</b> <span className="muted">· 저장 번호 {__APP_VERSION__}</span></p>
-      <p className="muted">버전 {APP_VERSION}에서 바뀐 것</p>
-      <ul className="changes">{CHANGES.map(c => <li key={c}>{c}</li>)}</ul>
+      <p className="muted">날짜별로 바뀐 것 (날짜를 누르면 펼쳐져요)</p>
+      <div className="update-days">
+        {UPDATES.map((day, i) => (
+          <details key={day.date} className="update-day" open={i === 0}>
+            <summary>
+              <b>{dayLabel(day.date)}</b> <span className="muted">({day.items.length})</span>
+              {i === 0 && <span className="update-new">최신</span>}
+              {day.version && <span className="update-ver">버전 {day.version}</span>}
+            </summary>
+            <ul className="changes">{day.items.map(c => <li key={c}>{c}</li>)}</ul>
+          </details>
+        ))}
+      </div>
       </> : <>
       <h2><FlaskConical size={20} style={{ verticalAlign: '-3px' }} /> 시뮬레이션</h2>
       <p>보호자가 아이처럼 앱 전체(일일미션, 탐험, 도감, 가방, 포켓로그 배틀)를 해 볼 수 있어요. <b>아이의 진짜 기록은 절대 바뀌지 않고</b>, 이 브라우저에서만 시험용 기록을 써요. 포켓로그 시도 횟수와 기록도 시험용으로 따로 세요.</p>
