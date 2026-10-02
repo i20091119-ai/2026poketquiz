@@ -17,6 +17,8 @@ export type AnswerResult = {
   already?: boolean;
   reviewed?: boolean;
   gained?: { type: PublicQuestion['type']; amount: number; exp: number };
+  /** 레인보우 이벤트 진행 (탐험에서만): 연속 수, 조각을 얻었는지, 아이에게 보여 줄 말 */
+  rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
 };
 
 type Props = {
@@ -31,6 +33,18 @@ type Props = {
   onClose: () => void;
   nextLabel: string;
 };
+
+/** 레인보우 이벤트: 이 과목 연속 수(동그라미 10개)와 조각 소식 */
+function RainbowLine({ r }: { r: NonNullable<AnswerResult['rainbow']> }) {
+  return (
+    <div className={'rainbow-line ' + r.kind} role="status">
+      {r.message && <b>{r.message}</b>}
+      {r.kind !== 'complete' && (
+        <span>🌈 {r.subject} <span className="rainbow-dots small">{Array.from({ length: r.goal }, (_, i) => <i key={i} className={i < r.count ? 'on' : ''} />)}</span> {r.count}/{r.goal}</span>
+      )}
+    </div>
+  );
+}
 
 /** 문제 한 개를 보여주고 답을 받습니다. 다음 문제로 넘어가는 건 부모 컴포넌트가 정합니다. */
 export function QuizDialog(props: Props) {
@@ -103,6 +117,7 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
               {feedback.explanation && <p>{feedback.explanation}</p>}
             </div>
           )}
+          {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}
           {answered
             ? <button className="primary" onClick={onNext}>{nextLabel} <ArrowRight size={20} /></button>
             : <button className="primary" disabled={busy || choice === null} onClick={() => void submit()}>정답 확인</button>}

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa } from './game-config.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited } from './game-engine.ts';
+import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
@@ -846,4 +847,160 @@ test('활동 기록: 어제 미션의 시도 횟수는 오늘 풀이에 이어�
   const action = { type: 'answer' as const, mode: 'daily' as const, questionId: q.id, choice: q.answer };
   assert.equal(beforeAction(state, action, c.today).tries, 2);
   assert.equal(beforeAction(state, action, '2026-09-27').tries, 0); // 날짜가 달라진 뒤의 풀이
+});
+
+// ---------- 기간 한정 이벤트: 레인보우 컬러체인지 ----------
+const RB = LIMITED_EVENTS.find(e => e.kind === 'rainbow')!;
+const rbCtx = (bank: ActiveBank, today = RB.start, random = seeded()): Context => ({ bank, today, now: today + 'T03:00:00Z', random });
+/** 그 과목 탐험 문제를 하나 받아 맞히거나(true) 틀림(false) */
+function exploreAnswer(state: GameState, bank: ActiveBank, subject: typeof SUBJECTS[number], ok: boolean, c: Context) {
+  const pq = nextExploreQuestion(state, bank, subject, c.today, c.random);
+  assert.ok(pq, `${subject} 탐험 문제가 있어야 함`);
+  const q = bank.questions.find(q => q.id === pq.id)!;
+  return applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: ok ? q.answer : (q.answer + 1) % 5 }, c) as { correct: boolean; rainbow: { kind: string; message: string; count: number } | null };
+}
+
+test('레인보우: 시작 전에는 아무 데도 안 보이고, 기간 중에만 열리며 이로치 확률 5배', () => {
+  const bank = makeBank(12);
+  const state = started(bank);
+  assert.deepEqual(limitedView(state, shiftDate(RB.start, -1), 600), []);
+  assert.equal(limitedShinyMultiplier(shiftDate(RB.start, -1)), 1);
+  assert.equal(limitedShinyMultiplier(RB.start), 5);
+  assert.equal(limitedShinyMultiplier(RB.end), 5);
+  assert.equal(limitedShinyMultiplier(shiftDate(RB.end, 1)), 1);
+  assert.throws(() => applyAction(state, { type: 'limitedAccept', id: RB.id }, rbCtx(bank, shiftDate(RB.start, -1))), /열려 있는 이벤트가 아니/);
+  const v = limitedView(state, RB.start, 0)[0];
+  assert.equal(v.phase, 'active');
+  assert.equal(v.seen, false); // 처음 열면 팝업
+  assert.equal(v.leftLabel, '2일 0시간');
+  // 볼 이로치: 기간 중 몬스터볼 2% → 10%
+  const trials = 4000;
+  let shinyN = 0;
+  const random = seeded(11);
+  for (let i = 0; i < trials; i++) {
+    state.balls.push({ id: 'z' + i, kind: 'poke' });
+    const r = applyAction(state, { type: 'openBall', ballId: 'z' + i }, rbCtx(bank, RB.start, random)) as { shiny: boolean };
+    if (r.shiny) shinyN++;
+  }
+  assert.ok(shinyN / trials > 0.07 && shinyN / trials < 0.13, `이로치 비율 ${shinyN / trials}`);
+});
+
+test('레인보우: "나중에"는 팝업만 닫고, 도전해야 조각을 셈. 10문제 연속이면 조각, 틀리면 그 과목만 0부터', () => {
+  const bank = makeBank(12);
+  const state = started(bank);
+  const c = rbCtx(bank);
+  applyAction(state, { type: 'limitedSeen', id: RB.id }, c);
+  assert.equal(limitedView(state, c.today, 0)[0].seen, true);
+  assert.equal(limitedView(state, c.today, 0)[0].accepted, false);
+  assert.equal(exploreAnswer(state, bank, '국어', true, c).rainbow, null); // 도전 전에는 안 셈
+  applyAction(state, { type: 'limitedAccept', id: RB.id }, c);
+  for (let i = 0; i < 3; i++) assert.equal(exploreAnswer(state, bank, '수학', true, c).rainbow?.kind, 'progress');
+  const reset = exploreAnswer(state, bank, '수학', false, c).rainbow!;
+  assert.equal(reset.kind, 'reset');
+  assert.equal(reset.message, '앗! 수학은 처음부터 다시 해 보자. 할 수 있어!');
+  assert.equal(limitedView(state, c.today, 0)[0].subjects.find(s => s.subject === '수학')!.streak, 0);
+  // 국어는 이미 1문제 맞혔지만 도전 전이라 0부터: 10개 연속
+  let last;
+  for (let i = 0; i < 10; i++) last = exploreAnswer(state, bank, '국어', true, c).rainbow!;
+  assert.equal(last!.kind, 'piece');
+  assert.equal(last!.message, '🩷 국어 조각 얻었다! 이제 5개 남았어!');
+  const v = limitedView(state, c.today, 0)[0];
+  assert.equal(v.pieceCount, 1);
+  assert.equal(v.subjects.find(s => s.subject === '국어')!.piece, true);
+  // 조각을 얻은 과목은 더 세지 않음
+  const more = nextExploreQuestion(state, bank, '국어', c.today, c.random);
+  if (more) assert.equal(exploreAnswer(state, bank, '국어', true, c).rainbow, null);
+});
+
+test('레인보우: 다 푼 과목은 이미 맞힌 문제로 다시 도전하고, 틀려도 마스터 기록은 그대로', () => {
+  const bank = makeBank(6);
+  const state = started(bank);
+  const prog = { solved: bank.questions.map(q => q.id), wrong: {}, review: {}, subjectRewards: [...SUBJECTS], masterClaimed: true };
+  state.banks[bank.id] = prog;
+  const c = rbCtx(bank);
+  // 도전 전: 다 푼 과목은 탐험 문제가 없음
+  assert.equal(nextExploreQuestion(state, bank, '영어', c.today, c.random), null);
+  applyAction(state, { type: 'limitedAccept', id: RB.id }, c);
+  assert.equal(childView(state, bank, c.today).explore.find(e => e.subject === '영어')!.rainbowReplay, true);
+  const solvedBefore = [...state.banks[bank.id].solved];
+  const statsBefore = JSON.stringify(state.stats);
+  exploreAnswer(state, bank, '영어', true, c);
+  const r = exploreAnswer(state, bank, '영어', false, c);
+  assert.equal(r.correct, false);
+  assert.deepEqual(state.banks[bank.id].solved, solvedBefore); // 마스터 그대로
+  assert.deepEqual(state.banks[bank.id].wrong, {});
+  assert.equal(JSON.stringify(state.stats), statsBefore); // 다시 풀기는 스탯 보상 없음
+  // 6문제뿐인 과목도 10연속 가능 (다시 나옴), 오늘 틀린 문제는 오늘 안 나옴
+  let last;
+  for (let i = 0; i < 10; i++) last = exploreAnswer(state, bank, '영어', true, c).rainbow!;
+  assert.equal(last!.kind, 'piece');
+  assert.equal(childView(state, bank, c.today).explore.find(e => e.subject === '영어')!.available, 0);
+});
+
+test('레인보우: 6개 완성 → 가진 포켓몬 하나를 골라 이로치로 (이미 이로치는 안 됨, 한 번만)', () => {
+  const bank = makeBank(6);
+  const state = started(bank);
+  state.banks[bank.id] = { solved: bank.questions.map(q => q.id), wrong: {}, review: {}, subjectRewards: [], masterClaimed: false };
+  const c = rbCtx(bank, RB.end);
+  applyAction(state, { type: 'limitedAccept', id: RB.id }, c);
+  simLimited(state, RB.id, 'pieces5', c.today);
+  const leftSubject = SUBJECTS.find(s => !state.limited![RB.id].pieces.includes(s))!;
+  let last;
+  for (let i = 0; i < 9; i++) last = exploreAnswer(state, bank, leftSubject, true, c).rainbow!;
+  assert.equal(last!.kind, 'progress');
+  last = exploreAnswer(state, bank, leftSubject, true, c).rainbow!;
+  assert.equal(last.kind, 'complete');
+  assert.equal(last.message, '🌈 무지개 완성! 이로치로 바꿀 포켓몬을 골라 봐!');
+  const v = limitedView(state, c.today, 21 * 60)[0];
+  assert.equal(v.canChange, true);
+  assert.equal(v.remind, false); // 다 모았으면 저녁 안내 없음
+  const partner = state.owned[0];
+  state.owned.push({ uid: 'sx', species: 25, obtainedAt: c.now, shiny: true });
+  assert.throws(() => applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: 'sx' }, c), /이미 이로치/);
+  const r = applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: partner.uid }, c) as { message: string };
+  assert.equal(r.message, `✨ ${iGa(species(partner.species).name)} 반짝반짝 변신했어! 이로치 도감에 들어갔어!`);
+  assert.equal(iGa('피카츄'), '피카츄가');
+  assert.equal(iGa('이상해꽃'), '이상해꽃이');
+  assert.equal(partner.shiny, true);
+  assert.equal(state.partner, partner.uid); // 파트너 그대로
+  assert.ok(state.shiny!.includes(partner.species));
+  assert.throws(() => applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: partner.uid }, c), /이미 이로치로 바꿨/);
+  assert.equal(limitedView(state, c.today, 0)[0].changed!.species, partner.species);
+});
+
+test('레인보우: 마지막 날 저녁 9시 안내, 끝나면 정산(3개 이상 사탕 3개, 2개 이하 없음, 안 한 아이는 안 보임)', () => {
+  const bank = makeBank(6);
+  const mk = (pieces: number) => {
+    const state = started(bank);
+    applyAction(state, { type: 'limitedAccept', id: RB.id }, rbCtx(bank));
+    const lp = state.limited![RB.id];
+    lp.pieces = SUBJECTS.slice(0, pieces);
+    return state;
+  };
+  const s3 = mk(3);
+  assert.equal(limitedView(s3, RB.end, 20 * 60 + 59)[0].remind, false);
+  assert.equal(limitedView(s3, RB.end, 21 * 60)[0].remind, true);
+  assert.equal(limitedView(s3, RB.start, 22 * 60)[0].remind, false); // 첫날 밤은 아님
+  assert.equal(limitedView(s3, RB.end, 21 * 60)[0].leftLabel, '3시간 0분');
+  const after = shiftDate(RB.end, 1);
+  const sent = s3.candy?.sent ?? 0;
+  assert.equal(syncLimited(s3, after), true);
+  assert.equal(syncLimited(s3, after), false); // 한 번만
+  assert.deepEqual(s3.limited![RB.id].ended, { date: after, pieces: 3, candy: 3 });
+  assert.equal(s3.candy!.sent, sent + 3);
+  const v = limitedView(s3, after, 0)[0];
+  assert.equal(v.phase, 'ended');
+  assert.equal(v.endSeen, false);
+  applyAction(s3, { type: 'limitedNotice', id: RB.id, notice: 'end' }, rbCtx(bank, after));
+  assert.equal(limitedView(s3, after, 0)[0].endSeen, true);
+  const s2 = mk(2);
+  syncLimited(s2, after);
+  assert.equal(s2.limited![RB.id].ended!.candy, 0);
+  // 도전하지 않은 아이: 끝난 뒤에는 카드도 없음, 정산도 없음
+  const none = started(bank);
+  assert.equal(syncLimited(none, after), false);
+  assert.deepEqual(limitedView(none, after, 0), []);
+  assert.equal(limitedReport(s3, after)[0].ended!.candy, 3);
+  // 끝난 뒤에는 조각을 더 셀 수 없음
+  assert.throws(() => applyAction(s2, { type: 'limitedAccept', id: RB.id }, rbCtx(bank, after)), /열려 있는 이벤트가 아니/);
 });

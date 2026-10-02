@@ -3,7 +3,8 @@ import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
 import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
-import { activityList, areaReport, battleLogList, eventsReport, simGiveBalls, simGiveShinies, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, simLimited, simGiveBalls, simGiveShinies, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -62,7 +63,9 @@ async function overview(request: Request) {
       rest: { rules: restRules, openToday: restOpen === today, now: { blocked: gate.rest.blocked, name: gate.rest.name, until: gate.rest.until }, timeUp: gate.timeUp },
     },
     /** 도전 이벤트 진행 상황과 부활권 */
-    events: eventsReport(state, bank, today),
+    events: { ...eventsReport(state, bank, today), limited: limitedReport(state, today) },
+    /** 시뮬레이션 도우미에서 고를 기간 한정 이벤트 */
+    limitedEvents: LIMITED_EVENTS.map(e => ({ id: e.id, title: e.title, start: e.start, end: e.end, reminderAt: e.reminderAt, after: shiftDate(e.end, 1) })),
     /** 보호자 "속성 변경"에서 바꾼 센 포켓몬·도전 속성 */
     strong,
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
@@ -417,6 +420,31 @@ export async function POST(request: Request) {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const { result } = await mutateState(state => { const n = simGiveShinies(state, new Date().toISOString()); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
         return json({ message: result ? `시험용 기록의 포켓몬 ${result}마리에게 이로치를 하나씩 넣었어요. 포켓로그 팀 선택 화면에서 기본·이로치가 따로 보이는지 확인해 보세요.` : '이미 모든 포켓몬이 이로치도 갖고 있어요.' });
+      }
+      case 'simDate': {
+        // 시험용 기록의 날짜를 이 날로 (기간 한정 이벤트 시험용). 지난 날짜로는 못 감. clock 을 주면 시각도 함께
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const date = String(body.date ?? '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ParentError('날짜를 다시 골라 주세요.');
+        const days = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(todayKorea() + 'T00:00:00Z')) / 86400000);
+        if (days < 0) throw new ParentError('지난 날짜로는 갈 수 없어요.');
+        await setSimDayOffset(days);
+        const clock = body.clock === undefined ? undefined : String(body.clock ?? '').trim();
+        if (clock !== undefined) {
+          if (clock && parseHm(clock) === null) throw new ParentError('시각은 21:00 처럼 적어 주세요.');
+          await setSimClock(clock || null);
+        }
+        return json({ message: `시험용 기록의 날짜를 ${date}${clock ? ` ${clock}` : ''}(으)로 맞췄어요. 아이 화면을 새로고침해 주세요.` });
+      }
+      case 'simLimited': {
+        // 기간 한정 이벤트 시험 도우미: reset(기록 지우기) / streak9(못 모은 과목 연속 9로) / pieces5(조각 5개로)
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const def = limitedById(String(body.id ?? ''));
+        const op = body.op === 'reset' || body.op === 'streak9' || body.op === 'pieces5' ? body.op : null;
+        if (!def || !op) throw new ParentError('이벤트를 다시 골라 주세요.');
+        const { today } = await simClock();
+        await mutateState(state => ({ result: null, changed: simLimited(state, def.id, op, today) }), SIM_PLAYER);
+        return json({ message: op === 'reset' ? `시험용 기록의 "${def.title}" 기록을 지웠어요. 기간 중이면 아이 화면을 열 때 팝업부터 다시 나와요.` : op === 'streak9' ? '아직 못 모은 과목의 연속 수를 9로 맞췄어요. 탐험에서 1문제만 더 맞히면 조각이에요.' : '조각을 5개로 맞췄어요. 남은 1과목을 10문제 연속 맞히면 무지개 완성이에요.' });
       }
       case 'simStreak': {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');

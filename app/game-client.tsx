@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
 import { BattleTab, HomePanel, StarterPicker, type BattleGateView } from '@/components/game/home';
 import { AllClearDialog, EventTab } from '@/components/game/events';
+import { RainbowIntro, RainbowNotice, ShinyChangeDialog } from '@/components/game/rainbow';
 import { writeRevivedSession } from '@/lib/battle-save';
 import { GiftOpenDialog, GiftPopup, GiftTab, ReplyDialog, type GiftOpenResult } from '@/components/game/gifts';
 import { DailyTab, ExploreTab } from '@/components/game/missions';
@@ -47,6 +48,10 @@ export default function Game() {
   const replyAfterBalls = useRef<PublicGift | null>(null);
   /** 이번에 이미 팝업으로 보여 준 선물 (닫으면 다시 뜨지 않고, 앱을 다시 열면 다시 알려 줌) */
   const shownGifts = useRef(new Set<string>());
+  /** 레인보우: 이로치로 바꿀 포켓몬 고르기 창 (이벤트 id), 이번에 자동으로 띄운 적 있는지, 방금 무지개를 완성했는지 */
+  const [changeId, setChangeId] = useState<string | null>(null);
+  const autoChangeShown = useRef(new Set<string>());
+  const rainbowJustDone = useRef(false);
 
   const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
@@ -69,10 +74,18 @@ export default function Game() {
 
   // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
   useEffect(() => {
-    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length) return;
+    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId) return;
+    if (view.limited.some(e => (e.phase === 'active' && !e.seen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
-  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length]);
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId]);
+
+  // 레인보우를 다 모았는데 아직 포켓몬을 안 골랐으면 (앱을 열 때 한 번) 고르기 창을 띄움
+  useEffect(() => {
+    if (!view?.partner || quiz || reward || ballQueue.length || giftPopup || opening || replying || changeId) return;
+    const ev = view.limited.find(e => e.canChange && !autoChangeShown.current.has(e.id));
+    if (ev) { autoChangeShown.current.add(ev.id); setChangeId(ev.id); }
+  }, [view, quiz, reward, ballQueue.length, giftPopup, opening, replying, changeId]);
 
   // 보호자 화면의 "하루 퀴즈 시간": 화면이 보이는 동안만 세어 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
   useEffect(() => {
@@ -145,6 +158,10 @@ export default function Game() {
         if (d && d.boxPicks > 0 && !d.claimed) setReward({ kind: 'daily' });
         else if (d?.finished) setNotice(`오늘의 미션 끝! 맞힌 문제 ${d.correct.length}개. 틀린 문제는 다른 날 다시 나와.`);
       }
+    } else if (rainbowJustDone.current) {
+      // 무지개 완성! 탐험을 멈추고 이로치로 바꿀 포켓몬 고르기 창으로
+      rainbowJustDone.current = false;
+      setQuiz(null);
     } else void loadExplore(quiz.subject!, quiz.question.id);
   }
 
@@ -166,7 +183,14 @@ export default function Game() {
   // 이벤트 탭 빨간 숫자: 아직 수락 안 한 도전 + 열 수 있는 상자
   const ev = view.events;
   const eventAlerts = (!ev.allClear.hidden && !ev.allClear.accepted ? 1 : 0) + (!ev.streak.hidden && !ev.streak.accepted ? 1 : 0)
-    + (ev.streak.completedAt && !ev.streak.hidden ? 1 : 0);
+    + (ev.streak.completedAt && !ev.streak.hidden ? 1 : 0)
+    + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange).length;
+  // 레인보우 팝업: 처음 열면 3장 소개 → 끝났을 때 결과 → 마지막 날 저녁 안내 (다른 창이 없을 때 하나씩)
+  const calm = !quiz && !reward && !ballQueue.length && !giftPopup && !opening && !replying && !changeId;
+  const introEv = calm ? view.limited.find(e => e.phase === 'active' && !e.seen && !e.accepted) ?? null : null;
+  const endEv = calm && !introEv ? view.limited.find(e => e.phase === 'ended' && e.accepted && !e.endSeen) ?? null : null;
+  const remindEv = calm && !introEv && !endEv ? view.limited.find(e => e.remind && !e.remindSeen) ?? null : null;
+  const changeEv = changeId ? view.limited.find(e => e.id === changeId) ?? null : null;
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
   async function reviveFromHistory(runId: string) {
     if (busy) return;
@@ -237,7 +261,9 @@ export default function Game() {
             <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate}
               reviveTickets={view.events.reviveTickets} busy={busy} onRevive={runId => void reviveFromHistory(runId)} /></TabsContent>
             <TabsContent value="event">
-              <EventTab events={view.events} busy={busy}
+              <EventTab events={view.events} limited={view.limited} busy={busy}
+                onLimitedAccept={async id => { const r = await act<{ message: string }>({ type: 'limitedAccept', id }); if (r) setNotice(r.message); }}
+                onLimitedChange={id => setChangeId(id)}
                 onAccept={async id => { const r = await act<{ message: string }>({ type: 'acceptEvent', event: id }); if (r) setNotice(r.message); }}
                 onExplore={s => { setTab('explore'); window.scrollTo({ top: 0, behavior: 'smooth' }); void loadExplore(s); }}
                 onOpenBox={() => setReward({ kind: 'event' })} />
@@ -261,7 +287,11 @@ export default function Game() {
         nextLabel={quiz?.mode === 'daily' && view.daily?.finished ? (view.daily.boxPicks > 0 ? '랜덤상자 받으러 가기' : '미션 끝!') : '다음 문제'}
         chances={quiz?.mode === 'daily' ? (view.daily?.attempts ?? 1) - (view.daily?.tries[quiz.question.id] ?? 0) : 1}
         maxChances={quiz?.mode === 'daily' ? view.daily?.attempts ?? 1 : 1}
-        onAnswer={choice => act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice })}
+        onAnswer={async choice => {
+          const r = await act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice });
+          if (r?.rainbow?.kind === 'complete') rainbowJustDone.current = true;
+          return r;
+        }}
         onNext={afterCorrect}
         onClose={() => setQuiz(null)}
       />
@@ -295,6 +325,15 @@ export default function Game() {
 
       <AllClearDialog open={!!view.events.allClear.completedAt && !view.events.allClear.celebrated && !quiz && !reward}
         onClose={() => void act({ type: 'eventSeen', event: 'allClear' })} />
+
+      <RainbowIntro ev={introEv} busy={busy}
+        onAccept={async () => { if (!introEv) return; const r = await act<{ message: string }>({ type: 'limitedAccept', id: introEv.id }); if (r) { setNotice(r.message); setTab('explore'); } }}
+        onLater={() => { if (introEv) void act({ type: 'limitedSeen', id: introEv.id }); }} />
+      <RainbowNotice ev={endEv ?? remindEv} kind={endEv ? 'end' : 'remind'}
+        onClose={() => { const e = endEv ?? remindEv; if (e) void act({ type: 'limitedNotice', id: e.id, notice: endEv ? 'end' : 'remind' }); }} />
+      <ShinyChangeDialog ev={changeEv} owned={view.owned} busy={busy}
+        onChange={uid => act<{ species: number; message: string }>({ type: 'limitedShinyChange', id: changeId!, uid })}
+        onClose={() => setChangeId(null)} />
 
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (

@@ -3,23 +3,31 @@ import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
 import { SUBJECT_INFO, type EventId, type Subject } from '@/lib/game-config';
-import type { ChildView } from '@/lib/game-engine';
+import type { ChildView, LimitedView } from '@/lib/game-engine';
+import { RainbowCard } from './rainbow';
 
 /* eslint-disable @next/next/no-img-element */
 
 type Events = ChildView['events'];
 
 /** [이벤트] 탭: 도전 이벤트 두 개. 설명을 읽고 "도전할래!"를 눌러야 시작하고, 끝내면 다시 나오지 않아요. */
-export function EventTab({ events, busy, onAccept, onExplore, onOpenBox }: {
-  events: Events; busy: boolean;
+export function EventTab({ events, limited, busy, onAccept, onExplore, onOpenBox, onLimitedAccept, onLimitedChange }: {
+  events: Events; limited: LimitedView[]; busy: boolean;
   onAccept: (id: EventId) => void;
   onExplore: (subject: Subject) => void;
   onOpenBox: () => void;
+  onLimitedAccept: (id: string) => void;
+  onLimitedChange: (id: string) => void;
 }) {
   const { allClear, streak } = events;
-  const none = allClear.hidden && streak.hidden;
+  // 기간 한정 이벤트: 열려 있는 것을 맨 위에, 끝난 것은 맨 아래 "끝난 이벤트"로
+  const open = limited.filter(e => e.phase === 'active');
+  const done = limited.filter(e => e.phase === 'ended');
+  const none = allClear.hidden && streak.hidden && !open.length;
+  const card = (e: LimitedView) => <RainbowCard key={e.id} ev={e} busy={busy} onAccept={() => onLimitedAccept(e.id)} onExplore={onExplore} onChange={() => onLimitedChange(e.id)} />;
   return (
     <div className="event-list">
+      {open.map(card)}
       {!allClear.hidden && <AllClearCard ev={allClear} busy={busy} onAccept={() => onAccept('allClear')} onExplore={onExplore} />}
       {!streak.hidden && <StreakCard ev={streak} busy={busy} onAccept={() => onAccept('streak')} onOpenBox={onOpenBox} />}
       {none && (
@@ -29,6 +37,7 @@ export function EventTab({ events, busy, onAccept, onExplore, onOpenBox }: {
           <p>새로운 이벤트를 준비하고 있어. 조금만 기다려 줘.</p>
         </section>
       )}
+      {done.map(card)}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
-  eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
+  eulReul, eunNeun, iGa, SUBJECT_INFO, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
   SHINY_CHANCE_DEFAULT, type ShinyBallKind,
@@ -9,6 +9,7 @@ import {
 } from './game-config.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
 import { RARE_POKEMON } from './rare-pokemon.ts';
+import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
 export type Question = {
   id: number;
@@ -99,6 +100,27 @@ export type GameState = {
   events?: { allClear?: AllClearEvent; streak?: StreakEvent };
   /** 부활권: 게임 오버된 포켓로그 판을 그 웨이브에서 체력 가득 채워 되살림 */
   reviveTickets?: number;
+  /** 기간 한정 이벤트 진행 (이벤트 id → 진행). lib/limited-events.ts */
+  limited?: Record<string, LimitedProgress>;
+};
+/**
+ * 기간 한정 이벤트(레인보우) 하나의 진행.
+ * streak: 과목별 지금 연속으로 맞힌 수, used: 이번 연속에서 맞힌 문제(다시 풀기 문제를 고를 때 뺌),
+ * missed: 오늘 틀린 다시 풀기 문제(오늘은 다시 안 나옴), pieces: 모은 조각(모은 순서), changed: 이로치로 바꾼 포켓몬,
+ * ended: 기간이 끝나 정산한 결과(조각 수, 받은 사탕)
+ */
+export type LimitedProgress = {
+  seen?: string; acceptedAt?: string;
+  streak: Partial<Record<Subject, number>>;
+  used: Partial<Record<Subject, number[]>>;
+  missed?: { date: string; ids: number[] };
+  pieces: Subject[];
+  pieceAt: Partial<Record<Subject, string>>;
+  completedAt?: string;
+  changed?: { uid: string; species: number; at: string };
+  remindSeen?: boolean;
+  ended?: { date: string; pieces: number; candy: number };
+  endSeen?: boolean;
 };
 /** 도전! 전 과목 올클리어: 수락한 날, 그때 공개 중이던 문제은행, 마스터한 과목(문제은행이 바뀌어도 남음) */
 export type AllClearEvent = { acceptedAt: string; bankId: number; mastered: Subject[]; completedAt?: string; celebrated?: boolean };
@@ -360,11 +382,177 @@ const inTodayDaily = (state: GameState, id: number, today: string) =>
   state.daily?.date === today && state.daily.questionIds.includes(id);
 
 /** 탐험에서 나올 문제: 아직 못 맞힌 문제. 오늘 틀린 문제와 오늘의 미션 문제는 빼 둡니다. */
-function explorePool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
+function newExplorePool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
   return subjectQuestions(bank, subject).filter(q =>
     !solved.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
+}
+/**
+ * 탐험 문제. 아직 못 맞힌 문제가 없는데 레인보우 이벤트로 그 과목 조각을 모으는 중이면,
+ * 이미 맞힌 문제를 "레인보우 도전"으로 다시 냅니다 (틀려도 마스터 기록은 그대로, 레인보우 연속 수만 0).
+ */
+function explorePool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
+  const fresh = newExplorePool(state, bank, subject, today);
+  return fresh.length || !rainbowOpenFor(state, today, subject) ? fresh : rainbowReplayPool(state, bank, subject, today);
+}
+function rainbowReplayPool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
+  const lp = rainbowOf(state, today)!.lp;
+  const prog = progress(state, bank.id);
+  const solved = new Set(prog.solved);
+  const missed = new Set(lp.missed?.date === today ? lp.missed.ids : []);
+  const base = subjectQuestions(bank, subject).filter(q =>
+    solved.has(q.id) && !missed.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
+  const used = new Set(lp.used[subject] ?? []);
+  const notYet = base.filter(q => !used.has(q.id));
+  return notYet.length ? notYet : base;
+}
+/** 이 문제가 레인보우 "다시 풀기" 문제인지 (이미 맞힌 문제인데 그 과목 조각을 모으는 중). 다시 풀기는 진도(마스터 기록)를 바꾸지 않습니다 */
+const isRainbowReplay = (state: GameState, prog: BankProgress, q: Question, today: string) =>
+  prog.solved.includes(q.id) && rainbowOpenFor(state, today, q.subject);
+
+// ---------- 기간 한정 이벤트 (레인보우) ----------
+/** 오늘 열려 있고 아이가 "도전할래!"를 누른 레인보우 이벤트 */
+function rainbowOf(state: GameState, today: string): { def: LimitedEventDef; lp: LimitedProgress } | null {
+  for (const def of LIMITED_EVENTS) {
+    if (def.kind !== 'rainbow' || limitedPhase(def, today) !== 'active') continue;
+    const lp = state.limited?.[def.id];
+    if (lp?.acceptedAt) return { def, lp };
+  }
+  return null;
+}
+/** 이 과목 조각을 아직 모으는 중인지 */
+function rainbowOpenFor(state: GameState, today: string, subject: Subject) {
+  const r = rainbowOf(state, today);
+  return !!r && r.def.goal.subjects.includes(subject) && !r.lp.pieces.includes(subject);
+}
+function limitedProgress(state: GameState, id: string): LimitedProgress {
+  const all = state.limited ??= {};
+  return all[id] ??= { streak: {}, used: {}, pieces: [], pieceAt: {} };
+}
+export type RainbowResult = {
+  kind: 'progress' | 'reset' | 'piece' | 'complete';
+  subject: Subject; count: number; goal: number; pieces: number; total: number;
+  /** 아이에게 보여 줄 말 (진행 중이면 빈 글) */
+  message: string;
+};
+/** 탐험에서 한 문제를 풀 때마다: 맞히면 그 과목 연속 +1(목표에 닿으면 조각), 틀리면 0부터 */
+function rainbowAnswer(state: GameState, today: string, q: Question, correct: boolean, replay: boolean): RainbowResult | null {
+  const r = rainbowOf(state, today);
+  if (!r) return null;
+  const { def, lp } = r;
+  const s = q.subject;
+  if (!def.goal.subjects.includes(s) || lp.pieces.includes(s)) return null;
+  const goal = def.goal.streak, total = def.goal.subjects.length;
+  const before = lp.streak[s] ?? 0;
+  if (!correct) {
+    lp.streak[s] = 0;
+    lp.used[s] = [];
+    if (replay) {
+      if (lp.missed?.date !== today) lp.missed = { date: today, ids: [] };
+      lp.missed.ids.push(q.id);
+    }
+    return { kind: before > 0 ? 'reset' : 'progress', subject: s, count: 0, goal, pieces: lp.pieces.length, total,
+      message: before > 0 ? `앗! ${eunNeun(s)} 처음부터 다시 해 보자. 할 수 있어!` : '' };
+  }
+  const count = before + 1;
+  if (count < goal) {
+    lp.streak[s] = count;
+    lp.used[s] = [...(lp.used[s] ?? []), q.id];
+    return { kind: 'progress', subject: s, count, goal, pieces: lp.pieces.length, total, message: '' };
+  }
+  lp.streak[s] = goal;
+  lp.used[s] = [];
+  lp.pieces.push(s);
+  lp.pieceAt[s] = today;
+  const left = total - lp.pieces.length;
+  if (left === 0) lp.completedAt = today;
+  const heart = PIECE_INFO[s].heart;
+  return {
+    kind: left === 0 ? 'complete' : 'piece', subject: s, count: goal, goal, pieces: lp.pieces.length, total,
+    message: left === 0 ? '🌈 무지개 완성! 이로치로 바꿀 포켓몬을 골라 봐!'
+      : left === 1 ? `${heart} ${s} 조각 얻었다! 와! 이제 딱 1개 남았어!`
+      : `${heart} ${s} 조각 얻었다! 이제 ${left}개 남았어!`,
+  };
+}
+/** 기간이 끝난 이벤트를 정산합니다 (조각이 minPieces 개 이상이면 파트너에게 사탕). 바뀌었으면 true */
+export function syncLimited(state: GameState, today: string): boolean {
+  let changed = false;
+  for (const def of LIMITED_EVENTS) {
+    const lp = state.limited?.[def.id];
+    if (!lp?.acceptedAt || lp.ended || limitedPhase(def, today) !== 'ended') continue;
+    const n = lp.pieces.length;
+    const partner = state.owned.find(p => p.uid === state.partner);
+    const candy = n >= def.reward.partial.minPieces && partner ? def.reward.partial.candy : 0;
+    if (candy && partner) {
+      const c = state.candy ??= { pending: [], sent: 0 };
+      c.pending.push({ id: nextId(state, 'c'), date: today, species: partner.species, amount: candy });
+      c.sent += candy;
+    }
+    lp.ended = { date: today, pieces: n, candy };
+    changed = true;
+  }
+  return changed;
+}
+/** 아이 화면용: 열려 있는 이벤트와 (참여했던) 끝난 이벤트. 시작 전 이벤트는 아예 안 보임(깜짝) */
+export function limitedView(state: GameState, today: string, minutes: number) {
+  return LIMITED_EVENTS.flatMap(def => {
+    const phase = limitedPhase(def, today);
+    const lp = state.limited?.[def.id];
+    if (phase === 'before' || (phase === 'ended' && !lp?.acceptedAt)) return [];
+    const pieces = lp?.pieces ?? [];
+    const completed = !!lp?.completedAt;
+    const left = minutesLeft(def, today, minutes);
+    const changedP = lp?.changed;
+    return [{
+      id: def.id, kind: def.kind, title: def.title, phase, start: def.start, end: def.end,
+      accepted: !!lp?.acceptedAt, seen: !!lp?.seen || !!lp?.acceptedAt,
+      goal: def.goal.streak, total: def.goal.subjects.length, pieceCount: pieces.length,
+      subjects: def.goal.subjects.map(s => ({
+        subject: s, color: SUBJECT_INFO[s].color, colorName: PIECE_INFO[s].color, heart: PIECE_INFO[s].heart,
+        piece: pieces.includes(s), streak: pieces.includes(s) ? def.goal.streak : lp?.streak[s] ?? 0,
+      })),
+      completed, changed: changedP ? { uid: changedP.uid, species: changedP.species, name: shinyName(changedP.species) } : null,
+      canChange: completed && !changedP,
+      leftMinutes: phase === 'active' ? left : 0, leftLabel: phase === 'active' ? leftLabel(left) : '',
+      /** 마지막 날 저녁 안내 ("오늘 밤 12시면 끝나!") */
+      remind: phase === 'active' && !!lp?.acceptedAt && today === def.end && minutes >= hmToMinutes(def.reminderAt) && !completed,
+      remindSeen: !!lp?.remindSeen,
+      ended: lp?.ended ?? null, endSeen: !!lp?.endSeen,
+      shinyMultiplier: def.shinyMultiplier, partial: def.reward.partial,
+    }];
+  });
+}
+export type LimitedView = ReturnType<typeof limitedView>[number];
+/** 보호자 화면용 요약 */
+export function limitedReport(state: GameState, today: string) {
+  return LIMITED_EVENTS.filter(def => limitedPhase(def, today) !== 'before' || state.limited?.[def.id]).map(def => {
+    const lp = state.limited?.[def.id];
+    return {
+      id: def.id, title: def.title, start: def.start, end: def.end, phase: limitedPhase(def, today),
+      seen: lp?.seen ?? null, acceptedAt: lp?.acceptedAt ?? null, goal: def.goal.streak,
+      pieces: lp?.pieces ?? [], streak: Object.fromEntries(def.goal.subjects.map(s => [s, (lp?.pieces ?? []).includes(s) ? def.goal.streak : lp?.streak[s] ?? 0])) as Record<Subject, number>,
+      completedAt: lp?.completedAt ?? null, changed: lp?.changed ? { species: lp.changed.species, name: shinyName(lp.changed.species), at: lp.changed.at } : null,
+      ended: lp?.ended ?? null, shinyMultiplier: def.shinyMultiplier, partial: def.reward.partial,
+    };
+  });
+}
+/** 시뮬레이션 도우미(시험용 기록에만): reset = 이 이벤트 기록 지우기, streak9 = 못 모은 과목 연속 9로, pieces5 = 조각 5개로 */
+export function simLimited(state: GameState, id: string, op: 'reset' | 'streak9' | 'pieces5', today: string): boolean {
+  const def = limitedById(id);
+  if (!def) return false;
+  if (op === 'reset') { if (state.limited) delete state.limited[id]; return true; }
+  const lp = limitedProgress(state, id);
+  lp.acceptedAt ??= today; lp.seen ??= today;
+  if (op === 'streak9') {
+    for (const s of def.goal.subjects) if (!lp.pieces.includes(s)) lp.streak[s] = def.goal.streak - 1;
+  } else {
+    for (const s of def.goal.subjects) {
+      if (lp.pieces.length >= def.goal.subjects.length - 1) break;
+      if (!lp.pieces.includes(s)) { lp.pieces.push(s); lp.pieceAt[s] = today; lp.streak[s] = def.goal.streak; }
+    }
+  }
+  return true;
 }
 
 export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, subject: Subject, today: string, random: Random, skip?: number) {
@@ -392,7 +580,11 @@ export type Action =
   | { type: 'replyGift'; id: string; sticker: ReplySticker; text?: string }
   | { type: 'acceptEvent'; event: EventId }
   | { type: 'eventSeen'; event: EventId }
-  | { type: 'eventBox'; pick: number };
+  | { type: 'eventBox'; pick: number }
+  | { type: 'limitedSeen'; id: string }
+  | { type: 'limitedAccept'; id: string }
+  | { type: 'limitedShinyChange'; id: string; uid: string }
+  | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' };
 
 /** shinyChance: 볼을 열 때 이로치가 나올 확률(%)을 덮어씀 (보호자 개발자 메뉴·시뮬레이션). 없으면 기본값 */
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>> };
@@ -433,6 +625,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!q) fail('문제를 다시 불러와 주세요.');
       if (!Number.isInteger(action.choice) || action.choice < 0 || action.choice >= q.choices.length) fail('답을 하나 골라 주세요.');
       const prog = progress(state, bank.id);
+      // 레인보우 "다시 풀기" 문제: 이미 맞힌 문제를 이벤트 조각용으로 다시 푸는 것. 진도(맞힌 문제·틀린 횟수·영역)는 바꾸지 않음
+      const replay = action.mode === 'explore' && isRainbowReplay(state, prog, q, ctx.today);
       if (action.mode === 'daily') {
         ensureDaily(state, bank, ctx.today, random);
         const d = state.daily!;
@@ -440,14 +634,23 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         if (d.correct.includes(q.id) || d.wrong.includes(q.id)) fail('이 문제는 오늘 이미 풀었어요.');
         if (d.box) fail('오늘의 미션은 끝났어요.');
       } else if (action.mode === 'explore') {
-        if (prog.solved.includes(q.id)) fail('이미 맞힌 문제예요.');
+        if (prog.solved.includes(q.id) && !replay) fail('이미 맞힌 문제예요.');
         if (wrongToday(prog, q.id, ctx.today)) fail('이 문제는 다른 날 다시 도전해 보자!');
+        if (replay && (() => { const lp = rainbowOf(state, ctx.today)!.lp; return lp.missed?.date === ctx.today && lp.missed.ids.includes(q.id); })()) fail('이 문제는 다른 날 다시 도전해 보자!');
         if (inTodayDaily(state, q.id, ctx.today)) fail('이 문제는 오늘의 미션에서 풀어 줘.');
       } else fail('지원하지 않는 요청이에요.');
 
       // 틀리면: '안 푼 문제'로 돌려놓고, 다른 날 일일미션·탐험에 다시 나오게 합니다.
       // 일일미션은 기회가 남아 있으면 다시 풀 수 있고, 탐험은 기회가 한 번입니다.
       if (action.choice !== q.answer) {
+        if (replay) {
+          quizDay(state, ctx.today).answered += 1;
+          return {
+            correct: false, final: true, answer: q.answer, explanation: q.explanation,
+            message: `아쉬워! 정답은 ${q.answer + 1}번이야.`,
+            rainbow: rainbowAnswer(state, ctx.today, q, false, true),
+          };
+        }
         prog.wrong[q.id] = (prog.wrong[q.id] ?? 0) + 1;
         prog.review[q.id] = ctx.today;
         prog.solved = prog.solved.filter(id => id !== q.id);
@@ -463,7 +666,12 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           correct: false, final: true, answer: q.answer, explanation: q.explanation,
           message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 다른 날 다시 나올 거야.`,
           candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
+          rainbow: action.mode === 'explore' ? rainbowAnswer(state, ctx.today, q, false, false) : null,
         };
+      }
+      if (replay) {
+        const day = quizDay(state, ctx.today); day.answered += 1; day.correct += 1;
+        return { correct: true, explanation: q.explanation, reviewed: false, message: '정답이야!', rainbow: rainbowAnswer(state, ctx.today, q, true, true) };
       }
 
       // 전날 이전에 틀린 문제를 맞히면 다시 풀기 완료. 오늘 틀렸다가 다시 맞힌 문제는 다른 날 한 번 더 나옵니다.
@@ -487,6 +695,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         message: reviewed ? '지난번에 틀린 문제, 이번엔 맞혔어!' : '정답이야!',
         /** 이 답으로 오늘의 미션이 끝나 사탕을 보냈으면 그 내용 */
         candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
+        /** 레인보우 이벤트 진행 (탐험에서만) */
+        rainbow: action.mode === 'explore' ? rainbowAnswer(state, ctx.today, q, true, false) : null,
       };
     }
 
@@ -576,7 +786,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
           id = pick(CATCH_POOLS[tier], random);
         }
-        const chance = ctx.shinyChance?.[ball.kind] ?? SHINY_CHANCE_DEFAULT[ball.kind];
+        // 기간 한정 이벤트 중에는 이로치 확률 × 배수 (최대 100%)
+        const chance = Math.min(100, (ctx.shinyChance?.[ball.kind] ?? SHINY_CHANCE_DEFAULT[ball.kind]) * limitedShinyMultiplier(ctx.today));
         shiny = random() * 100 < chance;
       }
       const result = addPokemon(state, id, ctx.now, shiny);
@@ -738,6 +949,45 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         items: st.box.items, picks: [choice], done: true, ballIds: ballId ? [ballId] : [],
         message: item.kind === 'ticket' ? '배틀 추가권을 얻었어!' : item.kind === 'ball' && item.ball === 'shiny' ? '이로치 볼을 얻었어!' : '희귀 포켓몬 볼을 얻었어!',
       };
+    }
+
+    // ---- 기간 한정 이벤트 (레인보우) ----
+    case 'limitedSeen': {
+      // 팝업에서 "나중에": 다시 팝업은 안 띄우고, 이벤트 탭에서 시작할 수 있음
+      const def = limitedById(String(action.id));
+      if (!def || limitedPhase(def, ctx.today) !== 'active') fail('지금은 열려 있는 이벤트가 아니에요.');
+      limitedProgress(state, def.id).seen ??= ctx.today;
+      return { ok: true };
+    }
+    case 'limitedAccept': {
+      needStarter();
+      const def = limitedById(String(action.id));
+      if (!def || limitedPhase(def, ctx.today) !== 'active') fail('지금은 열려 있는 이벤트가 아니에요.');
+      const lp = limitedProgress(state, def.id);
+      if (lp.acceptedAt) fail('이미 도전 중이야!');
+      lp.acceptedAt = ctx.today;
+      lp.seen ??= ctx.today;
+      return { message: `🌈 ${def.title} 시작! 탐험에서 ${def.goal.streak}문제 쭉 맞혀 봐!` };
+    }
+    case 'limitedShinyChange': {
+      const def = limitedById(String(action.id));
+      const lp = def ? state.limited?.[def.id] : undefined;
+      if (!def || !lp?.completedAt) fail('무지개 조각을 모두 모아야 해요.');
+      if (lp.changed) fail('이미 이로치로 바꿨어요.');
+      const p = state.owned.find(p => p.uid === action.uid);
+      if (!p) fail('포켓몬을 골라 줘.');
+      if (p.shiny) fail('이미 이로치야. 다른 포켓몬을 골라 줘.');
+      p.shiny = true;
+      state.shiny ??= [];
+      if (!state.shiny.includes(p.species)) state.shiny.push(p.species);
+      lp.changed = { uid: p.uid, species: p.species, at: ctx.now };
+      return { uid: p.uid, species: p.species, message: `✨ ${iGa(species(p.species).name)} 반짝반짝 변신했어! 이로치 도감에 들어갔어!` };
+    }
+    case 'limitedNotice': {
+      const lp = state.limited?.[String(action.id)];
+      if (lp && action.notice === 'remind') lp.remindSeen = true;
+      if (lp && action.notice === 'end') lp.endSeen = true;
+      return { ok: true };
     }
 
     default:
@@ -1105,7 +1355,7 @@ export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
 
 // ---------- 아이 화면에 보낼 정보 ----------
-export function childView(state: GameState, bank: ActiveBank | null, today: string) {
+export function childView(state: GameState, bank: ActiveBank | null, today: string, minutes = 0) {
   const prog = bank ? progress(state, bank.id) : null;
   const byId = new Map(bank?.questions.map(q => [q.id, q]) ?? []);
   const daily = state.daily && bank && state.daily.date === today
@@ -1139,6 +1389,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
       /** 오늘의 미션에 들어 있어 탐험에서 빠진 (아직 못 맞힌) 문제 수 */
       inDaily: qs.filter(q => !solved.has(q.id) && !wrongToday(prog!, q.id, today) && inTodayDaily(state, q.id, today)).length,
       rewardClaimed: prog!.subjectRewards.includes(subject),
+      /** 레인보우 이벤트로 이미 맞힌 문제를 다시 푸는 중 (새 문제가 없을 때) */
+      rainbowReplay: newExplorePool(state, bank, subject, today).length === 0 && rainbowOpenFor(state, today, subject),
     };
   }) : [];
   return {
@@ -1173,6 +1425,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     /** 포켓로그 이벤트에서 받은 이로치 (도감에 색깔별로 따로 표시) */
     shiny: state.shiny ?? [],
     megas: state.megas ?? [],
+    /** 기간 한정 이벤트 (시작 전에는 비어 있음) */
+    limited: limitedView(state, today, minutes),
   };
 }
 export type ChildView = ReturnType<typeof childView>;
