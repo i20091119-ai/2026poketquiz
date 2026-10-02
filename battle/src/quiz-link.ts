@@ -13,6 +13,7 @@ import type { PokemonSpecies } from "#data/pokemon-species";
 import type { SpeciesId } from "#enums/species-id";
 import type { StarterSpeciesId } from "#types/starter-species-id";
 import { decrypt, encrypt } from "#utils/data";
+import shinyColors from "./data/quiz-shiny-colors.json";
 
 /** 퀴즈 앱 서버 주소. 게임이 퀴즈 앱의 /battle/ 아래에서 열리므로 같은 주소를 씁니다. */
 export const QUIZ_MY_POKEMON_URL = "/api/my-pokemon";
@@ -117,6 +118,12 @@ function evolutionDepth(speciesId: SpeciesId): number {
     depth++;
   }
   return depth;
+}
+
+/** 이로치 이름: 퀴즈 앱과 같은 색 이름을 앞에 붙임 (예: 오렌지피카츄). 색 이름이 없으면 그대로. */
+export function quizShinyName(speciesId: number, baseName: string): string {
+  const color = (shinyColors as Record<string, string>)[String(speciesId)];
+  return color ? `${color}${baseName}` : baseName;
 }
 
 /**

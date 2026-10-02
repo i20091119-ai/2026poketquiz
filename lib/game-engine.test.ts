@@ -4,7 +4,8 @@ import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEF
 import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
-import { megaByKey, megaImages, MEGAS, TOTAL_MEGAS } from './megas.ts';
+import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
+import { readFileSync } from 'node:fs';
 import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -708,4 +709,12 @@ test('선물 열매는 고른 계열 열매가 가방에 들어가고, 몬스터
   assert.equal(r.ballIds.length, 1);
   assert.equal(state.balls[0].id, r.ballIds[0]);
   assert.equal(state.balls[0].kind, 'poke');
+});
+
+test('포켓로그의 이로치 색 이름 파일이 퀴즈 앱과 같고, 메가 이름에 이모지가 붙는다', () => {
+  const a = readFileSync(new URL('./data/shiny-colors.json', import.meta.url), 'utf8');
+  const b = readFileSync(new URL('../battle/src/data/quiz-shiny-colors.json', import.meta.url), 'utf8');
+  assert.equal(a, b);
+  assert.ok(megaLabel(MEGAS[0]).endsWith(MEGAS[0].name));
+  assert.notEqual(megaLabel(MEGAS[0]), MEGAS[0].name);
 });

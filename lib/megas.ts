@@ -31,3 +31,7 @@ export function megaImages(art: number): string[] {
     `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${art}.png`,
   ];
 }
+
+/** 메가 이름 앞에 붙는 이모지 (바꾸고 싶으면 여기만 고치면 됩니다) */
+export const MEGA_EMOJI = '🧬';
+export const megaLabel = (m: MegaForm) => `${MEGA_EMOJI} ${m.name}`;

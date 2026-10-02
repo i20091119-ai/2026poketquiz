@@ -1,4 +1,5 @@
 import { globalScene } from "#app/global-scene";
+import { quizShinyName } from "#app/quiz-link";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -462,7 +463,9 @@ export class StarterSummary extends Phaser.GameObjects.Container {
       const name = decodeURIComponent(escape(atob(starterPreferences.nickname)));
       this.pokemonNameText.setText(name);
     } else {
-      this.pokemonNameText.setText(species.name);
+      this.pokemonNameText.setText(
+        starterPreferences?.shiny ? quizShinyName(species.speciesId, species.name) : species.name,
+      );
     }
   }
 

@@ -12,7 +12,7 @@ import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { activeOverrides } from "#app/overrides";
-import { isBattleEvolutionAllowed } from "#app/quiz-link";
+import { isBattleEvolutionAllowed, quizShinyName } from "#app/quiz-link";
 import type { AnySound } from "#audio/audio-manager";
 import { speciesEggMoves } from "#balance/egg-moves";
 import { FusionSpeciesFormEvolution, SpeciesFormEvolution, validateShedinjaEvo } from "#balance/pokemon-evolutions";
@@ -624,7 +624,8 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
    */
   public generateName(): void {
     if (!this.fusionSpecies) {
-      this.name = this.species.getName(this.formIndex);
+      const baseName = this.species.getName(this.formIndex);
+      this.name = this.shiny && this.variant === 0 ? quizShinyName(this.species.speciesId, baseName) : baseName;
       return;
     }
     this.name = getFusedSpeciesName(

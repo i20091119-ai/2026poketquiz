@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
 import { ASSETS } from '@/lib/assets';
 import { evolutionRequirement, evolutionsOf, isStrong, shinyName, species, thirdTypeOf, TOTAL_SPECIES } from '@/lib/pokedex';
-import { megaByKey, megaImages, TOTAL_MEGAS, type MegaForm } from '@/lib/megas';
+import { megaByKey, megaImages, megaLabel, TOTAL_MEGAS, type MegaForm } from '@/lib/megas';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 import { rootOf } from '@/lib/pokedex';
 
@@ -139,7 +139,7 @@ function MegaDex({ view }: { view: ChildView }) {
             <div className="dex-cell is-mega" key={m.key}>
               <MegaImage art={m.art} name={m.name} />
               <small>{dexNo(m.species)}</small>
-              <span>{m.name}</span>
+              <span>{megaLabel(m)}</span>
             </div>
           ))}
         </div>
