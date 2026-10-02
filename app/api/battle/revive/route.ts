@@ -7,7 +7,7 @@ import { spendReviveTicket } from '@/lib/game-engine';
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { battleGate } from '@/lib/server/battle-gate';
 import { playerOf } from '@/lib/server/player';
-import { json, latestDefeat, mutateState, readState, takeRunForRevive, undoRevive } from '@/lib/server/store';
+import { appendActivity, json, latestDefeat, mutateState, readState, takeRunForRevive, undoRevive } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       if (body.mode === 'history') await undoRevive(player.id, String(body.runId));
       return json({ ok: false, message: NO_TICKET });
     }
+    await appendActivity(player.id, player.today, [{ kind: 'revive', data: { mode: body.mode === 'history' ? '배틀 탭에서 판 되살리기' : '게임 오버 화면', runId: body.mode === 'history' ? String(body.runId) : null, wave: run?.wave ?? null, ticketsLeft: state.reviveTickets ?? 0 } }]);
     return json({ ok: true, tickets: state.reviveTickets ?? 0, ...(run ? { wave: run.wave, data: run.data } : {}) });
   } catch (error) {
     console.error('부활권 사용 실패', error);

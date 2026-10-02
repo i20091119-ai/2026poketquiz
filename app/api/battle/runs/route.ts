@@ -2,9 +2,22 @@
 //   POST { runs: [{ id, wave, victory, data }] } → 저장 (같은 판은 한 번만)
 import { isBattleAllowed } from '@/lib/server/battle-auth';
 import { playerOf } from '@/lib/server/player';
-import { json, saveRuns, type RunInput } from '@/lib/server/store';
+import { appendActivity, json, saveRuns, type RunInput } from '@/lib/server/store';
 
 export const dynamic = 'force-dynamic';
+
+/** 판 저장(원본 게임의 세션 저장)에서 활동 기록에 남길 것만: 끝난 시각, 웨이브, 결과, 출전 포켓몬과 레벨 */
+function runSummary(r: RunInput) {
+  let party: { species: number; level: number; shiny: boolean }[] = [];
+  let playTime: number | null = null;
+  try {
+    const entry = JSON.parse(r.data) as { party?: { species?: number; level?: number; shiny?: boolean }[]; playTime?: number };
+    playTime = Number(entry.playTime) || null;
+    party = (entry.party ?? []).slice(0, 6).map(p => ({ species: Number(p.species), level: Number(p.level), shiny: !!p.shiny }));
+  } catch { /* 파티를 못 읽어도 기록은 남김 */ }
+  const end = new Date(Number(r.id));
+  return { runId: r.id, endedAt: Number.isFinite(end.getTime()) ? end.toISOString() : new Date().toISOString(), playTime, wave: r.wave, result: r.victory ? '클리어' : '게임 오버', party };
+}
 
 const MAX_BODY = 4_000_000;
 const MAX_RUN = 1_500_000;
@@ -25,8 +38,10 @@ export async function POST(request: Request) {
       return [{ id, wave, victory: r?.victory === true, data }];
     });
     const player = await playerOf(request);
-    const added = runs.length ? await saveRuns(player.id, runs) : 0;
-    return json({ ok: true, added });
+    const saved = runs.length ? await saveRuns(player.id, runs) : { count: 0, fresh: [] as RunInput[] };
+    // 새로 올라온 판마다 활동 기록 한 줄 (판 저장은 최근 30판만 남지만 이 기록은 계속 남음)
+    await appendActivity(player.id, player.today, saved.fresh.flatMap(r => { try { return [{ kind: 'battleRun', data: runSummary(r) }]; } catch { return []; } }));
+    return json({ ok: true, added: saved.count });
   } catch (error) {
     console.error('포켓로그 판 저장 실패', error);
     return json({ error: '판을 저장하지 못했어요.' }, 503);

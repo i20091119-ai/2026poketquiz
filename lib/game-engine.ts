@@ -44,6 +44,8 @@ export type BankProgress = {
   masterClaimed: boolean;
   /** 영역별 성적: '과목|영역' → 최근 결과(o/x 최대 8개), 맞힌 수, 틀린 수 */
   areas?: Record<string, AreaStat>;
+  /** 영역 기능이 생기기 전에 푼 문제는 한 번 지난 기록(맞힌 문제·틀린 횟수)으로 채워 둠 */
+  areasSeeded?: boolean;
 };
 export type AreaStat = { recent: string; correct: number; wrong: number };
 
@@ -237,8 +239,38 @@ function grant(state: GameState, item: BoxItem): string | null {
 /** 'YYYY-MM-DD' → 1970-01-01부터 며칠째 */
 const dayNumber = (date: string) => Math.floor(Date.parse(date + 'T00:00:00Z') / 86400000);
 
+/**
+ * 영역별 성적은 문제를 풀 때마다 쌓이므로, 영역 기능이 생기기 전에 푼 문제는 영역표에 빠져 있었습니다.
+ * 한 번만, 지난 기록으로 채웁니다: 맞힌 문제 수 = 영역에서 맞힌 적 있는 문제 수, 틀린 수 = 그 문제들의 틀린 횟수 합.
+ * (언제 틀렸는지는 몰라서 "최근 결과"는 비워 두고, 그래서 약점으로 잡히지는 않아요.) 이미 쌓인 영역은 건드리지 않습니다. 바꿨으면 true.
+ */
+export function seedAreaStats(state: GameState, bank: ActiveBank | null): boolean {
+  if (!bank) return false;
+  const prog = progress(state, bank.id);
+  if (prog.areasSeeded) return false;
+  prog.areasSeeded = true;
+  const solved = new Set(prog.solved);
+  const seeded = new Map<string, AreaStat>();
+  for (const q of bank.questions) {
+    const wrong = prog.wrong[q.id] ?? 0;
+    if (!solved.has(q.id) && !wrong) continue;
+    const key = areaKey(q);
+    if (prog.areas?.[key]) continue; // 이미 쌓이고 있는 영역
+    const stat = seeded.get(key) ?? { recent: '', correct: 0, wrong: 0 };
+    if (solved.has(q.id)) stat.correct += 1;
+    stat.wrong += wrong;
+    seeded.set(key, stat);
+  }
+  if (seeded.size) prog.areas = { ...(prog.areas ?? {}), ...Object.fromEntries(seeded) };
+  return true;
+}
+
 /** 오늘의 미션이 없거나 문제은행이 바뀌었으면 과목별로 새로 뽑습니다. 바뀌었으면 true. */
 export function ensureDaily(state: GameState, bank: ActiveBank | null, today: string, random: Random): boolean {
+  const seeded = seedAreaStats(state, bank);
+  return ensureDailyCore(state, bank, today, random) || seeded;
+}
+function ensureDailyCore(state: GameState, bank: ActiveBank | null, today: string, random: Random): boolean {
   if (!bank) return false;
   const d = state.daily;
   if (d) { d.wrong ??= []; d.tries ??= {}; d.box ??= null; } // 이전 형식으로 저장된 기록
@@ -1022,6 +1054,7 @@ export type AreaReport = {
   repeated: { id: number; prompt: string; wrong: number; solved: boolean }[];
 };
 export function areaReport(state: GameState, bank: ActiveBank): { subject: Subject; areas: AreaReport[] }[] {
+  seedAreaStats(state, bank); // 읽기만 하는 요청에서는 저장되지 않고, 아이 화면을 열 때 저장됨
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
   return SUBJECTS.map(subject => {

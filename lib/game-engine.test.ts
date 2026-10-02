@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, statReward } from './game-config.ts';
-import { activityList, applyAction, areaReport, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward } from './game-config.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen } from './game-engine.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
 import { readFileSync } from 'node:fs';
+import { afterAction, beforeAction, daySummary, type LogEntry } from './activity-log.ts';
+import { buildChildExport } from './child-export.ts';
 import { GIFT_CANDY, GIFT_EXP, REPLY_TEXT_MAX } from './game-config.ts';
 import { sampleQuestions } from './sample-bank.ts';
 
@@ -717,4 +719,131 @@ test('포켓로그의 이로치 색 이름 파일이 퀴즈 앱과 같고, 메�
   assert.equal(a, b);
   assert.ok(megaLabel(MEGAS[0]).endsWith(MEGAS[0].name));
   assert.notEqual(megaLabel(MEGAS[0]), MEGAS[0].name);
+});
+
+/** 행동 하나를 적용하고 그 활동 기록을 돌려줌 */
+function logged(state: GameState, action: Parameters<typeof applyAction>[1], c: Context): { result: ReturnType<typeof applyAction>; log: LogEntry[] } {
+  const before = beforeAction(state, action, c.today);
+  const result = applyAction(state, action, c);
+  return { result, log: afterAction(before, state, action, result, c) };
+}
+
+test('활동 기록: 문제 풀이에 고른 답·정답 여부·몇 번째 시도인지, 스탯 변화가 남는다', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank);
+  ensureDaily(state, bank, c.today, c.random);
+  const q = bank.questions.find(q => state.daily!.questionIds.includes(q.id))!;
+  const wrongChoice = (q.answer + 1) % 5;
+  const first = logged(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: wrongChoice }, c);
+  const a1 = first.log.find(e => e.kind === 'answer')!.data;
+  assert.equal(a1.correct, false);
+  assert.equal(a1.attempt, 1);
+  assert.equal(a1.chosen, wrongChoice + 1);
+  assert.equal(a1.answer, q.answer + 1);
+  assert.equal(a1.mode, '일일미션');
+  assert.equal(a1.prompt, q.prompt);
+  assert.equal(first.log.some(e => e.kind === 'stat'), false); // 틀리면 스탯 변화 없음
+  const second = logged(state, { type: 'answer', mode: 'daily', questionId: q.id, choice: q.answer }, c);
+  const a2 = second.log.find(e => e.kind === 'answer')!.data;
+  assert.equal(a2.correct, true);
+  assert.equal(a2.attempt, 2);
+  const stat = second.log.find(e => e.kind === 'stat')!.data;
+  assert.equal((stat.deltas as Record<string, number>)[TYPE_INFO[q.type].label], 5);
+  assert.equal(stat.exp, 10);
+});
+
+test('활동 기록: 볼에서 얻은 포켓몬(얻은 방법)과 진화, 시작 파트너', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = initialState();
+  const start = logged(state, { type: 'starter', species: 906 }, c);
+  assert.equal(start.log.find(e => e.kind === 'pokemon')!.data.how, '시작 파트너');
+  state.balls.push({ id: 'bx', kind: 'poke' });
+  const ball = logged(state, { type: 'openBall', ballId: 'bx' }, c);
+  assert.ok(ball.log.some(e => e.kind === 'ball' && e.data.ballLabel === '몬스터볼'));
+  const got = ball.log.find(e => e.kind === 'pokemon');
+  if (got) assert.equal(got.data.how, '몬스터볼 열기');
+  state.stats.grass = 41;
+  const evo = logged(state, { type: 'evolve', uid: state.owned[0].uid, target: 907 }, c);
+  const e = evo.log.find(e => e.kind === 'evolve')!.data;
+  assert.equal(e.to, 907);
+  assert.equal(e.from, 906);
+  assert.ok(evo.log.some(e => e.kind === 'stat' && (e.data.deltas as Record<string, number>)[TYPE_INFO.grass.label] === -36));
+});
+
+test('아이 기록 내보내기: 판·하루 활동·보유 포켓몬이 들어가고 모든 항목의 시작일이 적힌다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  state.quizLog = { '2026-09-25': { seconds: 600, answered: 18, correct: 15 } };
+  const rows = [
+    { seq: 1, at: '2026-09-26T01:00:00Z', date: '2026-09-26', kind: 'battleStart', data: { date: '2026-09-26' } },
+    { seq: 2, at: '2026-09-26T01:20:00Z', date: '2026-09-26', kind: 'battleRun', data: { runId: String(Date.parse('2026-09-26T01:20:00Z')), endedAt: '2026-09-26T01:20:00Z', wave: 12, result: '게임 오버', party: [{ species: 25, level: 30, shiny: false }] } },
+    { seq: 3, at: '2026-09-26T01:10:00Z', date: '2026-09-26', kind: 'revive', data: { mode: '게임 오버 화면' } },
+    { seq: 4, at: '2026-09-26T02:00:00Z', date: '2026-09-26', kind: 'day', data: daySummary(state, '2026-09-26').data },
+  ];
+  const file = buildChildExport({ state, rows, since: '2026-09-26', appVersion: 'test', exportedAt: '2026-09-27T00:00:00Z' });
+  assert.equal(file.포켓로그.판.length, 1);
+  assert.equal(file.포켓로그.판[0].startTime, '2026-09-26 10:00:00');
+  assert.equal(file.포켓로그.판[0].wave, 12);
+  assert.equal(file.포켓로그.판[0].reviveUsed, 1);
+  assert.equal(file.포켓로그.판[0].party[0].name, '피카츄');
+  assert.ok(file.하루활동.some(d => d.date === '2026-09-25' && d.quizSeconds === 600));
+  assert.equal(file.성장.보유포켓몬.length, 1);
+  
+  const since = (item: string) => file.기록시작.항목별.find(i => i.item === item)!.since;
+  assert.equal(since('포켓로그 새 판 시작'), '2026-09-26');
+  assert.match(since('진화 기록'), /이후 아직 없음/);
+  assert.doesNotThrow(() => JSON.stringify(file));
+});
+
+test('영역별 성적: 영역 기능 전에 푼 문제도 지난 기록으로 한 번 채워진다', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  const kor = bank.questions.filter(q => q.subject === '국어');
+  state.banks[bank.id] = { solved: kor.slice(0, 3).map(q => q.id), wrong: { [kor[0].id]: 2, [kor[4].id]: 1 }, review: {}, subjectRewards: [], masterClaimed: false };
+  const report = areaReport(state, bank).find(r => r.subject === '국어')!.areas;
+  const correct = report.reduce((n, a) => n + a.correct, 0);
+  const wrong = report.reduce((n, a) => n + a.wrong, 0);
+  assert.equal(correct, 3);
+  assert.equal(wrong, 3);
+  assert.ok(report.every(a => !a.weak)); // 언제 틀렸는지 몰라 약점으로는 잡지 않음
+  // 한 번만: 이후 풀이는 그대로 쌓이고 다시 채우지 않음
+  const before = JSON.stringify(state.banks[bank.id].areas);
+  assert.equal(seedAreaStats(state, bank), false);
+  assert.equal(JSON.stringify(state.banks[bank.id].areas), before);
+});
+
+test('아이 기록 내보내기: 게임 오버 화면에서 쓴 부활권은 그 판에 붙고, 처음부터 다시 하기 앞 기록은 나뉘고, 모르는 포켓몬 번호도 견딘다', () => {
+  const state = started(makeBank());
+  state.battleLevels = { 2019: 12 } as Record<number, number>; // 퀴즈 도감에 없는 번호
+  const run = (id: string, at: string, wave: number) => ({ at, kind: 'battleRun', data: { runId: id, endedAt: at, wave, result: '게임 오버', party: [{ species: 2019, level: 9, shiny: false }] } });
+  const rows = [
+    { seq: 1, at: '2026-09-20T01:00:00Z', date: '2026-09-20', kind: 'answer', data: { prompt: '옛 기록' } },
+    { seq: 2, at: '2026-09-21T01:00:00Z', date: '2026-09-21', kind: 'reset', data: {} },
+    { seq: 3, ...run('1', '2026-10-01T01:00:00Z', 10), date: '2026-10-01' },
+    // 판 B: 게임 오버 화면에서 부활(01:20) → 진짜 끝(01:40)
+    { seq: 4, at: '2026-10-02T01:20:00Z', date: '2026-10-02', kind: 'revive', data: { mode: '게임 오버 화면', runId: null } },
+    { seq: 5, ...run('2', '2026-10-02T01:40:00Z', 20), date: '2026-10-02' },
+    { seq: 6, ...run('2', '2026-10-02T01:40:00Z', 20), date: '2026-10-02' }, // 같은 판이 또 올라옴
+  ];
+  const file = buildChildExport({ state, rows, since: '2026-09-20', appVersion: 't', exportedAt: '2026-10-03T00:00:00Z' });
+  assert.equal(file.포켓로그.판.length, 2);
+  assert.deepEqual(file.포켓로그.판.map(r => r.reviveUsed), [0, 1]);
+  assert.equal(file.포켓로그.판[0].party[0].name, '#2019');
+  assert.equal(file.문제풀이.length, 0); // 다시 하기 앞의 문제 풀이는 본문에서 빠짐
+  assert.equal(file.처음부터다시하기_이전기록?.기록.length, 1);
+  assert.doesNotThrow(() => JSON.stringify(file));
+});
+
+test('활동 기록: 어제 미션의 시도 횟수는 오늘 풀이에 이어지지 않는다', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank);
+  ensureDaily(state, bank, c.today, c.random);
+  const q = bank.questions.find(q => state.daily!.questionIds.includes(q.id))!;
+  state.daily!.tries[q.id] = 2;
+  const action = { type: 'answer' as const, mode: 'daily' as const, questionId: q.id, choice: q.answer };
+  assert.equal(beforeAction(state, action, c.today).tries, 2);
+  assert.equal(beforeAction(state, action, '2026-09-27').tries, 0); // 날짜가 달라진 뒤의 풀이
 });

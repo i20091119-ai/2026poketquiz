@@ -5,6 +5,7 @@ import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SHINY_CHANCE_BALLS, SHINY_CH
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
+import type { LogEntry } from '../activity-log.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
@@ -186,19 +187,21 @@ export const setRestOpenDate = (date: string | null) => setSetting('battle_rest_
 const RUNS_KEEP = 30;
 export type RunInput = { id: string; wave: number; victory: boolean; data: string };
 /** 게임이 올린 판들을 저장합니다 (같은 판은 한 번만). 기록마다 최근 RUNS_KEEP 판만 남깁니다. 새로 넣은 수를 돌려줍니다. */
-export async function saveRuns(player: PlayerId, runs: RunInput[]): Promise<number> {
+export async function saveRuns(player: PlayerId, runs: RunInput[]): Promise<{ count: number; fresh: RunInput[] }> {
   let added = 0;
+  const fresh: RunInput[] = [];
   const now = new Date().toISOString();
   for (const r of runs) {
     const res = await db().prepare('INSERT OR IGNORE INTO battle_runs (player, id, wave, victory, data, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(player, r.id, r.wave, r.victory ? 1 : 0, r.data, now).run();
     added += res.meta.changes ?? 0;
+    if (res.meta.changes) fresh.push(r);
   }
   if (added) {
     await db().prepare(`DELETE FROM battle_runs WHERE player = ? AND id NOT IN (SELECT id FROM battle_runs WHERE player = ? ORDER BY CAST(id AS INTEGER) DESC LIMIT ${RUNS_KEEP})`)
       .bind(player, player).run();
   }
-  return added;
+  return { count: added, fresh };
 }
 /** 부활권으로 되살릴 수 있는 가장 최근 게임 오버 판 (이긴 판·이미 되살린 판 제외) */
 export async function latestDefeat(player: PlayerId): Promise<{ id: string; wave: number } | null> {
@@ -320,4 +323,35 @@ export async function updateQuestion(id: number, q: QuestionInput) {
 
 export async function deleteQuestion(id: number) {
   await db().prepare('DELETE FROM questions WHERE id = ?').bind(id).run();
+}
+
+// ---------- 활동 기록 (아이 기록 내보내기) ----------
+/**
+ * 활동 기록을 남깁니다. 시험용(sim) 기록은 남기지 않습니다. 기록이 실패해도 게임은 계속되게 오류는 삼킵니다.
+ * 처음 남길 때 "기록 시작일"도 settings.activity_log_since 에 한 번 적어 둡니다.
+ */
+export async function appendActivity(player: PlayerId, date: string, entries: LogEntry[]) {
+  if (player !== REAL_PLAYER || !entries.length) return;
+  try {
+    const d = db();
+    const now = new Date().toISOString();
+    await d.batch([d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('activity_log_since', ?)").bind(date), ...entries.map(e => e.ukey === undefined
+      ? d.prepare('INSERT INTO activity_log (player, at, date, kind, ukey, data) VALUES (?, ?, ?, ?, NULL, ?)').bind(player, now, date, e.kind, JSON.stringify(e.data))
+      : d.prepare(`INSERT INTO activity_log (player, at, date, kind, ukey, data) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(player, kind, ukey) WHERE ukey IS NOT NULL DO UPDATE SET at = excluded.at, data = excluded.data`).bind(player, now, date, e.kind, e.ukey, JSON.stringify(e.data)))]);
+  } catch (error) {
+    console.error('활동 기록 저장 실패', error);
+  }
+}
+export type ActivityRow = { seq: number; at: string; date: string; kind: string; data: Record<string, unknown> };
+export async function readActivity(player: PlayerId = REAL_PLAYER): Promise<{ since: string | null; rows: ActivityRow[] }> {
+  const d = db();
+  const [since, res] = await Promise.all([
+    d.prepare("SELECT value FROM settings WHERE key = 'activity_log_since'").first<{ value: string }>(),
+    d.prepare('SELECT seq, at, date, kind, data FROM activity_log WHERE player = ? ORDER BY seq').bind(player).all<{ seq: number; at: string; date: string; kind: string; data: string }>(),
+  ]);
+  return {
+    since: since?.value ?? null,
+    rows: (res.results ?? []).map(r => ({ seq: r.seq, at: r.at, date: r.date, kind: r.kind, data: JSON.parse(r.data) as Record<string, unknown> })),
+  };
 }
