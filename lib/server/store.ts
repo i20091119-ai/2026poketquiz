@@ -5,7 +5,7 @@ import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SHINY_CHANCE_BALLS, SHINY_CH
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
-import { daySummary, type LogEntry } from '../activity-log.ts';
+import type { LogEntry } from '../activity-log.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
@@ -335,18 +335,13 @@ export async function appendActivity(player: PlayerId, date: string, entries: Lo
   try {
     const d = db();
     const now = new Date().toISOString();
-    await d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('activity_log_since', ?)").bind(date).run();
-    await d.batch(entries.map(e => e.ukey === undefined
+    await d.batch([d.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('activity_log_since', ?)").bind(date), ...entries.map(e => e.ukey === undefined
       ? d.prepare('INSERT INTO activity_log (player, at, date, kind, ukey, data) VALUES (?, ?, ?, ?, NULL, ?)').bind(player, now, date, e.kind, JSON.stringify(e.data))
       : d.prepare(`INSERT INTO activity_log (player, at, date, kind, ukey, data) VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(player, kind, ukey) WHERE ukey IS NOT NULL DO UPDATE SET at = excluded.at, data = excluded.data`).bind(player, now, date, e.kind, e.ukey, JSON.stringify(e.data))));
+          ON CONFLICT(player, kind, ukey) WHERE ukey IS NOT NULL DO UPDATE SET at = excluded.at, data = excluded.data`).bind(player, now, date, e.kind, e.ukey, JSON.stringify(e.data)))]);
   } catch (error) {
     console.error('활동 기록 저장 실패', error);
   }
-}
-/** 오늘 하루 활동 요약 한 줄을 지금 기록으로 맞춥니다 (퀴즈 시간·포켓로그 진행·새 판 때마다) */
-export async function noteDay(player: PlayerId, state: GameState, date: string) {
-  await appendActivity(player, date, [daySummary(state, date)]);
 }
 export type ActivityRow = { seq: number; at: string; date: string; kind: string; data: Record<string, unknown> };
 export async function readActivity(player: PlayerId = REAL_PLAYER): Promise<{ since: string | null; rows: ActivityRow[] }> {

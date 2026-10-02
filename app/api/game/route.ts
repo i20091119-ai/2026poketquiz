@@ -8,6 +8,10 @@ import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
 
+function safeLog(make: () => LogEntry[]): LogEntry[] {
+  try { return make(); } catch (error) { console.error('활동 기록 만들기 실패', error); return []; }
+}
+
 /** 아이 화면 배틀 탭용: 지금 포켓로그를 할 수 있는지 (쉬는 시간·시간 제한) */
 async function battleInfo(player: Player, state: GameState) {
   const [gate, run]: [BattleGate, Awaited<ReturnType<typeof latestDefeat>>] = await Promise.all([battleGate(player, state), latestDefeat(player.id)]);
@@ -24,10 +28,10 @@ export async function GET(request: Request) {
     const { today } = player;
     let log: LogEntry[] = [];
     const { state } = await mutateState(state => {
-      const before = beforeAction(state, { type: 'quizTime', seconds: 0 });
+      const before = beforeAction(state, { type: 'quizTime', seconds: 0 }, today);
       const a = ensureDaily(state, bank, today, secureRandom);
       const b = syncEvents(state, bank, today); // 도전 이벤트 진도 (연속 기록 끊김·올클리어 완료)
-      log = eventsChange(before, state);
+      log = safeLog(() => eventsChange(before, state));
       return { result: null, changed: a || b };
     }, player.id);
     await appendActivity(player.id, today, log);
@@ -56,10 +60,11 @@ export async function POST(request: Request) {
     let log: LogEntry[] = [];
     const { state, result } = await mutateState(state => {
       const ctx = { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance };
-      const before = beforeAction(state, action);
+      const before = beforeAction(state, action, today);
       const result = applyAction(state, action, ctx);
       syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
-      log = action.type === 'quizTime' ? [daySummary(state, today)] : [...afterAction(before, state, action, result, ctx), ...(action.type === 'answer' ? [daySummary(state, today)] : [])];
+      // 활동 기록을 만들다 오류가 나도 게임 동작은 그대로 진행
+      log = safeLog(() => action.type === 'quizTime' ? [daySummary(state, today)] : [...afterAction(before, state, action, result, ctx), ...(action.type === 'answer' ? [daySummary(state, today)] : [])]);
       return { result, changed: true };
     }, player.id);
     await appendActivity(player.id, today, log); // 시험용이면 남기지 않음

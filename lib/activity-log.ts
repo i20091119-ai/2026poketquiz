@@ -30,6 +30,7 @@ export const LOG_KINDS = {
   event: '도전 이벤트 진행',
   battleStart: '포켓로그 새 판 시작',
   battleRun: '포켓로그 판 결과',
+  reset: '아이 게임 처음부터 다시 하기',
   revive: '부활권 사용',
   day: '하루 활동 요약',
 } as const;
@@ -45,12 +46,13 @@ export type Before = {
 };
 
 /** 행동을 적용하기 직전에 부릅니다 */
-export function beforeAction(state: GameState, action: Action): Before {
+export function beforeAction(state: GameState, action: Action, today: string): Before {
   return {
     stats: { ...state.stats },
     exp: state.exp,
     owned: new Map(state.owned.map(p => [p.uid, p.species])),
-    tries: action.type === 'answer' ? state.daily?.tries?.[action.questionId] ?? 0 : 0,
+    // 자정을 넘겨 어제 미션의 시도 횟수가 이어지지 않게 날짜를 확인
+    tries: action.type === 'answer' && state.daily?.date === today ? state.daily.tries?.[action.questionId] ?? 0 : 0,
     candySent: state.candy?.sent ?? 0,
     events: JSON.stringify(state.events ?? null),
     ballKind: action.type === 'openBall' ? state.balls.find(b => b.id === action.ballId)?.kind : undefined,
@@ -113,7 +115,7 @@ export function afterAction(before: Before, state: GameState, action: Action, re
     out.push({
       kind: 'pokemon',
       data: {
-        uid: p.uid, species: p.species, name: p.shiny ? shinyName(p.species) : species(p.species).name, shiny: !!p.shiny,
+        uid: p.uid, obtainedAt: p.obtainedAt, species: p.species, name: p.shiny ? shinyName(p.species) : species(p.species).name, shiny: !!p.shiny,
         how: action.type === 'starter' ? '시작 파트너' : action.type === 'openBall' ? `${BALLS[before.ballKind as keyof typeof BALLS]?.label ?? '볼'} 열기` : action.type,
       },
     });
@@ -124,8 +126,8 @@ export function afterAction(before: Before, state: GameState, action: Action, re
     out.push({
       kind: 'ball',
       data: {
-        ball: before.ballKind ?? null, ballLabel: BALLS[before.ballKind as keyof typeof BALLS]?.label ?? null,
-        caught, name: species(caught).name, tier: r.tier, shiny: r.shiny === true, duplicate: r.duplicate === true,
+        ballId: action.ballId, ball: before.ballKind ?? null, ballLabel: BALLS[before.ballKind as keyof typeof BALLS]?.label ?? null,
+        caught, name: r.shiny === true ? shinyName(caught) : species(caught).name, tier: r.tier, shiny: r.shiny === true, duplicate: r.duplicate === true,
         bonus: r.duplicate === true ? r.bonus : undefined,
       },
     });
@@ -163,12 +165,12 @@ export function afterAction(before: Before, state: GameState, action: Action, re
     let items: BoxItem[] | null = null, picked: number | null = null;
     if (action.type === 'dailyBox') { items = state.daily?.box?.items ?? null; picked = action.pick; }
     else if (Array.isArray(r.items)) { items = r.items as BoxItem[]; picked = Array.isArray(r.picks) ? (r.picks as number[])[0] ?? null : null; }
-    if (items) out.push({ kind: 'reward', data: { source: sources[action.type], options: items.map(boxItemLabel), picked: picked === null ? null : boxItemLabel(items[picked]) } });
+    if (items) out.push({ kind: 'reward', data: { source: sources[action.type], options: items.map(boxItemLabel), picked: picked === null ? null : boxItemLabel(items[picked]), ballIds: Array.isArray(r.ballIds) ? r.ballIds : undefined } });
   }
 
   if (action.type === 'openGift') {
     const g = (state.gifts ?? []).find(g => g.id === action.id);
-    out.push({ kind: 'giftOpen', data: { id: action.id, choice: action.choice, got: g?.opened?.got ?? null } });
+    out.push({ kind: 'giftOpen', data: { id: action.id, choice: action.choice, got: g?.opened?.got ?? null, ballIds: g?.opened?.ballId ? [g.opened.ballId] : undefined } });
   }
   if (action.type === 'replyGift') {
     const g = (state.gifts ?? []).find(g => g.id === action.id);

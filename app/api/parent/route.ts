@@ -368,6 +368,7 @@ export async function POST(request: Request) {
 
       case 'resetChild':
         await resetGame();
+        await appendActivity(REAL_PLAYER, todayKorea(), [{ kind: 'reset', data: {} }]); // 내보내기에서 이 시점 앞뒤를 나눔
         return json({ message: '아이 게임을 처음부터 다시 시작하도록 초기화했어요. 아이 화면에서 파트너를 새로 고르면 돼요.' });
 
       // ---- 개발자 메뉴: 시뮬레이션 (아이의 진짜 기록은 절대 건드리지 않고 sim 기록만 씀) ----

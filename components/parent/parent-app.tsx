@@ -1086,7 +1086,7 @@ function ExportSection({ busy, call }: { busy: boolean; call: Call }) {
         const blob = new Blob([JSON.stringify(data.file, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `child-record-${new Date().toISOString().slice(0, 10)}.json`;
+        a.href = url; a.download = `child-record-${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date())}.json`;
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
       }}><Download size={16} /> 내려받기</button></div>

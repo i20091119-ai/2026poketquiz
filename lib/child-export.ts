@@ -1,13 +1,15 @@
 import { LOG_KINDS } from './activity-log.ts';
 import { TYPE_INFO, type TypeKey } from './game-config.ts';
 import type { GameState } from './game-engine.ts';
-import { shinyName, species } from './pokedex.ts';
+import { isSpecies, shinyName, species } from './pokedex.ts';
 
 type Row = { seq: number; at: string; date: string; kind: string; data: Record<string, unknown> };
 
 /** UTC 시각 → 한국 시간 'YYYY-MM-DD HH:MM:SS' */
 export const kst = (iso: string) => new Date(Date.parse(iso) + 9 * 3600 * 1000).toISOString().replace('T', ' ').slice(0, 19);
 
+/** 모르는 번호(포켓로그의 지역 폼 등)가 있어도 내보내기가 멈추지 않게 */
+const nameOf = (id: number, shiny = false) => (isSpecies(id) ? (shiny ? shinyName(id) : species(id).name) : `#${id}`);
 const label = (t: string) => TYPE_INFO[t as TypeKey]?.label ?? t;
 
 /**
@@ -15,7 +17,11 @@ const label = (t: string) => TYPE_INFO[t as TypeKey]?.label ?? t;
  * 시각은 모두 한국 시간. 활동 기록은 기록을 시작한 날(since)부터 쌓였고, 그 전 내용은 퀴즈 기록에 남아 있는 것만 들어갑니다.
  */
 export function buildChildExport(input: { state: GameState; rows: Row[]; since: string | null; appVersion: string; exportedAt: string }) {
-  const { state, rows, since } = input;
+  const { state, since } = input;
+  // "아이 게임 처음부터 다시 하기"를 누른 적이 있으면 그 앞 기록은 따로 둠 (포켓몬 번호표가 다시 p1부터라 섞이지 않게)
+  const lastReset = input.rows.filter(r => r.kind === 'reset').reduce((n, r) => Math.max(n, r.seq), 0);
+  const rows = input.rows.filter(r => r.seq > lastReset);
+  const beforeReset = input.rows.filter(r => r.seq < lastReset && r.kind !== 'reset');
   const of = (kind: string) => rows.filter(r => r.kind === kind);
   const plain = (r: Row) => ({ time: kst(r.at), date: r.date, ...r.data });
 
@@ -30,12 +36,13 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
 
   // ---- 포켓로그: 새 판 시작과 판 결과를 짝지음 ----
   const starts = of('battleStart');
-  const runRows = of('battleRun').sort((a, b) => Date.parse(String(a.data.endedAt)) - Date.parse(String(b.data.endedAt)));
+  // 같은 판이 두 번 올라온 경우(다른 기기가 다시 올림)는 한 번만
+  const runRows = [...new Map(of('battleRun').map(r => [String(r.data.runId), r])).values()].sort((a, b) => Date.parse(String(a.data.endedAt)) - Date.parse(String(b.data.endedAt)));
   const revives = of('revive');
   const usedStart = new Set<number>();
   const runs = runRows.map((r, i) => {
     const end = Date.parse(String(r.data.endedAt));
-    const nextEnd = i + 1 < runRows.length ? Date.parse(String(runRows[i + 1].data.endedAt)) : Infinity;
+    const prevEnd = i > 0 ? Date.parse(String(runRows[i - 1].data.endedAt)) : -Infinity;
     // 이 판이 끝나기 전에 가장 최근에 시작된 새 판 (아직 다른 판에 짝지어지지 않은 것)
     const start = [...starts].reverse().find(s => !usedStart.has(s.seq) && Date.parse(s.at) <= end);
     if (start) usedStart.add(start.seq);
@@ -43,20 +50,22 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       startDate: start ? start.date : null, startTime: start ? kst(start.at) : null,
       endDate: kst(String(r.data.endedAt)).slice(0, 10), endTime: kst(String(r.data.endedAt)),
       wave: r.data.wave, result: r.data.result,
-      party: (r.data.party as { species: number; level: number; shiny: boolean }[] ?? []).map(p => ({ ...p, name: p.shiny ? shinyName(p.species) : species(p.species).name })),
-      reviveUsed: revives.filter(v => Date.parse(v.at) >= end && Date.parse(v.at) < nextEnd).length,
+      party: (r.data.party as { species: number; level: number; shiny: boolean }[] ?? []).map(p => ({ ...p, name: nameOf(p.species, p.shiny) })),
+      // 게임 오버 화면에서 쓴 부활권은 그 판이 진짜 끝나기 전에 기록되므로 "앞 판이 끝난 뒤 ~ 이 판이 끝날 때까지"로 셈
+      reviveUsed: revives.filter(v => (v.data.runId ? v.data.runId === r.data.runId : Date.parse(v.at) > prevEnd && Date.parse(v.at) <= end)).length,
+      playSeconds: r.data.playTime ?? null,
     };
   });
 
   // ---- 성장 ----
-  const how = new Map(of('pokemon').map(r => [String(r.data.uid), r.data.how]));
+  const how = new Map(of('pokemon').map(r => [`${r.data.uid}|${r.data.obtainedAt}`, r.data.how]));
   const pokemon = state.owned.map(p => ({
-    uid: p.uid, species: p.species, name: p.shiny ? shinyName(p.species) : species(p.species).name, shiny: !!p.shiny,
-    obtainedAt: kst(p.obtainedAt), how: how.get(p.uid) ?? '(기록 시작 전에 얻음)',
+    uid: p.uid, species: p.species, name: nameOf(p.species, p.shiny), shiny: !!p.shiny,
+    obtainedAt: kst(p.obtainedAt), how: how.get(`${p.uid}|${p.obtainedAt}`) ?? '(기록 시작 전에 얻음)',
   }));
   const candyRows = of('candy');
 
-  const tracking = Object.entries(LOG_KINDS).map(([kind, item]) => ({ item, since: since ?? '(아직 기록 없음)', count: of(kind).length }));
+  const tracking = Object.entries(LOG_KINDS).map(([kind, item]) => ({ item, since: of(kind)[0]?.date ?? (since ? `${since} 이후 아직 없음` : '(아직 기록 없음)'), count: of(kind).length }));
 
   return {
     안내: '아이 기록 내보내기. 시각은 모두 한국 시간이고, 시험용(시뮬레이션) 기록은 들어 있지 않아요.',
@@ -76,7 +85,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       판: runs,
       새판시작: starts.map(plain),
       부활권사용: revives.map(plain),
-      계열별최고레벨: Object.fromEntries(Object.entries(state.battleLevels ?? {}).map(([id, lv]) => [species(Number(id)).name, lv])),
+      계열별최고레벨: Object.fromEntries(Object.entries(state.battleLevels ?? {}).map(([id, lv]) => [nameOf(Number(id)), lv])),
     },
     성장: {
       보유포켓몬: pokemon,
@@ -101,5 +110,6 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       })),
       이벤트: { 지금: state.events ?? null, 부활권: state.reviveTickets ?? 0, 진행기록: of('event').map(plain) },
     },
+    ...(beforeReset.length ? { 처음부터다시하기_이전기록: { 설명: '아이 게임을 처음부터 다시 하기 전에 쌓인 활동 기록(원본 그대로)', 기록: beforeReset.map(plain) } } : {}),
   };
 }
