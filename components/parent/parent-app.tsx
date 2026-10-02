@@ -19,6 +19,8 @@ type BankSummary = { id: number; title: string; grade: string; keywords: Keyword
 type Overview = {
   /** 속성 변경(센 포켓몬·도전 속성)에서 바꾼 것 */
   strong: StrongOverrides;
+  /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
+  shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
   battle: {
     log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } };
@@ -345,8 +347,9 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       </>}
 
       {low === 'dev' && <>
-        <DevMenu part="version" sim={overview.sim} busy={busy} call={call} reload={reload} />
-        <DevMenu part="sim" sim={overview.sim} busy={busy} call={call} reload={reload} />
+        <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />
+        <DevMenu part="sim" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />
+        <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
         {/* 이 칸은 항상 맨 아래에 둡니다 (업데이트·개발 탭의 마지막). 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
         <section className="panel parent-section danger-zone">
@@ -422,7 +425,7 @@ function GiftSection({ gifts, busy, call, reload }: { gifts: Overview['gifts']; 
   return (
     <section className="panel parent-section gift-section">
       <div className="heading-row">
-        <div><h2>🎁 선물 보내기</h2><p className="muted">숙제·독서 등을 잘했을 때 보내요. 아이가 앱을 열면 팝업으로 알려 주고, 상자를 열 때 둘 중 하나를 골라요.</p></div>
+        <div><h2>🎁 선물 보내기</h2><p className="muted">숙제·독서 등을 잘했을 때 보내요. 아이가 앱을 열면 팝업으로 알려 주고, 상자를 열 때 하나를 골라요(큰 선물에는 이로치 볼도 있어요).</p></div>
         <button className="text-button" onClick={() => setShowLimits(v => !v)}>{showLimits ? '한도 닫기' : '한도 바꾸기'}</button>
       </div>
       {showLimits && (
@@ -627,7 +630,7 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
 
 // ---------------- 개발자 메뉴 ----------------
 /** 버전 표시와 시뮬레이션(아이 기록을 건드리지 않는 시험용 기록으로 앱 전체를 해 보기) */
-function DevMenu({ part, sim, busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; busy: boolean; call: Call; reload: () => Promise<void> }) {
+function DevMenu({ part, sim, shinyAll, busy, call, reload }: { part: 'version' | 'sim'; sim: Overview['sim']; shinyAll: boolean; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const childScreen = '/';
   const start = async (source: 'copy' | 'empty') => {
     if (source === 'copy' && !window.confirm('지금 아이 기록을 시험용으로 복사해서 시뮬레이션을 시작할까요? 아이의 진짜 기록은 바뀌지 않아요.')) return;
@@ -666,6 +669,12 @@ function DevMenu({ part, sim, busy, call, reload }: { part: 'version' | 'sim'; s
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveRevive' })) await reload(); }}>시험용 부활권 +1</button>
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simStreak', days: 9 })) await reload(); }}>연속 기록 9일로 맞추기</button>
         </div>
+        <div className="button-row">
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveBalls' })) await reload(); }}>시험용 볼 +1씩 (이로치 볼 포함)</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveShinies' })) await reload(); }}>가진 포켓몬마다 이로치도 +1</button>
+          <button className={shinyAll ? 'primary small' : 'secondary small'} disabled={busy} onClick={async () => { if (await call({ action: 'simShinyAll', on: !shinyAll })) await reload(); }}>{shinyAll ? '✨ 이로치 100% 켜짐 (누르면 끔)' : '볼 열 때 이로치 100%로 켜기'}</button>
+        </div>
+        <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
         <p className="muted">도전 이벤트 확인용이에요. &lsquo;연속 기록 9일로 맞추기&rsquo; 뒤 오늘 일일미션을 다 풀면 10일 연속이 돼요(이벤트를 먼저 수락해야 해요). 끊김은 &lsquo;다음 날로 넘기기&rsquo;를 두 번 누르면 확인돼요.</p>
         <p className="muted">‘다음 날로 넘기기’를 누른 뒤 아이 화면을 새로고침하면 일일미션과 포켓로그 새 게임 횟수가 새 날 기준으로 다시 시작해요. 아이 화면 맨 위의 보라색 띠를 누르면 여기로 돌아와요.</p>
       </> : <>
@@ -1004,6 +1013,36 @@ function StrongEditor({ overview, busy, call, reload }: { overview: Overview; bu
           await act({ action: 'resetStrong' });
         }}>모두 처음 값으로</button></div>
       )}
+    </section>
+  );
+}
+
+/** 이로치 확률: 볼을 열 때 이로치가 나올 확률(%)을 볼 종류마다 정합니다 (기본값은 lib/game-config.ts SHINY_CHANCE_DEFAULT) */
+function ShinyChanceEditor({ overview, busy, call, reload }: { overview: Overview; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const { chance, defaults, balls } = overview.shiny;
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const value = (k: string) => draft[k] ?? String(chance[k]);
+  const dirty = balls.filter(b => draft[b.kind] !== undefined && Number(draft[b.kind]) !== chance[b.kind]);
+  const changed = balls.some(b => chance[b.kind] !== defaults[b.kind]);
+  return (
+    <section className="panel parent-section shiny-chance">
+      <h2>✨ 이로치 확률</h2>
+      <p className="muted">볼을 열었을 때 이로치(색이 다른 포켓몬)가 나올 확률이에요. 이로치 볼은 확률과 상관없이 항상 이로치가 나와요. 바꾸면 아이 화면에 바로 적용돼요.</p>
+      <div className="chance-grid">
+        {balls.map(b => (
+          <label key={b.kind}>
+            <span>{b.label} <small className="muted">(기본 {defaults[b.kind]}%)</small></span>
+            <span className="chance-input"><input type="number" min={0} max={100} step={0.5} inputMode="decimal" value={value(b.kind)} onChange={e => setDraft(d => ({ ...d, [b.kind]: e.target.value }))} /> %</span>
+          </label>
+        ))}
+      </div>
+      <div className="button-row">
+        <button className="primary small" disabled={busy || dirty.length === 0} onClick={async () => {
+          for (const b of dirty) { if (!(await call({ action: 'setShinyChance', ball: b.kind, percent: Number(draft[b.kind]) }))) return; }
+          setDraft({}); await reload();
+        }}>저장</button>
+        {changed && <button className="secondary" disabled={busy} onClick={async () => { if (await call({ action: 'resetShinyChance' })) { setDraft({}); await reload(); } }}>처음 값으로</button>}
+      </div>
     </section>
   );
 }

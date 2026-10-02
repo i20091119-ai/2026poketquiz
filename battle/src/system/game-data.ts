@@ -7,7 +7,7 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
-import { SHINY_KEEP_BITS } from "#app/quiz-gifts";
+import { hasQuizNormalStarter, hasQuizShinyStarter } from "#app/quiz-link";
 import { isIos } from "#app/touch-controls";
 import { Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -88,9 +88,26 @@ const ErrorMessages = {
   GAME_OUT_OF_DATE: i18next.t("gameData:gameOutOfDate"),
 } as const;
 
-/** 기본 스타터가 처음부터 갖는 도감 속성 (색 보통, 암수, 기본 모습) */
-const DEFAULT_STARTER_ATTR =
-  DexAttr.NON_SHINY | DexAttr.MALE | DexAttr.FEMALE | DexAttr.DEFAULT_VARIANT | DexAttr.DEFAULT_FORM;
+/** 이로치 관련 도감 비트 (이로치, 레어·에픽 색) */
+const SHINY_ATTR_BITS = DexAttr.SHINY | DexAttr.VARIANT_2 | DexAttr.VARIANT_3;
+
+/**
+ * 퀴즈 연동(SPEC.md 3번): 스타터가 도감에서 해제하는 속성. 퀴즈에서 얻은 것만 쓸 수 있습니다.
+ * - 기본 모습: 퀴즈에서 그 계열의 기본 모습 포켓몬을 가졌을 때
+ * - 이로치(SHINY): 퀴즈 이로치 도감에 그 계열이 있을 때. 색은 공식 이로치 색 하나(DEFAULT_VARIANT)뿐 — 레어·에픽 색은 쓸 수 없음
+ */
+function quizStarterAttr(speciesId: number): bigint {
+  const normal = hasQuizNormalStarter(speciesId);
+  const shiny = hasQuizShinyStarter(speciesId);
+  return (
+    (normal ? DexAttr.NON_SHINY : 0n)
+    | (shiny ? DexAttr.SHINY : 0n)
+    | DexAttr.MALE
+    | DexAttr.FEMALE
+    | DexAttr.DEFAULT_VARIANT
+    | DexAttr.DEFAULT_FORM
+  );
+}
 
 export class GameData {
   public trainerId: number;
@@ -1518,8 +1535,6 @@ export class GameData {
       };
     }
 
-    const defaultStarterAttr = DEFAULT_STARTER_ATTR;
-
     const defaultStarterNatures: Nature[] = [];
 
     globalScene.executeWithSeedOffset(
@@ -1535,8 +1550,8 @@ export class GameData {
 
     for (let ds = 0; ds < defaultStarterSpecies.length; ds++) {
       const entry = data[defaultStarterSpecies[ds]] as DexEntry;
-      entry.seenAttr = defaultStarterAttr;
-      entry.caughtAttr = defaultStarterAttr;
+      entry.seenAttr = quizStarterAttr(defaultStarterSpecies[ds]);
+      entry.caughtAttr = quizStarterAttr(defaultStarterSpecies[ds]);
       entry.natureAttr = 1 << (defaultStarterNatures[ds] + 1);
       for (const i in entry.ivs) {
         entry.ivs[i] = 15;
@@ -1567,9 +1582,10 @@ export class GameData {
       }
       const starterEntry = this.starterData[speciesId as StarterSpeciesId];
       if (defaultStarterSpecies.includes(speciesId as StarterSpeciesId)) {
-        dexEntry.seenAttr |= DEFAULT_STARTER_ATTR;
-        // 기본 속성으로 해제. 이벤트로 받은 이로치(SHINY_KEEP_BITS)만은 "내 것"으로 남깁니다 (SPEC 3·6번, 부모님 결정)
-        dexEntry.caughtAttr = DEFAULT_STARTER_ATTR | (dexEntry.caughtAttr & SHINY_KEEP_BITS);
+        // 퀴즈에서 얻은 것만 해제 (SPEC 1·3번): 기본 모습과 이로치(공식 색)를 따로. 예전에 저장된 이로치·레어색 표시는 지움
+        const attr = quizStarterAttr(speciesId);
+        dexEntry.seenAttr = (dexEntry.seenAttr & ~SHINY_ATTR_BITS) | attr;
+        dexEntry.caughtAttr = attr;
         if (!dexEntry.natureAttr) {
           dexEntry.natureAttr = 1 << (Nature.HARDY + 1);
         }

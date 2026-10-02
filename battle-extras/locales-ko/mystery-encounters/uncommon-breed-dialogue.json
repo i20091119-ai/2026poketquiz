@@ -1,0 +1,10 @@
+{
+  "option": {
+    "2": {
+      "selected": "{{enemyPokemon}}에게 나무열매를 주었다!$행복한 듯 맛있게 먹기 시작했다!$@s{level_up_fanfare}{{enemyPokemon}}[[는]] 고마움의 선물을 남기고 떠났다!"
+    },
+    "3": {
+      "selected": "{{option3PrimaryName}}[[가]] {{option3PrimaryMove}}[[를]] 사용해\n{{enemyPokemon}}를 매료시켰다!$@s{level_up_fanfare}{{enemyPokemon}}[[는]] 고마움의 선물을 남기고 떠났다!"
+    }
+  }
+}

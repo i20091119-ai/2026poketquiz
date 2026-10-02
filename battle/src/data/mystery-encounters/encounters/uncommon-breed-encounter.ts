@@ -1,15 +1,14 @@
 import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { audioManager } from "#app/global-audio-manager";
 import { globalScene } from "#app/global-scene";
-import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
+import { ModifierTier } from "#enums/modifier-tier";
 import type { MoveId } from "#enums/move-id";
 import { MoveUseMode } from "#enums/move-use-mode";
 import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
 import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { PokeballType } from "#enums/pokeball";
 import { Stat } from "#enums/stat";
 import type { EnemyPokemon, Pokemon } from "#field/pokemon";
 import { BerryModifier } from "#modifiers/modifier";
@@ -23,11 +22,7 @@ import {
   setEncounterExp,
   setEncounterRewards,
 } from "#mystery-encounters/encounter-phase-utils";
-import {
-  catchPokemon,
-  getHighestLevelPlayerPokemon,
-  getSpriteKeysFromPokemon,
-} from "#mystery-encounters/encounter-pokemon-utils";
+import { getHighestLevelPlayerPokemon, getSpriteKeysFromPokemon } from "#mystery-encounters/encounter-pokemon-utils";
 import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
@@ -230,10 +225,8 @@ export const UncommonBreedEncounter: MysteryEncounter = MysteryEncounterBuilder.
         // Give 1 additional egg move
         givePokemonExtraEggMove(pokemon, encounter.misc.eggMove);
 
-        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
-        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
-        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
-        setEncounterRewards({ fillRemaining: true });
+        // 퀴즈 연동판(SPEC 3번): 포켓몬(이로치)은 퀴즈에서만 얻으므로, 같은 등급의 다른 보상(아이템)을 줌
+        setEncounterRewards({ guaranteedModifierTiers: [ModifierTier.COMMON], fillRemaining: true });
         leaveEncounterWithoutBattle();
       })
       .build(),
@@ -266,13 +259,11 @@ export const UncommonBreedEncounter: MysteryEncounter = MysteryEncounterBuilder.
           return newValue > iv ? newValue : iv;
         });
 
-        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
-        await catchPokemon(gift, null, PokeballType.POKEBALL, false);
-        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
+        // 퀴즈 연동판(SPEC 3번): 포켓몬(이로치)은 퀴즈에서만 얻으므로, 같은 등급의 다른 보상(아이템)을 줌
         if (encounter.selectedOption?.primaryPokemon?.id) {
           setEncounterExp(encounter.selectedOption.primaryPokemon.id, pokemon.getExpValue(), false);
         }
-        setEncounterRewards({ fillRemaining: true });
+        setEncounterRewards({ guaranteedModifierTiers: [ModifierTier.COMMON], fillRemaining: true });
         leaveEncounterWithoutBattle();
       })
       .build(),

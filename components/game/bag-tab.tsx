@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ASSETS } from '@/lib/assets';
 import { BALLS, eulReul, POTIONS, potionTargets, type PotionKind } from '@/lib/game-config';
 import type { Ball, ChildView } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, species } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, shinyName, species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 import { potionEffect } from './rewards';
 
@@ -96,8 +96,8 @@ function FeedDialog({ kind, view, busy, onClose, onFeed }: {
         <div className="partner-choices">
           {view.owned.map(p => (
             <button key={p.uid} className={'partner-choice' + (p.uid === uid ? ' current' : '')} onClick={() => setUid(p.uid)}>
-              <PokemonImage id={p.species} />
-              <b>{species(p.species).name}</b>
+              <PokemonImage id={p.species} shiny={p.shiny} />
+              <b>{p.shiny ? `✨ ${shinyName(p.species)}` : species(p.species).name}</b>
             </button>
           ))}
         </div>

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ASSETS } from '@/lib/assets';
 import { EXP_EXCHANGE, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INFO, type TypeKey } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, rootOf, species, typesLabel } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, rootOf, shinyName, species, typesLabel } from '@/lib/pokedex';
 import { dexNo, goTo, PokemonImage, TypeBadge } from './common';
 
 /* eslint-disable @next/next/no-img-element */
@@ -23,10 +23,10 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
     <section className="home panel">
       <div className="partner-stage" style={{ backgroundImage: `url(${ASSETS.homeBackground})` }}>
         {partner && <>
-          <PokemonImage id={partner.species} className="partner-img" />
+          <PokemonImage id={partner.species} shiny={partner.shiny} className="partner-img" />
           <div className="partner-info">
             <small>{dexNo(partner.species)} · 나의 파트너</small>
-            <h2>{species(partner.species).name}</h2>
+            <h2>{partner.shiny ? `✨ ${shinyName(partner.species)}` : species(partner.species).name}</h2>
             <div className="type-row">{species(partner.species).types.map(t => <TypeBadge key={t} type={t} />)}</div>
             {view.battleLevels[rootOf(partner.species)] ? <small className="partner-battle-level">⚔️ 포켓로그 최고 Lv.{view.battleLevels[rootOf(partner.species)]}</small> : null}
             <div className="exp-box">
@@ -58,8 +58,8 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
               <button key={p.uid} className={'partner-choice' + (p.uid === view.partner ? ' current' : '')}
                 disabled={busy || p.uid === view.partner}
                 onClick={() => { onChoosePartner(p.uid); setPicking(false); }}>
-                <PokemonImage id={p.species} />
-                <b>{species(p.species).name}</b>
+                <PokemonImage id={p.species} shiny={p.shiny} />
+                <b>{p.shiny ? `✨ ${shinyName(p.species)}` : species(p.species).name}</b>
                 {p.uid === view.partner && <small>지금 파트너</small>}
               </button>
             ))}

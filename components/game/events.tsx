@@ -77,7 +77,7 @@ function StreakCard({ ev, busy, onAccept, onOpenBox }: { ev: Events['streak']; b
       {!ev.accepted ? <>
         <p className="event-desc">하루도 빠지지 않고 <b>일일미션을 다 풀기</b>!<br />{ev.days}일 이어지면 성공이야. 하루라도 빠지면 처음부터 다시!</p>
         <Calendar ev={ev} />
-        <Reward icon={<img src={ASSETS.boxClosed} alt="" />} title="랜덤박스 1개" text="희귀 포켓몬 볼이나 배틀 추가권이 들어 있어!" />
+        <Reward icon={<img src={ASSETS.boxClosed} alt="" />} title="랜덤박스 1개" text="희귀 포켓몬 볼, 배틀 추가권, 이로치 볼 중 하나가 들어 있어!" />
         <button className="primary glow" disabled={busy} onClick={onAccept}>도전할래!</button>
       </> : ev.completedAt ? <>
         <p className="event-done">🎉 {ev.days}일 연속 성공!</p>
@@ -86,7 +86,7 @@ function StreakCard({ ev, busy, onAccept, onOpenBox }: { ev: Events['streak']; b
         <p className="event-big">{ev.doneToday ? `오늘까지 ${ev.count}일째! 내일도 해 줘` : `오늘 미션 하면 ${ev.nextCount}일째!`}</p>
         {ev.count === 0 && ev.best > 0 && <p className="event-desc">연속이 끊겼어. 오늘부터 다시 시작하자!</p>}
         <Calendar ev={ev} />
-        <Reward icon={<img src={ASSETS.boxClosed} alt="" />} title="보상: 랜덤박스 1개" text="희귀 포켓몬 볼이나 배틀 추가권!" />
+        <Reward icon={<img src={ASSETS.boxClosed} alt="" />} title="보상: 랜덤박스 1개" text="희귀 포켓몬 볼·배틀 추가권·이로치 볼!" />
       </>}
     </section>
   );

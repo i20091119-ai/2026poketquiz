@@ -2,27 +2,23 @@ import { CLASSIC_MODE_MYSTERY_ENCOUNTER_WAVES } from "#app/constants";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
-import { keepShinyGiftForever, makeShinyGiftFromParty } from "#app/quiz-gifts";
 import { NON_LEGEND_PARADOX_POKEMON, NON_LEGEND_ULTRA_BEASTS } from "#balance/special-species-groups";
 import type { PokemonSpecies } from "#data/pokemon-species";
 import { AbilityId } from "#enums/ability-id";
+import { ModifierTier } from "#enums/modifier-tier";
 import { MysteryEncounterOptionMode } from "#enums/mystery-encounter-option-mode";
 import { MysteryEncounterTier } from "#enums/mystery-encounter-tier";
 import { MysteryEncounterType } from "#enums/mystery-encounter-type";
-import { PokeballType } from "#enums/pokeball";
 import { SpeciesId } from "#enums/species-id";
 import { PlayerPokemon } from "#field/pokemon";
 import { showEncounterDialogue } from "#mystery-encounters/encounter-dialogue-utils";
 import {
   leaveEncounterWithoutBattle,
+  setEncounterRewards,
   transitionMysteryEncounterIntroVisuals,
   updatePlayerMoney,
 } from "#mystery-encounters/encounter-phase-utils";
-import {
-  catchPokemon,
-  getRandomSpeciesByStarterCost,
-  getSpriteKeysFromPokemon,
-} from "#mystery-encounters/encounter-pokemon-utils";
+import { getRandomSpeciesByStarterCost, getSpriteKeysFromPokemon } from "#mystery-encounters/encounter-pokemon-utils";
 import type { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterBuilder } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterOptionBuilder } from "#mystery-encounters/mystery-encounter-option";
@@ -222,10 +218,9 @@ export const ThePokemonSalesmanEncounter: MysteryEncounter = MysteryEncounterBui
         await showEncounterDialogue(`${namespace}:option.1.selectedDialogue`, `${namespace}:speaker`);
         await transitionMysteryEncounterIntroVisuals();
 
-        // "Catch" purchased pokemon
-        const gift = makeShinyGiftFromParty(); // SPEC 3번: 파티 포켓몬의 이로치 지급
-        await catchPokemon(gift, null, PokeballType.POKEBALL, true, true);
-        keepShinyGiftForever(gift); // 이 이로치는 다음 판에도 내 것으로 남김
+        // 퀴즈 연동판(SPEC 3번): 포켓몬(이로치)은 퀴즈에서만 얻으므로, 같은 등급의 다른 보상(아이템)을 줌
+        // (돈을 낸 값만큼 ULTRA 등급 아이템 2개)
+        setEncounterRewards({ guaranteedModifierTiers: [ModifierTier.ULTRA, ModifierTier.ULTRA] });
 
         leaveEncounterWithoutBattle(true);
       })

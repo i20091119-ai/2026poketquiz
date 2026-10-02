@@ -4,9 +4,10 @@ import {
   eulReul, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
   EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
+  SHINY_CHANCE_DEFAULT, type ShinyBallKind,
   type BallKind, type GiftChoice, type GiftLimits, type GiftSender, type GiftSize, type PotionKind, type ReplySticker, type Subject, type TypeKey,
 } from './game-config.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, rootOf, species, typeLabel } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
 import { RARE_POKEMON } from './rare-pokemon.ts';
 
 export type Question = {
@@ -32,7 +33,8 @@ export type BoxItem =
   | { kind: 'ticket' };
 export type Ball = { id: string; kind: BallKind };
 export type Potion = { id: string; kind: PotionKind };
-export type OwnedPokemon = { uid: string; species: number; obtainedAt: string };
+/** shiny: 이로치(색이 다른 포켓몬). 퀴즈 볼에서만 나오고, 기본 모습과 따로 한 마리로 셈 */
+export type OwnedPokemon = { uid: string; species: number; obtainedAt: string; shiny?: boolean };
 export type BankProgress = {
   solved: number[];
   wrong: Record<string, number>;
@@ -83,8 +85,10 @@ export type GameState = {
   quizLog?: Record<string, QuizDay>;
   /** 포켓로그에서 도달한 최고 레벨: 진화 계열 첫 모습 번호 → 레벨 (판이 바뀌어도 최고 기록은 남음) */
   battleLevels?: Record<string, number>;
-  /** 포켓로그 이벤트에서 받은 이로치(색이 다른 포켓몬)의 도감 번호. 도감에 색깔별로 따로 모입니다 */
+  /** 이로치 도감: 퀴즈 볼에서 얻은 이로치(진화한 모습 포함)의 도감 번호. 이 목록에 있는 것만 포켓로그에서 이로치로 출전할 수 있어요 */
   shiny?: number[];
+  /** 메가 도감: 해금한 메가 모습의 키(lib/megas.ts 의 key). 지금은 해금 방법이 없어 비어 있어요 (특별 미션이 생기면 채움) */
+  megas?: string[];
   /** 보호자가 보낸 선물 (최근 GIFT_HISTORY 개, 오래된 것부터) */
   gifts?: Gift[];
   /** 배틀 추가권: 그날 새 게임 횟수를 다 썼을 때 1장으로 한 번 더. 안 쓰면 남아 있음 */
@@ -189,17 +193,32 @@ const wrongToday = (prog: BankProgress, id: number, today: string) => prog.revie
 export const publicQuestion = ({ id, subject, type, prompt, choices, area }: Question): PublicQuestion =>
   ({ id, subject, type, prompt, choices, area });
 
-function addPokemon(state: GameState, id: number, now: string) {
-  const duplicate = state.owned.some(p => p.species === id);
-  if (!state.dex.includes(id)) state.dex.push(id);
+/**
+ * 새 포켓몬을 내 목록에 넣습니다. 이로치는 기본 모습과 따로 한 마리로 세어서, 이미 기본 모습이 있어도 이로치는 새로 얻습니다.
+ * 같은 모습(기본끼리·이로치끼리)이 또 나오면 우정 보너스 스탯.
+ */
+function addPokemon(state: GameState, id: number, now: string, shiny = false) {
+  const duplicate = state.owned.some(p => p.species === id && !!p.shiny === shiny);
+  if (shiny) {
+    state.shiny ??= [];
+    if (!state.shiny.includes(id)) state.shiny.push(id);
+  } else if (!state.dex.includes(id)) state.dex.push(id);
   if (duplicate) {
     const type = species(id).types[0];
     state.stats[type] += DUPLICATE_BONUS;
     return { duplicate: true, bonus: { type, amount: DUPLICATE_BONUS } };
   }
   const uid = nextId(state, 'p');
-  state.owned.push({ uid, species: id, obtainedAt: now });
+  state.owned.push(shiny ? { uid, species: id, obtainedAt: now, shiny: true } : { uid, species: id, obtainedAt: now });
   return { duplicate: false, uid };
+}
+
+/** 이로치 볼: 아이가 가진 포켓몬의 1단계(계열 첫 모습) 중 하나. 아직 이로치가 없는 계열을 먼저 */
+function pickShinyBallSpecies(state: GameState, random: Random): number {
+  const lines = [...new Set(state.owned.map(p => rootOf(p.species)))];
+  const have = new Set((state.shiny ?? []).map(rootOf));
+  const fresh = lines.filter(id => !have.has(id));
+  return pick(fresh.length ? fresh : lines, random);
 }
 
 function rollPotion(potion: PotionKind): BoxItem {
@@ -343,7 +362,8 @@ export type Action =
   | { type: 'eventSeen'; event: EventId }
   | { type: 'eventBox'; pick: number };
 
-export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random };
+/** shinyChance: 볼을 열 때 이로치가 나올 확률(%)을 덮어씀 (보호자 개발자 메뉴·시뮬레이션). 없으면 기본값 */
+export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>> };
 
 function needPick(value: unknown) {
   if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 2) fail('3개 중 하나를 골라 주세요.');
@@ -509,20 +529,31 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const index = state.balls.findIndex(b => b.id === action.ballId);
       if (index < 0) fail('볼을 찾을 수 없어요.');
       const [ball] = state.balls.splice(index, 1);
-      let tier: number, id: number;
-      if (ball.kind === 'rare') {
-        id = pickRarePokemon(state, random);
-        tier = 2;
+      let tier: number, id: number, shiny = false;
+      if (ball.kind === 'shiny') {
+        // 이로치 볼: 가진 포켓몬(1단계 기준) 중 하나의 이로치가 확정
+        id = pickShinyBallSpecies(state, random);
+        tier = Math.min(species(id).tier, 3);
+        shiny = true;
       } else {
-        const odds = BALLS[ball.kind].odds;
-        tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
-        id = pick(CATCH_POOLS[tier], random);
+        if (ball.kind === 'rare') {
+          id = pickRarePokemon(state, random);
+          tier = 2;
+        } else {
+          const odds = BALLS[ball.kind].odds;
+          tier = weighted<{ tier: number; weight: number }>(odds.map((weight, tier) => ({ tier, weight })), random).tier;
+          id = pick(CATCH_POOLS[tier], random);
+        }
+        const chance = ctx.shinyChance?.[ball.kind] ?? SHINY_CHANCE_DEFAULT[ball.kind];
+        shiny = random() * 100 < chance;
       }
-      const result = addPokemon(state, id, ctx.now);
+      const result = addPokemon(state, id, ctx.now, shiny);
       const name = species(id).name;
       return {
-        caught: id, tier, ...result,
-        message: result.duplicate ? `${name}를 또 만났어! 우정 보너스를 받았어.` : `${name}를 잡았어!`,
+        caught: id, tier, shiny, ...result,
+        message: shiny
+          ? (result.duplicate ? `✨ 이로치 ${shinyName(id)}를 또 만났어! 우정 보너스를 받았어.` : `✨ 이로치다! ${shinyName(id)}를 잡았어!`)
+          : (result.duplicate ? `${name}를 또 만났어! 우정 보너스를 받았어.` : `${name}를 잡았어!`),
       };
     }
 
@@ -551,8 +582,10 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       for (const r of req) state.stats[r.type] -= r.amount;
       const before = species(p.species).name;
       p.species = action.target;
-      if (!state.dex.includes(action.target)) state.dex.push(action.target);
-      return { evolved: action.target, message: `축하해! ${before}가 ${species(action.target).name}로 진화했어!` };
+      // 이로치는 진화해도 이로치: 진화한 모습도 이로치 도감에 (기본 도감에는 넣지 않음)
+      if (p.shiny) { state.shiny ??= []; if (!state.shiny.includes(action.target)) state.shiny.push(action.target); }
+      else if (!state.dex.includes(action.target)) state.dex.push(action.target);
+      return { evolved: action.target, shiny: !!p.shiny, message: p.shiny ? `축하해! 이로치 ${shinyName(action.target)}로 진화했어!` : `축하해! ${before}가 ${species(action.target).name}로 진화했어!` };
     }
 
     case 'exchangeExp': {
@@ -582,7 +615,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!gift) fail('선물을 찾을 수 없어요.');
       if (gift.opened) fail('이미 연 선물이에요.');
       const options = GIFT_SIZES[gift.size].options as readonly GiftChoice[];
-      if (!options.includes(action.choice)) fail('둘 중 하나를 골라 줘.');
+      if (!options.includes(action.choice)) fail('선물 중 하나를 골라 줘.');
       const opened: NonNullable<Gift['opened']> = { at: ctx.now, choice: action.choice, got: GIFT_CHOICE_INFO[action.choice].label };
       let item: BoxItem | null = null;
       switch (action.choice) {
@@ -617,6 +650,12 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           break;
         }
         case 'ticket': state.battleTickets = (state.battleTickets ?? 0) + 1; break;
+        case 'shinyBall': {
+          item = { kind: 'ball', ball: 'shiny' };
+          opened.ballId = grant(state, item)!;
+          opened.got = BALLS.shiny.label;
+          break;
+        }
       }
       gift.opened = opened;
       return { gift: publicGift(gift), item, ballIds: opened.ballId ? [opened.ballId] : [], message: `${GIFT_SENDERS[gift.from]}의 선물: ${opened.got}!` };
@@ -665,13 +704,30 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const item = st.box.items[choice];
       return {
         items: st.box.items, picks: [choice], done: true, ballIds: ballId ? [ballId] : [],
-        message: item.kind === 'ticket' ? '배틀 추가권을 얻었어!' : '희귀 포켓몬 볼을 얻었어!',
+        message: item.kind === 'ticket' ? '배틀 추가권을 얻었어!' : item.kind === 'ball' && item.ball === 'shiny' ? '이로치 볼을 얻었어!' : '희귀 포켓몬 볼을 얻었어!',
       };
     }
 
     default:
       fail('지원하지 않는 요청이에요.');
   }
+}
+
+/** 시뮬레이션 도우미(시험용 기록에만): 볼 종류마다 1개씩 가방에 넣습니다 (이로치 볼 포함) */
+export function simGiveBalls(state: GameState): number {
+  const kinds = Object.keys(BALLS) as BallKind[];
+  for (const kind of kinds) state.balls.push({ id: nextId(state, 'b'), kind });
+  return kinds.length;
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 가진 포켓몬마다 이로치도 한 마리씩 (이미 있으면 건너뜀). 새로 넣은 수를 돌려줍니다. */
+export function simGiveShinies(state: GameState, now: string): number {
+  let added = 0;
+  for (const p of [...state.owned]) {
+    if (state.owned.some(o => o.shiny && o.species === p.species)) continue;
+    addPokemon(state, p.species, now, true);
+    added++;
+  }
+  return added;
 }
 
 /** 상자 내용물 이름 (예: 사과열매, 몬스터볼, 배틀 추가권) */
@@ -688,9 +744,14 @@ function pickRarePokemon(state: GameState, random: Random): number {
 }
 /** 연속 이벤트 랜덤박스 3칸: 희귀 포켓몬 볼 또는 배틀 추가권, 세 칸이 모두 같지는 않게 */
 function streakBoxItems(random: Random): BoxItem[] {
-  const one = (): BoxItem => (random() < 0.5 ? { kind: 'ball', ball: 'rare' } : { kind: 'ticket' });
+  // 희귀 포켓몬 볼 45% · 배틀 추가권 40% · 이로치 볼 15%
+  const one = (): BoxItem => {
+    const r = random();
+    return r < 0.45 ? { kind: 'ball', ball: 'rare' } : r < 0.85 ? { kind: 'ticket' } : { kind: 'ball', ball: 'shiny' };
+  };
+  const same = (a: BoxItem, b: BoxItem) => a.kind === b.kind && (a.kind !== 'ball' || (b.kind === 'ball' && a.ball === b.ball));
   const items = [one(), one(), one()];
-  if (items.every(i => i.kind === items[0].kind)) items[Math.floor(random() * 3)] = items[0].kind === 'ticket' ? { kind: 'ball', ball: 'rare' } : { kind: 'ticket' };
+  if (items.every(i => same(i, items[0]))) items[Math.floor(random() * 3)] = same(items[0], { kind: 'ticket' }) ? { kind: 'ball', ball: 'rare' } : { kind: 'ticket' };
   return items;
 }
 /** 연속 기록이 오늘 기준으로 살아 있는지 (어제나 오늘 다 풀었으면 이어짐) */
@@ -1078,6 +1139,7 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     battleLevels: state.battleLevels ?? {},
     /** 포켓로그 이벤트에서 받은 이로치 (도감에 색깔별로 따로 표시) */
     shiny: state.shiny ?? [],
+    megas: state.megas ?? [],
   };
 }
 export type ChildView = ReturnType<typeof childView>;
