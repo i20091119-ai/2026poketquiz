@@ -326,7 +326,7 @@ export default function Game() {
       <AllClearDialog open={!!view.events.allClear.completedAt && !view.events.allClear.celebrated && !quiz && !reward}
         onClose={() => void act({ type: 'eventSeen', event: 'allClear' })} />
 
-      <RainbowIntro ev={introEv} busy={busy}
+      <RainbowIntro key={introEv ? 'intro-' + introEv.id : 'intro-none'} ev={introEv} busy={busy}
         onAccept={async () => { if (!introEv) return; const r = await act<{ message: string }>({ type: 'limitedAccept', id: introEv.id }); if (r) { setNotice(r.message); setTab('explore'); } }}
         onLater={() => { if (introEv) void act({ type: 'limitedSeen', id: introEv.id }); }} />
       <RainbowNotice ev={endEv ?? remindEv} kind={endEv ? 'end' : 'remind'}

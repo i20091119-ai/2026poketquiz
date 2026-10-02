@@ -524,6 +524,24 @@ export function limitedView(state: GameState, today: string, minutes: number) {
   });
 }
 export type LimitedView = ReturnType<typeof limitedView>[number];
+/**
+ * 보호자 "팝업 다시 보이게": 이 이벤트의 "팝업 봄"(그리고 진행이 없을 때만 "도전 시작")을 지워
+ * 다음에 아이 화면을 열 때 소개 팝업 3장이 처음부터 다시 뜨게 합니다.
+ * 조각·연속 수·완성·변신·정산 중 하나라도 있으면 아이가 한 것을 지우지 않도록 되돌리지 않습니다.
+ */
+export function resetLimitedIntro(state: GameState, id: string): { changed: boolean; message: string } {
+  const def = limitedById(id);
+  if (!def) return { changed: false, message: '이벤트를 찾지 못했어요.' };
+  const lp = state.limited?.[id];
+  if (!lp || (!lp.seen && !lp.acceptedAt)) return { changed: false, message: `아직 아무도 "${def.title}" 팝업을 보지 않았어요. 다음에 아이 화면을 열면 처음부터 떠요.` };
+  const progress = lp.pieces.length > 0 || Object.values(lp.streak).some(n => (n ?? 0) > 0) || !!lp.completedAt || !!lp.changed || !!lp.ended;
+  if (progress) {
+    const streaks = def.goal.subjects.filter(s => (lp.streak[s] ?? 0) > 0).map(s => `${s} ${lp.streak[s]}`).join(', ');
+    return { changed: false, message: `이미 진행한 기록이 있어서 되돌리지 않았어요 (조각 ${lp.pieces.length}개${streaks ? ` · 연속 ${streaks}` : ''}${lp.changed ? ' · 이로치 변신 완료' : ''}). 아이가 한 것을 지우지 않으려고 그대로 두었어요.` };
+  }
+  delete state.limited![id];
+  return { changed: true, message: `"${def.title}" 팝업 기록을 지웠어요${lp.acceptedAt ? ' (도전 시작 전 상태로 되돌림)' : ''}. 아이 폰에서 앱을 다음에 열면 팝업 3장이 처음부터 떠요. 열려 있는 화면이면 1분 안에 다시 떠요.` };
+}
 /** 보호자 화면용 요약: 예약된(시작 전) 이벤트도 모두 보여 줌 (아이 화면에는 시작 전엔 안 보임) */
 export function limitedReport(state: GameState, today: string) {
   return LIMITED_EVENTS.map(def => {

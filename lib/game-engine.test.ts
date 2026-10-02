@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
@@ -1011,4 +1011,34 @@ test('보호자 이벤트 기록에는 예약된(시작 전) 기간 한정 이�
   const r = limitedReport(state, before);
   assert.ok(r.some(e => e.id === RB.id && e.phase === 'before'));
   assert.deepEqual(limitedView(state, before, 0), []); // 아이 화면에는 여전히 안 보임
+});
+
+test('보호자 "팝업 다시 보이게": 본 것·진행 없는 시작은 되돌리고, 진행이 있으면 그대로 둔다', () => {
+  const bank = makeBank(12);
+  const c = rbCtx(bank);
+  // 1) 팝업만 보고 "나중에"
+  const a = started(bank);
+  applyAction(a, { type: 'limitedSeen', id: RB.id }, c);
+  assert.equal(limitedView(a, c.today, 0)[0].seen, true);
+  assert.equal(resetLimitedIntro(a, RB.id).changed, true);
+  assert.equal(limitedView(a, c.today, 0)[0].seen, false); // 다시 팝업
+  assert.equal(limitedView(a, c.today, 0)[0].accepted, false);
+  // 2) "도전할래!"까지 눌렀지만 아직 진행 0 → 시작 전으로
+  const b = started(bank);
+  applyAction(b, { type: 'limitedAccept', id: RB.id }, c);
+  exploreAnswer(b, bank, '국어', false, c); // 틀려도 연속 0이면 진행 아님
+  assert.equal(resetLimitedIntro(b, RB.id).changed, true);
+  assert.equal(limitedView(b, c.today, 0)[0].accepted, false);
+  assert.equal(limitedView(b, c.today, 0)[0].seen, false);
+  // 3) 연속 1이라도 있으면 되돌리지 않음
+  const d = started(bank);
+  applyAction(d, { type: 'limitedAccept', id: RB.id }, c);
+  exploreAnswer(d, bank, '수학', true, c);
+  const before = JSON.stringify(d.limited);
+  const r = resetLimitedIntro(d, RB.id);
+  assert.equal(r.changed, false);
+  assert.match(r.message, /수학 1/);
+  assert.equal(JSON.stringify(d.limited), before);
+  // 4) 아무도 안 봤으면 그대로
+  assert.equal(resetLimitedIntro(started(bank), RB.id).changed, false);
 });

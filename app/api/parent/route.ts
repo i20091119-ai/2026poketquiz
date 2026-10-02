@@ -4,7 +4,7 @@ import { normalizeRules, parseHm } from '@/lib/battle-rest';
 import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, simLimited, simGiveBalls, simGiveShinies, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -420,6 +420,12 @@ export async function POST(request: Request) {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const { result } = await mutateState(state => { const n = simGiveShinies(state, new Date().toISOString()); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
         return json({ message: result ? `시험용 기록의 포켓몬 ${result}마리에게 이로치를 하나씩 넣었어요. 포켓로그 팀 선택 화면에서 기본·이로치가 따로 보이는지 확인해 보세요.` : '이미 모든 포켓몬이 이로치도 갖고 있어요.' });
+      }
+      case 'limitedResetIntro': {
+        // 아이의 진짜 기록에만 (시뮬레이션 중이어도 시험용 기록은 건드리지 않음)
+        const id = String(body.id ?? '');
+        const { result } = await mutateState(state => { const r = resetLimitedIntro(state, id); return { result: r, changed: r.changed }; }, REAL_PLAYER);
+        return json({ message: result.message, reset: result.changed });
       }
       case 'simDate': {
         // 시험용 기록의 날짜를 이 날로 (기간 한정 이벤트 시험용). 지난 날짜로는 못 감. clock 을 주면 시각도 함께

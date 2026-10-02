@@ -256,7 +256,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
       </>}
 
-      {tab === 'events' && <EventsSection events={overview.events} />}
+      {tab === 'events' && <EventsSection events={overview.events} sim={overview.sim.active} busy={busy} call={call} reload={reload} />}
 
       {tab === 'battlelog' && <>
         <section className="panel parent-section">
@@ -392,12 +392,12 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
 }
 
 // ---------------- 도전 이벤트 ----------------
-function EventsSection({ events }: { events: Overview['events'] }) {
+function EventsSection({ events, sim, busy, call, reload }: { events: Overview['events']; sim: boolean; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const { allClear: a, streak: st } = events;
   return (
     <section className="panel parent-section">
       {events.limited.length > 0 && <h2>기간 한정 이벤트</h2>}
-      {events.limited.map(l => <LimitedRow key={l.id} l={l} />)}
+      {events.limited.map(l => <LimitedRow key={l.id} l={l} sim={sim} busy={busy} call={call} reload={reload} />)}
       <h2>도전 이벤트</h2>
       <table className="battle-log">
         <thead><tr><th>이벤트</th><th>수락</th><th>진도</th><th>완료</th></tr></thead>
@@ -422,7 +422,8 @@ function EventsSection({ events }: { events: Overview['events'] }) {
 }
 
 /** 기간 한정 이벤트 한 줄: 기간·상태, 조각, 과목별 연속 수, 완료·이로치 변신, 끝난 뒤 정산 */
-function LimitedRow({ l }: { l: Overview['events']['limited'][number] }) {
+function LimitedRow({ l, sim, busy, call, reload }: { l: Overview['events']['limited'][number]; sim: boolean; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const progress = l.pieces.length > 0 || Object.values(l.streak).some(n => n > 0) || !!l.completedAt || !!l.changed || !!l.ended;
   const status = l.phase === 'before' ? '⏳ 예약됨 · 시작 전이라 아이 화면에는 아직 안 보여요' : l.phase === 'ended' ? '끝남' : '진행 중';
   return (
     <div className="limited-report">
@@ -437,6 +438,18 @@ function LimitedRow({ l }: { l: Overview['events']['limited'][number] }) {
           {l.ended && <tr><td>정산</td><td>{l.ended.date} · 조각 {l.ended.pieces}개 · {l.ended.candy ? `사탕 ${l.ended.candy}개 보냄` : '사탕 없음'}</td></tr>}
         </tbody>
       </table>
+      {(l.seen || l.acceptedAt) && l.phase !== 'ended' && (sim
+        ? <p className="muted">시뮬레이션 중이라 &lsquo;팝업 다시 보이게&rsquo; 버튼은 숨겼어요 (위 표는 시험용 기록이에요).</p>
+        : <div className="inline-form">
+            <button className="secondary small" disabled={busy} onClick={async () => {
+              const warn = progress
+                ? `아이가 이미 진행했어요 (조각 ${l.pieces.length}개). 아이가 한 것을 지우지 않으려고 되돌리지 않아요. 확인만 할까요?`
+                : `아이 폰에서 다음에 앱을 열 때 "${l.title}" 팝업 3장이 처음부터 다시 뜨게 할까요?${l.acceptedAt ? ' (도전 시작도 시작 전 상태로 되돌려요)' : ''}`;
+              if (!window.confirm(warn)) return;
+              if (await call({ action: 'limitedResetIntro', id: l.id })) await reload();
+            }}>팝업 다시 보이게</button>
+            {progress && <small className="muted">⚠️ 진행이 있어서 되돌리지 않아요</small>}
+          </div>)}
     </div>
   );
 }
