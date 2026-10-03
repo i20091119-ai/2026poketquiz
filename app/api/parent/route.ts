@@ -446,10 +446,13 @@ export async function POST(request: Request) {
         // 기간 한정 이벤트 시험 도우미: reset(기록 지우기) / streak9(못 모은 과목 연속 9로) / pieces5(조각 5개로)
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const def = limitedById(String(body.id ?? ''));
-        const op = body.op === 'reset' || body.op === 'streak9' || body.op === 'pieces5' ? body.op : null;
+        const OPS = ['reset', 'streak9', 'pieces5', 'goldOpen', 'gold19', 'gold5'] as const;
+        const op = OPS.find(o => o === body.op) ?? null;
         if (!def || !op) throw new ParentError('이벤트를 다시 골라 주세요.');
         const { today } = await simClock();
-        await mutateState(state => ({ result: null, changed: simLimited(state, def.id, op, today) }), SIM_PLAYER);
+        const { result: ok } = await mutateState(state => { const r = simLimited(state, def.id, op, today); return { result: r, changed: r }; }, SIM_PLAYER);
+        if (!ok) throw new ParentError(op === 'goldOpen' ? '시험용 기록에 이로치로 바꿀 포켓몬이 없거나, 이벤트 기간이 아니에요. 날짜를 이벤트 기간으로 맞춰 주세요.' : '먼저 "황금 조각 열기"를 눌러 주세요.');
+        if (op === 'goldOpen' || op === 'gold19' || op === 'gold5') return json({ message: op === 'goldOpen' ? '무지개 6개 완성 + 첫 이로치 변신까지 끝낸 상태로 맞추고 황금 조각을 열었어요. 아이 화면을 새로고침하면 히든 스테이지 팝업이 떠요.' : op === 'gold19' ? '황금 조각을 아직 못 모은 과목의 연속 수를 19로 맞췄어요. 탐험에서 1문제만 더 맞히면 황금 조각이에요.' : '황금 조각을 5개로 맞췄어요. 남은 1과목을 20문제 연속 맞히면 황금 조각 완성이에요.' });
         return json({ message: op === 'reset' ? `시험용 기록의 "${def.title}" 기록을 지웠어요. 기간 중이면 아이 화면을 열 때 팝업부터 다시 나와요.` : op === 'streak9' ? '아직 못 모은 과목의 연속 수를 9로 맞췄어요. 탐험에서 1문제만 더 맞히면 조각이에요.' : '조각을 5개로 맞췄어요. 남은 1과목을 10문제 연속 맞히면 무지개 완성이에요.' });
       }
       case 'simStreak': {

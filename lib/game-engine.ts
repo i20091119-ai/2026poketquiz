@@ -121,8 +121,18 @@ export type LimitedProgress = {
   completedAt?: string;
   changed?: { uid: string; species: number; at: string };
   remindSeen?: boolean;
-  ended?: { date: string; pieces: number; candy: number };
+  ended?: { date: string; pieces: number; candy: number; goldPieces?: number };
   endSeen?: boolean;
+  /**
+   * 히든 스테이지 "황금 조각" (무지개 완성 + 이로치 변신 뒤 기간 안에 열림): 과목마다 20문제 연속 → 황금 조각,
+   * 6개 = 포켓몬 하나를 이로치로 하나 더. introSeen: 열릴 때 팝업을 봤는지
+   */
+  gold?: {
+    openedAt: string; introSeen?: boolean;
+    streak: Partial<Record<Subject, number>>; used: Partial<Record<Subject, number[]>>; missed?: { date: string; ids: number[] };
+    pieces: Subject[]; pieceAt: Partial<Record<Subject, string>>; completedAt?: string;
+    changed?: { uid: string; species: number; at: string };
+  };
 };
 /** 도전! 전 과목 올클리어: 수락한 날, 그때 공개 중이던 문제은행, 마스터한 과목(문제은행이 바뀌어도 남음) */
 export type AllClearEvent = { acceptedAt: string; bankId: number; mastered: Subject[]; completedAt?: string; celebrated?: boolean };
@@ -399,13 +409,13 @@ function explorePool(state: GameState, bank: ActiveBank, subject: Subject, today
   return fresh.length || !rainbowOpenFor(state, today, subject) ? fresh : rainbowReplayPool(state, bank, subject, today);
 }
 function rainbowReplayPool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {
-  const lp = rainbowOf(state, today)!.lp;
+  const st = rainbowStage(state, today)!.st;
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
-  const missed = new Set(lp.missed?.date === today ? lp.missed.ids : []);
+  const missed = new Set(st.missed?.date === today ? st.missed.ids : []);
   const base = subjectQuestions(bank, subject).filter(q =>
     solved.has(q.id) && !missed.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
-  const used = new Set(lp.used[subject] ?? []);
+  const used = new Set(st.used[subject] ?? []);
   const notYet = base.filter(q => !used.has(q.id));
   return notYet.length ? notYet : base;
 }
@@ -423,58 +433,83 @@ function rainbowOf(state: GameState, today: string): { def: LimitedEventDef; lp:
   }
   return null;
 }
-/** 이 과목 조각을 아직 모으는 중인지 */
-function rainbowOpenFor(state: GameState, today: string, subject: Subject) {
+/** 조각 모으기 한 단계(무지개 조각 / 히든 황금 조각)의 진행 칸 */
+type StageProgress = Pick<LimitedProgress, 'streak' | 'used' | 'missed' | 'pieces' | 'pieceAt' | 'completedAt'>;
+/**
+ * 지금 조각을 세는 단계. 무지개 6개를 다 모으기 전에는 무지개 단계(10연속),
+ * 다 모으고 이로치 변신까지 끝내 황금 조각이 열렸으면 황금 단계(20연속). 둘 다 끝났으면 null
+ */
+function rainbowStage(state: GameState, today: string): { def: LimitedEventDef; lp: LimitedProgress; st: StageProgress; gold: boolean; goal: number } | null {
   const r = rainbowOf(state, today);
-  return !!r && r.def.goal.subjects.includes(subject) && !r.lp.pieces.includes(subject);
+  if (!r) return null;
+  const { def, lp } = r;
+  if (lp.pieces.length < def.goal.subjects.length) return { ...r, st: lp, gold: false, goal: def.goal.streak };
+  if (def.hidden && lp.gold && !lp.gold.completedAt) return { ...r, st: lp.gold, gold: true, goal: def.hidden.streak };
+  return null;
+}
+/** 이 과목 조각을 아직 모으는 중인지 (무지개 또는 황금) */
+function rainbowOpenFor(state: GameState, today: string, subject: Subject) {
+  const r = rainbowStage(state, today);
+  return !!r && r.def.goal.subjects.includes(subject) && !r.st.pieces.includes(subject);
 }
 function limitedProgress(state: GameState, id: string): LimitedProgress {
   const all = state.limited ??= {};
   return all[id] ??= { streak: {}, used: {}, pieces: [], pieceAt: {} };
 }
+/** 무지개 조각을 다 모으고 이로치 변신까지 끝냈으면 (기간 안에) 히든 "황금 조각"을 엽니다. 열었으면 true */
+function openGoldStage(def: LimitedEventDef, lp: LimitedProgress, today: string): boolean {
+  if (!def.hidden || lp.gold || !lp.changed || limitedPhase(def, today) !== 'active') return false;
+  lp.gold = { openedAt: today, streak: {}, used: {}, pieces: [], pieceAt: {} };
+  return true;
+}
 export type RainbowResult = {
   kind: 'progress' | 'reset' | 'piece' | 'complete';
+  /** 'gold' 이면 히든 황금 조각 단계 */
+  stage: 'rainbow' | 'gold';
   subject: Subject; count: number; goal: number; pieces: number; total: number;
   /** 아이에게 보여 줄 말 (진행 중이면 빈 글) */
   message: string;
 };
 /** 탐험에서 한 문제를 풀 때마다: 맞히면 그 과목 연속 +1(목표에 닿으면 조각), 틀리면 0부터 */
 function rainbowAnswer(state: GameState, today: string, q: Question, correct: boolean, replay: boolean): RainbowResult | null {
-  const r = rainbowOf(state, today);
+  const r = rainbowStage(state, today);
   if (!r) return null;
-  const { def, lp } = r;
+  const { def, st, gold, goal } = r;
   const s = q.subject;
-  if (!def.goal.subjects.includes(s) || lp.pieces.includes(s)) return null;
-  const goal = def.goal.streak, total = def.goal.subjects.length;
-  const before = lp.streak[s] ?? 0;
+  if (!def.goal.subjects.includes(s) || st.pieces.includes(s)) return null;
+  const total = def.goal.subjects.length;
+  const stage = gold ? 'gold' as const : 'rainbow' as const;
+  const before = st.streak[s] ?? 0;
   if (!correct) {
-    lp.streak[s] = 0;
-    lp.used[s] = [];
+    st.streak[s] = 0;
+    st.used[s] = [];
     if (replay) {
-      if (lp.missed?.date !== today) lp.missed = { date: today, ids: [] };
-      lp.missed.ids.push(q.id);
+      if (st.missed?.date !== today) st.missed = { date: today, ids: [] };
+      st.missed.ids.push(q.id);
     }
-    return { kind: before > 0 ? 'reset' : 'progress', subject: s, count: 0, goal, pieces: lp.pieces.length, total,
+    return { kind: before > 0 ? 'reset' : 'progress', stage, subject: s, count: 0, goal, pieces: st.pieces.length, total,
       message: before > 0 ? `앗! ${eunNeun(s)} 처음부터 다시 해 보자. 할 수 있어!` : '' };
   }
   const count = before + 1;
   if (count < goal) {
-    lp.streak[s] = count;
-    lp.used[s] = [...(lp.used[s] ?? []), q.id];
-    return { kind: 'progress', subject: s, count, goal, pieces: lp.pieces.length, total, message: '' };
+    st.streak[s] = count;
+    st.used[s] = [...(st.used[s] ?? []), q.id];
+    return { kind: 'progress', stage, subject: s, count, goal, pieces: st.pieces.length, total, message: '' };
   }
-  lp.streak[s] = goal;
-  lp.used[s] = [];
-  lp.pieces.push(s);
-  lp.pieceAt[s] = today;
-  const left = total - lp.pieces.length;
-  if (left === 0) lp.completedAt = today;
-  const heart = PIECE_INFO[s].heart;
+  st.streak[s] = goal;
+  st.used[s] = [];
+  st.pieces.push(s);
+  st.pieceAt[s] = today;
+  const left = total - st.pieces.length;
+  if (left === 0) st.completedAt = today;
+  const heart = gold ? '👑' : PIECE_INFO[s].heart;
+  const name = gold ? `${s} 황금 조각` : `${s} 조각`;
   return {
-    kind: left === 0 ? 'complete' : 'piece', subject: s, count: goal, goal, pieces: lp.pieces.length, total,
-    message: left === 0 ? '🌈 무지개 완성! 이로치로 바꿀 포켓몬을 골라 봐!'
-      : left === 1 ? `${heart} ${s} 조각 얻었다! 와! 이제 딱 1개 남았어!`
-      : `${heart} ${s} 조각 얻었다! 이제 ${left}개 남았어!`,
+    kind: left === 0 ? 'complete' : 'piece', stage, subject: s, count: goal, goal, pieces: st.pieces.length, total,
+    message: left === 0
+      ? (gold ? '👑 황금 조각 완성! 이로치로 바꿀 포켓몬을 하나 더 골라 봐!' : '🌈 무지개 완성! 이로치로 바꿀 포켓몬을 골라 봐!')
+      : left === 1 ? `${heart} ${name} 얻었다! 와! 이제 딱 1개 남았어!`
+      : `${heart} ${name} 얻었다! 이제 ${left}개 남았어!`,
   };
 }
 /** 기간이 끝난 이벤트를 정산합니다 (조각이 minPieces 개 이상이면 파트너에게 사탕). 바뀌었으면 true */
@@ -482,6 +517,7 @@ export function syncLimited(state: GameState, today: string): boolean {
   let changed = false;
   for (const def of LIMITED_EVENTS) {
     const lp = state.limited?.[def.id];
+    if (lp?.acceptedAt && openGoldStage(def, lp, today)) changed = true; // 변신을 이미 끝냈으면 황금 조각 열기
     if (!lp?.acceptedAt || lp.ended || limitedPhase(def, today) !== 'ended') continue;
     const n = lp.pieces.length;
     const partner = state.owned.find(p => p.uid === state.partner);
@@ -491,7 +527,7 @@ export function syncLimited(state: GameState, today: string): boolean {
       c.pending.push({ id: nextId(state, 'c'), date: today, species: partner.species, amount: candy });
       c.sent += candy;
     }
-    lp.ended = { date: today, pieces: n, candy };
+    lp.ended = { date: today, pieces: n, candy, ...(lp.gold ? { goldPieces: lp.gold.pieces.length } : {}) };
     changed = true;
   }
   return changed;
@@ -524,6 +560,17 @@ export function limitedView(state: GameState, today: string, minutes: number) {
       remindSeen: !!lp?.remindSeen,
       ended: lp?.ended ?? null, endSeen: !!lp?.endSeen,
       shinyMultiplier: def.shinyMultiplier, partial: def.reward.partial,
+      /** 히든 스테이지 황금 조각 (열리기 전에는 null) */
+      gold: lp?.gold && def.hidden ? {
+        goal: def.hidden.streak, introSeen: !!lp.gold.introSeen, pieceCount: lp.gold.pieces.length,
+        subjects: def.goal.subjects.map(s => ({
+          subject: s, color: SUBJECT_INFO[s].color, piece: lp.gold!.pieces.includes(s),
+          streak: lp.gold!.pieces.includes(s) ? def.hidden!.streak : lp.gold!.streak[s] ?? 0,
+        })),
+        completed: !!lp.gold.completedAt,
+        changed: lp.gold.changed ? { uid: lp.gold.changed.uid, species: lp.gold.changed.species, name: shinyName(lp.gold.changed.species) } : null,
+        canChange: !!lp.gold.completedAt && !lp.gold.changed,
+      } : null,
     }];
   });
 }
@@ -556,16 +603,45 @@ export function limitedReport(state: GameState, today: string) {
       pieces: lp?.pieces ?? [], streak: Object.fromEntries(def.goal.subjects.map(s => [s, (lp?.pieces ?? []).includes(s) ? def.goal.streak : lp?.streak[s] ?? 0])) as Record<Subject, number>,
       completedAt: lp?.completedAt ?? null, changed: lp?.changed ? { species: lp.changed.species, name: shinyName(lp.changed.species), at: lp.changed.at } : null,
       ended: lp?.ended ?? null, shinyMultiplier: def.shinyMultiplier, partial: def.reward.partial,
+      gold: lp?.gold && def.hidden ? {
+        openedAt: lp.gold.openedAt, goal: def.hidden.streak, pieces: lp.gold.pieces,
+        streak: Object.fromEntries(def.goal.subjects.map(s => [s, lp.gold!.pieces.includes(s) ? def.hidden!.streak : lp.gold!.streak[s] ?? 0])) as Record<Subject, number>,
+        completedAt: lp.gold.completedAt ?? null, changed: lp.gold.changed ? { species: lp.gold.changed.species, name: shinyName(lp.gold.changed.species), at: lp.gold.changed.at } : null,
+      } : null,
+      hiddenGoal: def.hidden?.streak ?? null,
     };
   });
 }
 /** 시뮬레이션 도우미(시험용 기록에만): reset = 이 이벤트 기록 지우기, streak9 = 못 모은 과목 연속 9로, pieces5 = 조각 5개로 */
-export function simLimited(state: GameState, id: string, op: 'reset' | 'streak9' | 'pieces5', today: string): boolean {
+export function simLimited(state: GameState, id: string, op: 'reset' | 'streak9' | 'pieces5' | 'goldOpen' | 'gold19' | 'gold5', today: string): boolean {
   const def = limitedById(id);
   if (!def) return false;
   if (op === 'reset') { if (state.limited) delete state.limited[id]; return true; }
   const lp = limitedProgress(state, id);
   lp.acceptedAt ??= today; lp.seen ??= today;
+  if (op === 'goldOpen') {
+    // 무지개 6개 완성 + 첫 이로치 변신까지 끝낸 상태로 (변신은 가진 포켓몬 중 이로치 아닌 첫 포켓몬)
+    if (!def.hidden) return false;
+    for (const s of def.goal.subjects) if (!lp.pieces.includes(s)) { lp.pieces.push(s); lp.pieceAt[s] = today; lp.streak[s] = def.goal.streak; }
+    lp.completedAt ??= today;
+    if (!lp.changed) {
+      const p = state.owned.find(p => !p.shiny);
+      if (!p) return false;
+      p.shiny = true; state.shiny ??= []; if (!state.shiny.includes(p.species)) state.shiny.push(p.species);
+      lp.changed = { uid: p.uid, species: p.species, at: today };
+    }
+    return openGoldStage(def, lp, today) || !!lp.gold;
+  }
+  if (op === 'gold19' || op === 'gold5') {
+    if (!def.hidden || !lp.gold) return false;
+    const g = lp.gold;
+    for (const s of def.goal.subjects) {
+      if (g.pieces.includes(s)) continue;
+      if (op === 'gold19') g.streak[s] = def.hidden.streak - 1;
+      else if (g.pieces.length < def.goal.subjects.length - 1) { g.pieces.push(s); g.pieceAt[s] = today; g.streak[s] = def.hidden.streak; }
+    }
+    return true;
+  }
   if (op === 'streak9') {
     for (const s of def.goal.subjects) if (!lp.pieces.includes(s)) lp.streak[s] = def.goal.streak - 1;
   } else {
@@ -605,8 +681,8 @@ export type Action =
   | { type: 'eventBox'; pick: number }
   | { type: 'limitedSeen'; id: string; device?: string }
   | { type: 'limitedAccept'; id: string }
-  | { type: 'limitedShinyChange'; id: string; uid: string }
-  | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' };
+  | { type: 'limitedShinyChange'; id: string; uid: string; stage?: 'rainbow' | 'gold' }
+  | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' | 'gold' };
 
 /** shinyChance: 볼을 열 때 이로치가 나올 확률(%)을 덮어씀 (보호자 개발자 메뉴·시뮬레이션). 없으면 기본값 */
 export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>> };
@@ -658,7 +734,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       } else if (action.mode === 'explore') {
         if (prog.solved.includes(q.id) && !replay) fail('이미 맞힌 문제예요.');
         if (wrongToday(prog, q.id, ctx.today)) fail('이 문제는 다른 날 다시 도전해 보자!');
-        if (replay && (() => { const lp = rainbowOf(state, ctx.today)!.lp; return lp.missed?.date === ctx.today && lp.missed.ids.includes(q.id); })()) fail('이 문제는 다른 날 다시 도전해 보자!');
+        if (replay && (() => { const st = rainbowStage(state, ctx.today)!.st; return st.missed?.date === ctx.today && st.missed.ids.includes(q.id); })()) fail('이 문제는 다른 날 다시 도전해 보자!');
         if (inTodayDaily(state, q.id, ctx.today)) fail('이 문제는 오늘의 미션에서 풀어 줘.');
       } else fail('지원하지 않는 요청이에요.');
 
@@ -997,21 +1073,26 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'limitedShinyChange': {
       const def = limitedById(String(action.id));
       const lp = def ? state.limited?.[def.id] : undefined;
-      if (!def || !lp?.completedAt) fail('무지개 조각을 모두 모아야 해요.');
-      if (lp.changed) fail('이미 이로치로 바꿨어요.');
+      const gold = action.stage === 'gold';
+      // 무지개 보상(첫 번째)과 황금 조각 보상(하나 더)은 각각 한 번씩
+      const stageProgress = gold ? lp?.gold : lp;
+      if (!def || !lp || !stageProgress?.completedAt) fail(gold ? '황금 조각을 모두 모아야 해요.' : '무지개 조각을 모두 모아야 해요.');
+      if (stageProgress.changed) fail('이미 이로치로 바꿨어요.');
       const p = state.owned.find(p => p.uid === action.uid);
       if (!p) fail('포켓몬을 골라 줘.');
       if (p.shiny) fail('이미 이로치야. 다른 포켓몬을 골라 줘.');
       p.shiny = true;
       state.shiny ??= [];
       if (!state.shiny.includes(p.species)) state.shiny.push(p.species);
-      lp.changed = { uid: p.uid, species: p.species, at: ctx.now };
+      stageProgress.changed = { uid: p.uid, species: p.species, at: ctx.now };
+      if (!gold) openGoldStage(def, lp, ctx.today); // 무지개 변신을 끝내면 히든 황금 조각이 열림
       return { uid: p.uid, species: p.species, message: `✨ ${iGa(species(p.species).name)} 반짝반짝 변신했어! 이로치 도감에 들어갔어!` };
     }
     case 'limitedNotice': {
       const lp = state.limited?.[String(action.id)];
       if (lp && action.notice === 'remind') lp.remindSeen = true;
       if (lp && action.notice === 'end') lp.endSeen = true;
+      if (lp?.gold && action.notice === 'gold') lp.gold.introSeen = true;
       return { ok: true };
     }
 

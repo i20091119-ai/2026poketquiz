@@ -1,6 +1,6 @@
 // 화면에 보여 주는 버전 이름. 새 기능을 올릴 때 여기 숫자와 아래 "바뀐 것(UPDATES)"만 고치면 됩니다.
 // 날짜는 인터넷에 올릴 때(만들 때) 자동으로 들어갑니다 (vite.config.ts 의 __BUILD_DATE__).
-export const APP_VERSION = '1.20';
+export const APP_VERSION = '1.21';
 
 /** 하루치 바뀐 것. date는 'YYYY-MM-DD', version은 그날 마지막으로 올린 버전 이름 */
 export interface UpdateDay {
@@ -18,6 +18,15 @@ export interface UpdateDay {
  * (lib/version.test.ts 가 이 규칙을 검사합니다)
  */
 export const UPDATES: UpdateDay[] = [
+  {
+    date: '2026-10-03',
+    version: '1.21',
+    items: [
+      '👑 레인보우 히든 스테이지 "황금 조각": 변신 뒤 과목마다 20연속, 이로치 하나 더',
+      '레인보우 소개 팝업은 기기마다 한 번(보호자 폰에서 봐도 아이 폰엔 처음처럼)',
+      '보호자 이벤트 기록: 예약된 이벤트 표시, "팝업 다시 보이게" 버튼',
+    ],
+  },
   {
     date: '2026-10-02',
     version: '1.20',

@@ -27,6 +27,11 @@ export type LimitedEventDef = {
   shinyMultiplier: number;
   /** 마지막 날 이 시각 이후 아직 못 모았으면 "오늘 밤 12시면 끝나!" 안내 ('HH:MM') */
   reminderAt: string;
+  /**
+   * 히든 스테이지(선택): 조각을 다 모으고 이로치 변신까지 끝내면 기간 안에 열림.
+   * 과목마다 streak 문제 연속 정답 → 황금 조각, 다 모으면 포켓몬 하나를 이로치로 하나 더 (위 규칙은 그대로)
+   */
+  hidden?: { streak: number; reward: 'shinyChange' };
 };
 
 export const LIMITED_EVENTS: readonly LimitedEventDef[] = [
@@ -40,6 +45,8 @@ export const LIMITED_EVENTS: readonly LimitedEventDef[] = [
     reward: { full: 'shinyChange', partial: { minPieces: 3, candy: 3 } },
     shinyMultiplier: 5,
     reminderAt: '21:00',
+    // 2026-10-03 부모님 요청: 히든 스테이지 "황금 조각" (20문제 연속)
+    hidden: { streak: 20, reward: 'shinyChange' },
   },
 ];
 

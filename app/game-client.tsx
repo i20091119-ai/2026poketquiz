@@ -49,7 +49,8 @@ export default function Game() {
   /** 이번에 이미 팝업으로 보여 준 선물 (닫으면 다시 뜨지 않고, 앱을 다시 열면 다시 알려 줌) */
   const shownGifts = useRef(new Set<string>());
   /** 레인보우: 이로치로 바꿀 포켓몬 고르기 창 (이벤트 id), 이번에 자동으로 띄운 적 있는지, 방금 무지개를 완성했는지 */
-  const [changeId, setChangeId] = useState<string | null>(null);
+  const [change, setChange] = useState<{ id: string; gold: boolean } | null>(null);
+  const changeId = change?.id ?? null;
   const autoChangeShown = useRef(new Set<string>());
   const rainbowJustDone = useRef(false);
 
@@ -75,7 +76,7 @@ export default function Game() {
   // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
   useEffect(() => {
     if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId) return;
-    if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
+    if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.phase === 'active' && e.gold && !e.gold.introSeen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
   }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId]);
@@ -84,7 +85,10 @@ export default function Game() {
   useEffect(() => {
     if (!view?.partner || quiz || reward || ballQueue.length || giftPopup || opening || replying || changeId) return;
     const ev = view.limited.find(e => e.canChange && !autoChangeShown.current.has(e.id));
-    if (ev) { autoChangeShown.current.add(ev.id); setChangeId(ev.id); }
+    if (ev) { autoChangeShown.current.add(ev.id); setChange({ id: ev.id, gold: false }); return; }
+    // 황금 조각 완성도 같은 방식으로 (한 번)
+    const g = view.limited.find(e => e.gold?.canChange && !autoChangeShown.current.has(e.id + ':gold'));
+    if (g) { autoChangeShown.current.add(g.id + ':gold'); setChange({ id: g.id, gold: true }); }
   }, [view, quiz, reward, ballQueue.length, giftPopup, opening, replying, changeId]);
 
   // 보호자 화면의 "하루 퀴즈 시간": 화면이 보이는 동안만 세어 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
@@ -184,13 +188,15 @@ export default function Game() {
   const ev = view.events;
   const eventAlerts = (!ev.allClear.hidden && !ev.allClear.accepted ? 1 : 0) + (!ev.streak.hidden && !ev.streak.accepted ? 1 : 0)
     + (ev.streak.completedAt && !ev.streak.hidden ? 1 : 0)
-    + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange).length;
+    + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange || e.gold?.canChange).length;
   // 레인보우 팝업: 처음 열면 3장 소개 → 끝났을 때 결과 → 마지막 날 저녁 안내 (다른 창이 없을 때 하나씩)
   const calm = !quiz && !reward && !ballQueue.length && !giftPopup && !opening && !replying && !changeId;
   // 소개 팝업은 기기마다 한 번: 다른 기기(보호자 폰)에서 봤어도 이 기기에서 처음이면 뜸. 도전을 시작했으면 안 뜸
   const introEv = calm ? view.limited.find(e => e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) ?? null : null;
   const endEv = calm && !introEv ? view.limited.find(e => e.phase === 'ended' && e.accepted && !e.endSeen) ?? null : null;
-  const remindEv = calm && !introEv && !endEv ? view.limited.find(e => e.remind && !e.remindSeen) ?? null : null;
+  // 히든 스테이지 "황금 조각"이 열리면 (이미 열린 상태로 처음 열어도) 한 번 알려 줌
+  const goldEv = calm && !introEv && !endEv ? view.limited.find(e => e.phase === 'active' && e.gold && !e.gold.introSeen) ?? null : null;
+  const remindEv = calm && !introEv && !endEv && !goldEv ? view.limited.find(e => e.remind && !e.remindSeen) ?? null : null;
   const changeEv = changeId ? view.limited.find(e => e.id === changeId) ?? null : null;
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
   async function reviveFromHistory(runId: string) {
@@ -264,7 +270,8 @@ export default function Game() {
             <TabsContent value="event">
               <EventTab events={view.events} limited={view.limited} busy={busy}
                 onLimitedAccept={async id => { const r = await act<{ message: string }>({ type: 'limitedAccept', id }); if (r) setNotice(r.message); }}
-                onLimitedChange={id => setChangeId(id)}
+                onLimitedChange={id => setChange({ id, gold: false })}
+                onGoldChange={id => setChange({ id, gold: true })}
                 onAccept={async id => { const r = await act<{ message: string }>({ type: 'acceptEvent', event: id }); if (r) setNotice(r.message); }}
                 onExplore={s => { setTab('explore'); window.scrollTo({ top: 0, behavior: 'smooth' }); void loadExplore(s); }}
                 onOpenBox={() => setReward({ kind: 'event' })} />
@@ -330,11 +337,11 @@ export default function Game() {
       <RainbowIntro key={introEv ? 'intro-' + introEv.id : 'intro-none'} ev={introEv} busy={busy}
         onAccept={async () => { if (!introEv) return; const r = await act<{ message: string }>({ type: 'limitedAccept', id: introEv.id }); if (r) { setNotice(r.message); setTab('explore'); } }}
         onLater={() => { if (introEv) void act({ type: 'limitedSeen', id: introEv.id, device: deviceId() }); }} />
-      <RainbowNotice ev={endEv ?? remindEv} kind={endEv ? 'end' : 'remind'}
-        onClose={() => { const e = endEv ?? remindEv; if (e) void act({ type: 'limitedNotice', id: e.id, notice: endEv ? 'end' : 'remind' }); }} />
-      <ShinyChangeDialog ev={changeEv} owned={view.owned} busy={busy}
-        onChange={uid => act<{ species: number; message: string }>({ type: 'limitedShinyChange', id: changeId!, uid })}
-        onClose={() => setChangeId(null)} />
+      <RainbowNotice ev={endEv ?? goldEv ?? remindEv} kind={endEv ? 'end' : goldEv ? 'gold' : 'remind'}
+        onClose={() => { const e = endEv ?? goldEv ?? remindEv; if (e) void act({ type: 'limitedNotice', id: e.id, notice: endEv ? 'end' : goldEv ? 'gold' : 'remind' }); }} />
+      <ShinyChangeDialog key={change ? change.id + (change.gold ? ':gold' : '') : 'none'} ev={changeEv} gold={!!change?.gold} owned={view.owned} busy={busy}
+        onChange={uid => act<{ species: number; message: string }>({ type: 'limitedShinyChange', id: changeId!, uid, stage: change?.gold ? 'gold' : 'rainbow' })}
+        onClose={() => setChange(null)} />
 
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (
