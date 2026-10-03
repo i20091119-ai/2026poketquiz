@@ -1,7 +1,7 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
-  eulReul, eunNeun, iGa, SUBJECT_INFO, POTIONS, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, TYPE_KEYS,
+  eunNeun, iGa, SUBJECT_INFO, POTIONS, BATTLE_IV, battleIvFromFeeds, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
   EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
   SHINY_CHANCE_DEFAULT, type ShinyBallKind,
@@ -102,6 +102,8 @@ export type GameState = {
   reviveTickets?: number;
   /** 기간 한정 이벤트 진행 (이벤트 id → 진행). lib/limited-events.ts */
   limited?: Record<string, LimitedProgress>;
+  /** 배틀 힘: 진화 계열 첫 모습 번호 → 열매·상처약을 먹인 횟수 (포켓로그 개체값 = 15 + 횟수, 최대 31) */
+  battlePower?: Record<string, number>;
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -247,6 +249,27 @@ function addPokemon(state: GameState, id: number, now: string, shiny = false) {
   const uid = nextId(state, 'p');
   state.owned.push(shiny ? { uid, species: id, obtainedAt: now, shiny: true } : { uid, species: id, obtainedAt: now });
   return { duplicate: false, uid };
+}
+
+/** 이 포켓몬(진화 계열)의 포켓로그 개체값 (6개 능력치 모두 같은 값) */
+export const battleIvOf = (state: GameState, speciesId: number) => battleIvFromFeeds(state.battlePower?.[String(rootOf(speciesId))] ?? 0);
+/** 포켓로그에 보낼 개체값: 가진 포켓몬(기본·이로치·이로치 도감)의 번호 → 개체값 */
+export function battleIvList(state: GameState): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const id of [...state.owned.map(p => p.species), ...(state.shiny ?? [])]) out[id] = battleIvOf(state, id);
+  return out;
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 열매·상처약을 종류마다 1개씩 가방에 */
+export function simGivePotions(state: GameState): number {
+  const kinds = Object.keys(POTIONS) as PotionKind[];
+  for (const kind of kinds) (state.potions ??= []).push({ id: nextId(state, 'm'), kind });
+  return kinds.length;
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 가진 포켓몬 계열마다 먹인 횟수를 n 더함 (n = 'max'면 최대로) */
+export function simBattlePower(state: GameState, n: number | 'max'): number {
+  const roots = [...new Set(state.owned.map(p => String(rootOf(p.species))))];
+  for (const r of roots) (state.battlePower ??= {})[r] = n === 'max' ? BATTLE_IV.max - BATTLE_IV.base : Math.min(BATTLE_IV.max - BATTLE_IV.base, (state.battlePower?.[r] ?? 0) + n);
+  return roots.length;
 }
 
 /** 이로치 볼: 아이가 가진 포켓몬의 1단계(계열 첫 모습) 중 하나. 아직 이로치가 없는 계열을 먼저 */
@@ -904,12 +927,18 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const p = state.owned.find(p => p.uid === action.uid);
       if (!p) fail('포켓몬을 골라 주세요.');
       const [item] = state.potions.splice(index, 1);
-      const { amount, label } = POTIONS[item.kind];
+      const { amount } = POTIONS[item.kind];
       const types = potionTargets(item.kind);
       for (const t of types) state.stats[t] += amount;
+      // 배틀 힘: 먹인 포켓몬의 진화 계열(기본·이로치 같이) 포켓로그 개체값 +1, 최대 31
+      const root = String(rootOf(p.species));
+      const before = battleIvOf(state, p.species);
+      if (before < BATTLE_IV.max) (state.battlePower ??= {})[root] = (state.battlePower?.[root] ?? 0) + 1;
+      const iv = battleIvOf(state, p.species);
+      const name = p.shiny ? shinyName(p.species) : species(p.species).name;
       return {
-        types, amount,
-        message: `${species(p.species).name}에게 ${eulReul(label)} 먹였어! ${types.length === TYPE_KEYS.length ? '모든 속성' : types.map(t => TYPE_INFO[t].label).join('·')} +${amount}`,
+        types, amount, battleIv: iv, battleIvUp: iv > before,
+        message: iv > before ? `${name}에게 먹였어! 속성 +${amount}, 배틀 힘도 쑥!` : `${name}에게 먹였어! 속성 +${amount}, 배틀 힘은 이미 최고야!`,
       };
     }
 
@@ -1531,6 +1560,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     /** 포켓로그 이벤트에서 받은 이로치 (도감에 색깔별로 따로 표시) */
     shiny: state.shiny ?? [],
     megas: state.megas ?? [],
+    /** 배틀 힘: 진화 계열 첫 모습 번호 → 먹인 횟수 (개체값 = battleIvFromFeeds) */
+    battlePower: state.battlePower ?? {},
     /** 기간 한정 이벤트 (시작 전에는 비어 있음) */
     limited: limitedView(state, today, minutes),
   };

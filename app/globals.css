@@ -800,3 +800,10 @@ select { width: auto; min-width: 120px; }
 .gold-intro { background: linear-gradient(180deg, #fff8dc, #fff) !important; }
 .gold-burst { position: relative; display: grid; place-items: center; height: 120px; font-size: 72px; }
 .pre-line { white-space: pre-line; }
+
+/* 배틀 힘 (포켓로그 개체값) */
+.battle-power { margin: 2px 0; font-size: 14px; font-weight: 700; color: #4b5b51; }
+.power-stars i { font-style: normal; color: #d5dcd7; font-size: 16px; letter-spacing: 1px; }
+.power-stars i.on { color: #f2b705; }
+.power-max { color: #e5484d; }
+.feed-power { display: grid; justify-items: center; gap: 2px; margin: 4px 0; }

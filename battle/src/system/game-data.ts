@@ -7,7 +7,7 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
-import { hasQuizNormalStarter, hasQuizShinyStarter } from "#app/quiz-link";
+import { hasQuizNormalStarter, hasQuizShinyStarter, quizStarterIv } from "#app/quiz-link";
 import { isIos } from "#app/touch-controls";
 import { Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -1553,9 +1553,8 @@ export class GameData {
       entry.seenAttr = quizStarterAttr(defaultStarterSpecies[ds]);
       entry.caughtAttr = quizStarterAttr(defaultStarterSpecies[ds]);
       entry.natureAttr = 1 << (defaultStarterNatures[ds] + 1);
-      for (const i in entry.ivs) {
-        entry.ivs[i] = 15;
-      }
+      // 배틀 힘: 퀴즈에서 열매·상처약을 먹인 만큼 (기본 15, 최대 31)
+      entry.ivs = Array.from({ length: 6 }, () => quizStarterIv(defaultStarterSpecies[ds]));
     }
 
     this.defaultDexData = { ...data };
@@ -1589,9 +1588,8 @@ export class GameData {
         if (!dexEntry.natureAttr) {
           dexEntry.natureAttr = 1 << (Nature.HARDY + 1);
         }
-        if (dexEntry.ivs.every(iv => iv === 0)) {
-          dexEntry.ivs = [15, 15, 15, 15, 15, 15];
-        }
+        // 배틀 힘(개체값)은 퀴즈 앱 값 그대로: 열매·상처약을 먹인 만큼 (기본 15, 최대 31). 판 안에서 오른 값은 남기지 않음
+        dexEntry.ivs = Array.from({ length: 6 }, () => quizStarterIv(speciesId));
         if (starterEntry) {
           starterEntry.abilityAttr |= AbilityAttr.ABILITY_1;
         }

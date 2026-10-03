@@ -27,6 +27,13 @@ export const quizOwnedSpecies: number[] = [];
  */
 export const quizShinySpecies: number[] = [];
 const SHINY_CACHE_KEY = "quizShinySpecies";
+/**
+ * 배틀 힘(개체값): 퀴즈 앱에서 열매·상처약을 먹인 만큼 오른 값. 퀴즈 번호 → 값 (6개 능력치에 똑같이).
+ * 기본값은 원래 쓰던 고정값 15, 최대 31. 같은 진화 계열은 기본 모습·이로치 모두 같은 값.
+ */
+export const QUIZ_IV_DEFAULT = 15;
+const IV_CACHE_KEY = "quizBattleIvs";
+const quizIvBySpecies: Record<string, number> = {};
 
 const validIds = (list: unknown): number[] | null =>
   Array.isArray(list) ? list.filter((n): n is number => Number.isInteger(n) && n > 0) : null;
@@ -41,12 +48,13 @@ export async function loadQuizOwnedSpecies(): Promise<void> {
   try {
     const res = await fetch(QUIZ_MY_POKEMON_URL, { cache: "no-store" });
     if (res.ok) {
-      const body = (await res.json()) as { species?: unknown; shiny?: unknown };
+      const body = (await res.json()) as { species?: unknown; shiny?: unknown; ivs?: unknown };
       ids = validIds(body.species);
       if (ids) {
         localStorage.setItem(CACHE_KEY, JSON.stringify(ids));
         shinies = validIds(body.shiny) ?? [];
         localStorage.setItem(SHINY_CACHE_KEY, JSON.stringify(shinies));
+        localStorage.setItem(IV_CACHE_KEY, JSON.stringify(body.ivs && typeof body.ivs === "object" ? body.ivs : {}));
       }
     }
   } catch (err) {
@@ -61,6 +69,21 @@ export async function loadQuizOwnedSpecies(): Promise<void> {
   };
   quizOwnedSpecies.splice(0, quizOwnedSpecies.length, ...(ids ?? cached(CACHE_KEY)));
   quizShinySpecies.splice(0, quizShinySpecies.length, ...(shinies ?? cached(SHINY_CACHE_KEY)));
+  let ivs: Record<string, unknown> = {};
+  try {
+    ivs = JSON.parse(localStorage.getItem(IV_CACHE_KEY) ?? "{}") as Record<string, unknown>;
+  } catch {
+    ivs = {};
+  }
+  for (const key of Object.keys(quizIvBySpecies)) {
+    delete quizIvBySpecies[key];
+  }
+  for (const [id, value] of Object.entries(ivs)) {
+    const iv = Number(value);
+    if (Number.isInteger(iv) && iv >= 0 && iv <= 31) {
+      quizIvBySpecies[id] = iv;
+    }
+  }
   // 예전 버전이 포켓로그 이로치를 퀴즈 앱에 알리려고 기기에 적어 두던 것은 이제 쓰지 않으니 지움
   localStorage.removeItem("quizShinyPending");
 }
@@ -70,6 +93,10 @@ const quizNormalStarters = new Set<number>();
 const quizShinyStarters = new Set<number>();
 export const hasQuizNormalStarter = (starterId: number): boolean => quizNormalStarters.has(starterId);
 export const hasQuizShinyStarter = (starterId: number): boolean => quizShinyStarters.has(starterId);
+/** 스타터(진화 전 첫 모습) → 퀴즈 배틀 힘 개체값 */
+const quizStarterIvs = new Map<number, number>();
+/** 이 스타터 계열의 개체값 (퀴즈에서 먹인 만큼, 없으면 15). 팀 선택 화면과 판 시작에 6개 능력치 모두 이 값 */
+export const quizStarterIv = (starterId: number): number => quizStarterIvs.get(starterId) ?? QUIZ_IV_DEFAULT;
 
 /**
  * 보유 포켓몬을 포켓로그 스타터(진화 전 첫 모습)로 바꿔 기본 스타터 목록을 채웁니다.
@@ -96,6 +123,13 @@ export function applyQuizStarters(): void {
     const starter = starterOf(id);
     if (starter != null) {
       quizShinyStarters.add(starter);
+    }
+  }
+  quizStarterIvs.clear();
+  for (const [id, iv] of Object.entries(quizIvBySpecies)) {
+    const starter = starterOf(Number(id));
+    if (starter != null) {
+      quizStarterIvs.set(starter, Math.max(quizStarterIvs.get(starter) ?? 0, iv));
     }
   }
   const starters = new Set<StarterSpeciesId>([...quizNormalStarters, ...quizShinyStarters] as StarterSpeciesId[]);

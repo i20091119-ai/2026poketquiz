@@ -4,7 +4,7 @@ import { normalizeRules, parseHm } from '@/lib/battle-rest';
 import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -426,6 +426,18 @@ export async function POST(request: Request) {
         const id = String(body.id ?? '');
         const { result } = await mutateState(state => { const r = resetLimitedIntro(state, id); return { result: r, changed: r.changed }; }, REAL_PLAYER);
         return json({ message: result.message, reset: result.changed });
+      }
+      case 'simPotions': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const { result } = await mutateState(state => ({ result: simGivePotions(state), changed: true }), SIM_PLAYER);
+        return json({ message: `시험용 가방에 열매·상처약을 ${result}개(종류마다 1개) 넣었어요. 가방 탭에서 포켓몬에게 먹여 보세요.` });
+      }
+      case 'simBattlePower': {
+        // 시험용 기록의 배틀 힘: +5 또는 최고로
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const max = body.to === 'max';
+        const { result } = await mutateState(state => { const n = simBattlePower(state, max ? 'max' : 5); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
+        return json({ message: `시험용 기록의 포켓몬 ${result}계열 배틀 힘을 ${max ? '최고(31)로' : '+5'} 맞췄어요. 포켓로그 팀 선택 화면의 능력치 그래프에서 확인할 수 있어요.` });
       }
       case 'simDate': {
         // 시험용 기록의 날짜를 이 날로 (기간 한정 이벤트 시험용). 지난 날짜로는 못 감. clock 을 주면 시각도 함께

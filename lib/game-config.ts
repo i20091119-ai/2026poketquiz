@@ -37,6 +37,16 @@ export const eulReul = (word: string) => {
   return word + (code >= 0 && code <= 11171 && code % 28 ? '을' : '를');
 };
 
+/**
+ * 배틀 힘(포켓로그 개체값 IV): 열매·상처약을 먹인 포켓몬의 진화 계열은 포켓로그 6개 능력치 개체값이 하나 먹일 때마다 +1.
+ * 시작값은 포켓로그가 원래 쓰던 고정값 15, 최대 31 (기본 모습과 이로치는 같은 계열이면 같은 값).
+ */
+export const BATTLE_IV = { base: 15, max: 31, perFeed: 1 } as const;
+/** 먹인 횟수 → 개체값 */
+export const battleIvFromFeeds = (feeds: number) => Math.min(BATTLE_IV.max, BATTLE_IV.base + Math.max(0, feeds) * BATTLE_IV.perFeed);
+/** 배틀 힘 별 (5칸, 개체값 비율) */
+export const battleStars = (iv: number) => Math.max(0, Math.min(5, Math.round((iv / BATTLE_IV.max) * 5)));
+
 /** 받침에 따라 은/는 (예: 국어는, 수학은) */
 export const eunNeun = (word: string) => {
   const code = word.charCodeAt(word.length - 1) - 0xac00;

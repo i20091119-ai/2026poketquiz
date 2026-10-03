@@ -4,7 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ASSETS } from '@/lib/assets';
 import { BALLS, eulReul, POTIONS, potionTargets, type PotionKind } from '@/lib/game-config';
 import type { Ball, ChildView } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, shinyName, species } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, rootOf, shinyName, species } from '@/lib/pokedex';
+import { BattlePower } from './pokedex-tab';
 import { PokemonImage, TypeBadge } from './common';
 import { potionEffect } from './rewards';
 
@@ -102,6 +103,12 @@ function FeedDialog({ kind, view, busy, onClose, onFeed }: {
           ))}
         </div>
 
+        {chosen && (
+          <div className="feed-power">
+            <BattlePower feeds={view.battlePower[rootOf(chosen.species)] ?? 0} />
+            <small className="muted">먹이면 포켓로그에서 배틀 힘이 쑥! 올라가 (같은 진화 계열은 이로치도 함께)</small>
+          </div>
+        )}
         {chosen && (
           <div className="feed-types">
             {helps.length ? helps.map(r => {

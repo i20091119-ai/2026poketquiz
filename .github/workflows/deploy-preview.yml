@@ -6,7 +6,7 @@ name: 미리보기 올리기 (게임 작업본)
 
 on:
   push:
-    branches: [claude/battle-pokerogue, claude/dev-menu, claude/insight, claude/gifts, claude/pwa, claude/events, claude/landscape, claude/landscape2, claude/ab-buttons, claude/evolve-cost, claude/strong-evolve, claude/strong-editor, claude/shiny-mega, claude/export-tabs, claude/rainbow, claude/rainbow-gold]
+    branches: [claude/battle-pokerogue, claude/dev-menu, claude/insight, claude/gifts, claude/pwa, claude/events, claude/landscape, claude/landscape2, claude/ab-buttons, claude/evolve-cost, claude/strong-evolve, claude/strong-editor, claude/shiny-mega, claude/export-tabs, claude/rainbow, claude/rainbow-gold, claude/battle-iv]
   workflow_dispatch:
 
 concurrency:
