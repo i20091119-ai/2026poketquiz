@@ -94,3 +94,8 @@
 ## 14. 배틀 힘 (퀴즈 열매·상처약 → 개체값, 2026-10-03)
 - 퀴즈 앱에서 열매·상처약을 먹인 포켓몬 계열은 개체값 6개가 모두 +1 (시작 15, 최대 31). 기본 모습과 이로치는 같은 계열이면 같은 값.
 - 퀴즈 서버 `GET /api/my-pokemon`의 `ivs`(퀴즈 번호 → 값)를 `quiz-link.ts`가 스타터 계열별 값(`quizStarterIv`)으로 바꾸고, `game-data.ts`가 실행마다 도감 개체값을 이 값으로 맞춤(새 기록 `initDexData`·기존 기록 `applyQuizStarterUnlocks`). 팀 선택 화면의 개체값 표시와 판 시작 포켓몬에 그대로 쓰임.
+
+## 15. 모험 팀 (2026-10-03)
+- 퀴즈 앱 모험 팀(파트너 1 + 친구 2)이 `GET /api/my-pokemon`의 `team`(`[{species, shiny}]`, 파트너 먼저)으로 옴. `quiz-link.ts`가 스타터 칸(`quizTeamStarterCells`)으로 바꾸고, 팀 선택 화면(`starter-select-ui-handler.ts` `moveTeamCellsFirst`)이 정렬·이로치 칸 표시 뒤 이 칸들을 맨 앞으로 옮김. 다른 포켓몬은 그 뒤에 그대로 있어 고를 수 있음.
+- ★ 배틀 힘(14번 개체값)은 이제 열매·상처약 말고도 에너지 바꾸기, 다 진화한 포켓몬의 💗로도 오름(퀴즈 앱이 계산, 게임은 `ivs` 값만 씀). 최대는 `ivMax`(보호자 설정, 기본 31).
+- 팀 선택 화면 왼쪽 정보 칸의 속성 아이콘 위에 "배틀 힘 ★★★☆☆"(`starter-summary.ts` `pokemonBattlePowerText`, `quizBattlePowerLabel`: 별 5칸 = 개체값 / 최대, 빈 별은 회색), 최대면 "배틀 힘 최고!". 행운 표시는 그 오른쪽으로 밀림.

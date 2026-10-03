@@ -4,6 +4,7 @@ import { ArrowRight, Volume2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { PublicQuestion } from '@/lib/game-engine';
 import { TypeBadge } from './common';
+import { HeartLines, type HeartGainView } from './adventure';
 
 export type AnswerResult = {
   correct: boolean;
@@ -17,6 +18,8 @@ export type AnswerResult = {
   already?: boolean;
   reviewed?: boolean;
   gained?: { type: PublicQuestion['type']; amount: number; exp: number };
+  /** 모험 팀이 받은 💗 (정답일 때) */
+  hearts?: HeartGainView[];
   /** 레인보우 이벤트 진행 (탐험에서만): 연속 수, 조각을 얻었는지, 아이에게 보여 줄 말 */
   rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; stage?: 'rainbow' | 'gold'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
 };
@@ -113,8 +116,10 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
           {feedback && (
             <div className={'feedback ' + (feedback.correct ? 'correct' : 'retry')} role="status">
               <b>{feedback.message}</b>
-              {feedback.gained && <p className="gain-line"><TypeBadge type={feedback.gained.type} amount={'+' + feedback.gained.amount} small /> 경험치 +{feedback.gained.exp}</p>}
-              {feedback.explanation && <p>{feedback.explanation}</p>}
+              {feedback.gained && <p className="gain-line"><TypeBadge type={feedback.gained.type} amount={'⚡+' + feedback.gained.amount} small /> 경험치 +{feedback.gained.exp}</p>}
+              {/* 풀이를 먼저 (정답이든 오답이든 아이가 설명을 한 번 더 보도록), 💗 소식은 그 아래 */}
+              {feedback.explanation && <p className="feedback-explain">📖 {feedback.explanation}</p>}
+              {feedback.correct && feedback.hearts && <HeartLines hearts={feedback.hearts} />}
             </div>
           )}
           {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}

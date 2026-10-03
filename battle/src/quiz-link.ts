@@ -34,6 +34,13 @@ const SHINY_CACHE_KEY = "quizShinySpecies";
 export const QUIZ_IV_DEFAULT = 15;
 const IV_CACHE_KEY = "quizBattleIvs";
 const quizIvBySpecies: Record<string, number> = {};
+/** 퀴즈 앱 모험 팀 (파트너 먼저, 그다음 친구 2마리). 팀 선택 화면에서 맨 앞에 보여 줍니다 */
+const TEAM_CACHE_KEY = "quizAdventureTeam";
+type QuizTeamMember = { species: number; shiny: boolean };
+let quizTeam: QuizTeamMember[] = [];
+/** ★ 배틀 힘 최대 (퀴즈 보호자 설정, 기본 31) */
+const IV_MAX_CACHE_KEY = "quizBattleIvMax";
+let quizIvMax = 31;
 
 const validIds = (list: unknown): number[] | null =>
   Array.isArray(list) ? list.filter((n): n is number => Number.isInteger(n) && n > 0) : null;
@@ -48,13 +55,23 @@ export async function loadQuizOwnedSpecies(): Promise<void> {
   try {
     const res = await fetch(QUIZ_MY_POKEMON_URL, { cache: "no-store" });
     if (res.ok) {
-      const body = (await res.json()) as { species?: unknown; shiny?: unknown; ivs?: unknown };
+      const body = (await res.json()) as {
+        species?: unknown;
+        shiny?: unknown;
+        ivs?: unknown;
+        team?: unknown;
+        ivMax?: unknown;
+      };
       ids = validIds(body.species);
       if (ids) {
         localStorage.setItem(CACHE_KEY, JSON.stringify(ids));
         shinies = validIds(body.shiny) ?? [];
         localStorage.setItem(SHINY_CACHE_KEY, JSON.stringify(shinies));
         localStorage.setItem(IV_CACHE_KEY, JSON.stringify(body.ivs && typeof body.ivs === "object" ? body.ivs : {}));
+        localStorage.setItem(TEAM_CACHE_KEY, JSON.stringify(Array.isArray(body.team) ? body.team : []));
+        if (Number.isInteger(body.ivMax)) {
+          localStorage.setItem(IV_MAX_CACHE_KEY, String(body.ivMax));
+        }
       }
     }
   } catch (err) {
@@ -84,6 +101,19 @@ export async function loadQuizOwnedSpecies(): Promise<void> {
       quizIvBySpecies[id] = iv;
     }
   }
+  try {
+    const team = JSON.parse(localStorage.getItem(TEAM_CACHE_KEY) ?? "[]") as unknown[];
+    quizTeam = team
+      .filter(
+        (m): m is QuizTeamMember => !!m && typeof m === "object" && Number.isInteger((m as QuizTeamMember).species),
+      )
+      .map(m => ({ species: m.species, shiny: !!m.shiny }))
+      .slice(0, 3);
+  } catch {
+    quizTeam = [];
+  }
+  const ivMax = Number(localStorage.getItem(IV_MAX_CACHE_KEY));
+  quizIvMax = Number.isInteger(ivMax) && ivMax >= QUIZ_IV_DEFAULT && ivMax <= 31 ? ivMax : 31;
   // 예전 버전이 포켓로그 이로치를 퀴즈 앱에 알리려고 기기에 적어 두던 것은 이제 쓰지 않으니 지움
   localStorage.removeItem("quizShinyPending");
 }
@@ -97,6 +127,19 @@ export const hasQuizShinyStarter = (starterId: number): boolean => quizShinyStar
 const quizStarterIvs = new Map<number, number>();
 /** 이 스타터 계열의 개체값 (퀴즈에서 먹인 만큼, 없으면 15). 팀 선택 화면과 판 시작에 6개 능력치 모두 이 값 */
 export const quizStarterIv = (starterId: number): number => quizStarterIvs.get(starterId) ?? QUIZ_IV_DEFAULT;
+/** 팀 선택 화면 "배틀 힘 ★★★☆☆" (별 5칸 = 개체값 / 최대). 최대면 "배틀 힘 최고!" */
+export function quizBattlePowerLabel(starterId: number): string {
+  const iv = quizStarterIv(starterId);
+  if (iv >= quizIvMax) {
+    return "배틀 힘 [color=#e05050]최고![/color]";
+  }
+  const stars = Math.max(0, Math.min(5, Math.round((iv / quizIvMax) * 5)));
+  // 화면 글꼴은 ☆ 이 ★ 과 같아 보여서, 빈 별은 회색 ★ 로 그림 (BBCode 색)
+  return `배틀 힘 [color=#e8a800]${"★".repeat(stars)}[/color][color=#b8b8b8]${"★".repeat(5 - stars)}[/color]`;
+}
+/** 모험 팀 칸 (스타터 번호, 이로치 칸인지). 파트너 먼저 */
+const quizTeamCells: { starter: number; shiny: boolean }[] = [];
+export const quizTeamStarterCells = (): readonly { starter: number; shiny: boolean }[] => quizTeamCells;
 
 /**
  * 보유 포켓몬을 포켓로그 스타터(진화 전 첫 모습)로 바꿔 기본 스타터 목록을 채웁니다.
@@ -130,6 +173,13 @@ export function applyQuizStarters(): void {
     const starter = starterOf(Number(id));
     if (starter != null) {
       quizStarterIvs.set(starter, Math.max(quizStarterIvs.get(starter) ?? 0, iv));
+    }
+  }
+  quizTeamCells.splice(0, quizTeamCells.length);
+  for (const m of quizTeam) {
+    const starter = starterOf(m.species);
+    if (starter != null && !quizTeamCells.some(c => c.starter === starter && c.shiny === m.shiny)) {
+      quizTeamCells.push({ starter, shiny: m.shiny });
     }
   }
   const starters = new Set<StarterSpeciesId>([...quizNormalStarters, ...quizShinyStarters] as StarterSpeciesId[]);

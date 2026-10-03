@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
+import { CATCH_POOLS, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
 import { readFileSync } from 'node:fs';
@@ -38,7 +38,7 @@ test('도감 데이터: 1025종, 시작 포켓몬 진화 조건', () => {
   assert.equal(species(906).name, '나오하');
   assert.deepEqual(evolutionsOf(906), [907]);
   assert.deepEqual(evolutionRequirement(907), [{ type: 'grass', amount: 36 }]); // 시작 포켓몬 계열은 센 포켓몬
-  assert.deepEqual(evolutionRequirement(908), [{ type: 'grass', amount: 55 }, { type: 'dark', amount: 25 }, { type: 'psychic', amount: 16 }]);
+  assert.deepEqual(evolutionRequirement(908), [{ type: 'grass', amount: 70 }, { type: 'dark', amount: 30 }, { type: 'psychic', amount: 20 }]); // 2026-10-03: 3단계 센 포켓몬 합계 120
   assert.equal(evolutionsOf(133).length, 8); // 이브이
   for (const pool of CATCH_POOLS) assert.ok(pool.length > 0);
 });
@@ -97,15 +97,20 @@ test('탐험 마스터 볼은 약 50%가 희귀 이상', () => {
   assert.ok(Math.abs(rare / N - 0.5) < 0.03, `희귀 비율 ${rare / N}`);
 });
 
-test('진화: 스탯이 모자라면 실패, 충분하면 소모하고 진화', () => {
+test('진화: 에너지·💗가 모자라면 실패, 충분하면 에너지를 소모하고 진화, 💗는 0부터', () => {
   const bank = makeBank();
   const state = started(bank);
   const uid = state.owned[0].uid;
-  assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /부족/);
+  assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /에너지가 부족/);
   assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 908 }, ctx(bank)), /진화할 수 없어요/);
   state.stats.grass = 41;
+  state.hearts = { 906: 29 };
+  assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /💗가 1개 더 필요해! 모험 팀으로 문제를 더 풀어 보자/);
+  assert.equal(state.stats.grass, 41); // 실패하면 에너지는 그대로
+  state.hearts = { 906: 30 };
   applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank));
   assert.equal(state.stats.grass, 5);
+  assert.equal(state.hearts[906], 0);
   assert.equal(state.owned[0].species, 907);
   assert.ok(state.dex.includes(907));
   assert.equal(state.partner, uid);
@@ -340,7 +345,7 @@ test('센 모습일수록 진화에 스탯이 더 많이 든다 (1→2단계보�
 
 test('센 포켓몬: 1.2배쯤 더 들고, 절반쯤은 이야기에 맞는 도전 속성으로 3과목이 필요', () => {
   const subjectOf = (t: string) => SUBJECTS.find(sub => (SUBJECT_TYPES[sub] as string[]).includes(t));
-  assert.deepEqual(evolutionRequirement(6), [{ type: 'fire', amount: 55 }, { type: 'flying', amount: 25 }, { type: 'dark', amount: 16 }]); // 리자몽 불꽃·비행 + 악
+  assert.deepEqual(evolutionRequirement(6), [{ type: 'fire', amount: 70 }, { type: 'flying', amount: 30 }, { type: 'dark', amount: 20 }]); // 리자몽 불꽃·비행 + 악
   assert.deepEqual(evolutionRequirement(130), [{ type: 'water', amount: 24 }, { type: 'flying', amount: 12 }]); // 갸라도스: 센 포켓몬, 도전 속성 없음
   assert.deepEqual(evolutionRequirement(25), [{ type: 'electric', amount: 36 }]); // 피카츄: 인기 포켓몬
   assert.deepEqual(evolutionRequirement(2), [{ type: 'grass', amount: 24 }, { type: 'poison', amount: 12 }]); // 이상해풀
@@ -404,6 +409,7 @@ test('이로치: 볼에서 확률로 나오고, 이미 가진 포켓몬이어도
   // 이로치를 진화시키면 진화한 모습도 이로치 도감에 (기본 도감에는 안 들어감)
   const shinyP = state.owned.find(p => p.shiny && p.species === 906)!;
   state.stats.grass = 100;
+  state.hearts = { 906: 30 };
   applyAction(state, { type: 'evolve', uid: shinyP.uid, target: 907 }, ctx(bank));
   assert.equal(shinyP.species, 907);
   assert.ok(state.shiny!.includes(907) && state.shiny!.includes(906));
@@ -459,6 +465,7 @@ test('아이템: 가방에 모았다가 포켓몬에게 먹이면 적힌 속성�
   assert.equal(state.potions.length, 0);
   assert.throws(() => applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank)), /부족/); // 아이템 3개(15)만으로는 모자람
   state.stats = { ...state.stats, grass: 36 }; // 문제를 더 풀어서 36이 됨
+  state.hearts = { 906: 30 }; // 모험 팀으로 친해짐
   applyAction(state, { type: 'evolve', uid, target: 907 }, ctx(bank));
   assert.equal(state.owned[0].species, 907);
 });
@@ -766,6 +773,7 @@ test('활동 기록: 볼에서 얻은 포켓몬(얻은 방법)과 진화, 시작
   const got = ball.log.find(e => e.kind === 'pokemon');
   if (got) assert.equal(got.data.how, '몬스터볼 열기');
   state.stats.grass = 41;
+  state.hearts = { 906: 30 };
   const evo = logged(state, { type: 'evolve', uid: state.owned[0].uid, target: 907 }, c);
   const e = evo.log.find(e => e.kind === 'evolve')!.data;
   assert.equal(e.to, 907);
@@ -1144,7 +1152,7 @@ test('배틀 힘: 열매·상처약을 먹인 계열은 포켓로그 개체값 +
   state.potions.push({ id: 'm1', kind: 'apple' });
   const grassBefore = state.stats.grass;
   const r = applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, c) as { message: string; battleIv: number };
-  assert.equal(r.message, `${species(906).name}에게 먹였어! 속성 +5, 배틀 힘도 쑥!`);
+  assert.equal(r.message, `${species(906).name}에게 먹였어! 에너지 +5, 배틀 힘도 쑥!`);
   assert.equal(state.stats.grass, grassBefore + 5); // 속성 스탯은 그대로 오름
   assert.equal(r.battleIv, 16);
   assert.equal(battleIvOf(state, 907), 16); // 같은 계열(이로치 진화형 포함)은 같은 값
@@ -1160,4 +1168,156 @@ test('배틀 힘: 열매·상처약을 먹인 계열은 포켓로그 개체값 +
   const r2 = applyAction(state, { type: 'usePotion', potionId: 'm2', uid: 'other' }, c) as { message: string; battleIv: number };
   assert.equal(r2.battleIv, 31);
   assert.match(r2.message, /배틀 힘은 이미 최고야!/);
+});
+
+// ---------- 모험 팀 · 💗 친해짐 · ★ 배틀 힘 (2026-10-03) ----------
+/** 일일미션 문제 하나를 맞힘 (오늘 미션에서 아직 안 푼 문제) */
+function answerDaily(state: GameState, bank: ActiveBank, c: Context) {
+  ensureDaily(state, bank, c.today, c.random);
+  const d = state.daily!;
+  const id = d.questionIds.find(id => !d.correct.includes(id) && !d.wrong.includes(id))!;
+  const q = bank.questions.find(q => q.id === id)!;
+  return applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: q.answer }, c) as { hearts: { name: string; role: string; amount: number; hearts: number; goal: number; filled: boolean; stars: number }[] };
+}
+
+test('모험 팀: 정답 하나에 파트너 💗+2, 친구 💗+1 (일일미션·탐험 모두), 친구가 없으면 파트너만', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank); // 나오하
+  const r1 = answerDaily(state, bank, c);
+  assert.equal(r1.hearts.length, 1);
+  assert.equal(r1.hearts[0].role, 'partner');
+  assert.equal(r1.hearts[0].amount, GROWTH_DEFAULT.heartPartner);
+  assert.equal(state.hearts![906], 2);
+  // 친구 2마리
+  state.owned.push({ uid: 'f1', species: 25, obtainedAt: 't' }, { uid: 'f2', species: 1, obtainedAt: 't' }, { uid: 'f3', species: 4, obtainedAt: 't' });
+  assert.throws(() => applyAction(state, { type: 'team', friends: ['f1', 'f2', 'f3'] }, c), /2마리까지/);
+  assert.throws(() => applyAction(state, { type: 'team', friends: ['nope'] }, c), /만나지 못한/);
+  applyAction(state, { type: 'team', friends: ['f1', 'f2'] }, c);
+  assert.deepEqual(childView(state, bank, c.today).team, ['f1', 'f2']);
+  const r2 = answerDaily(state, bank, c);
+  assert.deepEqual(r2.hearts.map(h => [h.role, h.amount]), [['partner', 2], ['friend', 1], ['friend', 1]]);
+  assert.deepEqual([state.hearts![906], state.hearts![172], state.hearts![1]], [4, 1, 1]); // 피카츄 계열은 첫 모습 피츄(172) 기준
+  // 탐험 정답도 💗
+  const q = bank.questions.find(q => !state.daily!.questionIds.includes(q.id))!;
+  const r3 = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, c) as { hearts: unknown[] };
+  assert.equal(r3.hearts.length, 3);
+  assert.equal(state.hearts![906], 6);
+  // 틀리면 💗 없음
+  const q2 = bank.questions.find(x => x.subject === q.subject && x.id !== q.id && !state.daily!.questionIds.includes(x.id))!;
+  const wrong = applyAction(state, { type: 'answer', mode: 'explore', questionId: q2.id, choice: (q2.answer + 1) % 5 }, c) as { hearts?: unknown[] };
+  assert.equal(wrong.hearts, undefined);
+  assert.equal(state.hearts![906], 6);
+  // 팀을 바꿔도 모은 💗는 그 계열에 남음
+  applyAction(state, { type: 'team', friends: ['f3'] }, c);
+  assert.equal(state.hearts![172], 2);
+  assert.deepEqual(teamOf(state).friends.map(p => p.uid), ['f3']);
+  // 친구를 파트너로 바꾸면 원래 파트너가 그 친구 자리로
+  const starter = state.partner!;
+  applyAction(state, { type: 'partner', uid: 'f3' }, c);
+  assert.equal(state.partner, 'f3');
+  assert.deepEqual(state.team, [starter]);
+});
+
+test('모험 팀: 💗는 진화에 필요한 만큼 차면 "친해졌어", 다 진화한 포켓몬은 💗 10칸마다 ★+1', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank);
+  assert.equal(heartGoalOf(906), 30);
+  assert.equal(heartGoalOf(907), 80);
+  assert.equal(heartGoalOf(908), 10); // 다 진화하면 ★까지 10칸
+  state.hearts = { 906: 29 };
+  const r = answerDaily(state, bank, c);
+  assert.equal(r.hearts[0].filled, true);
+  assert.equal(state.hearts[906], 30); // 진화에 필요한 만큼까지만
+  answerDaily(state, bank, c);
+  assert.equal(state.hearts[906], 30);
+  // 다 진화한 모습 (이미 진화한 포켓몬은 그대로)
+  state.owned[0].species = 908;
+  state.hearts = { 906: 9 };
+  const r2 = answerDaily(state, bank, c);
+  assert.equal(r2.hearts[0].stars, 1);
+  assert.equal(battleIvOf(state, 908), 16);
+  assert.equal(state.hearts[906], 1); // 10칸을 넘은 💗는 다음 칸으로
+  // ★이 최대면 💗 칸이 찬 채로 멈춤
+  simBattlePower(state, 'max');
+  state.hearts = { 906: 9 };
+  answerDaily(state, bank, c);
+  assert.equal(state.hearts[906], 10);
+  assert.equal(battleIvOf(state, 908), GROWTH_DEFAULT.ivMax);
+});
+
+test('★ 배틀 힘: 그 포켓몬 속성 에너지 10 → ★+1, 다른 속성·부족·최대면 실패', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank); // 나오하(풀)
+  const uid = state.owned[0].uid;
+  assert.throws(() => applyAction(state, { type: 'energyStar', uid, statType: 'fire' }, c), /이 포켓몬의 속성/);
+  state.stats.grass = 9;
+  assert.throws(() => applyAction(state, { type: 'energyStar', uid, statType: 'grass' }, c), /풀 에너지가 1개 더 필요해!/);
+  state.stats.grass = 25;
+  const r = applyAction(state, { type: 'energyStar', uid, statType: 'grass' }, c) as { message: string; battleIv: number };
+  assert.equal(r.message, '⭐ 배틀 힘이 올랐어! 배틀에서 더 세졌어!');
+  assert.equal(r.battleIv, 16);
+  assert.equal(state.stats.grass, 15);
+  simBattlePower(state, 'max');
+  assert.throws(() => applyAction(state, { type: 'energyStar', uid, statType: 'grass' }, c), /이미 최고/);
+  assert.equal(state.stats.grass, 15);
+});
+
+test('경험치 → 에너지 바꾸기는 하루 5번까지, 다음 날 다시', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank);
+  state.exp = 1000;
+  for (let i = 0; i < GROWTH_DEFAULT.expExchangePerDay; i++) {
+    const r = applyAction(state, { type: 'exchangeExp', statType: 'grass' }, c) as { message: string; todayLeft: number };
+    assert.equal(r.todayLeft, GROWTH_DEFAULT.expExchangePerDay - 1 - i);
+  }
+  assert.throws(() => applyAction(state, { type: 'exchangeExp', statType: 'grass' }, c), /오늘은 다 바꿨어. 내일 또 바꿀 수 있어!/);
+  assert.equal(expExchangeToday(state, c.today).left, 0);
+  assert.equal(state.stats.grass, 25);
+  const next = { ...c, today: shiftDate(c.today, 1) };
+  assert.equal(expExchangeToday(state, next.today).left, 5);
+  applyAction(state, { type: 'exchangeExp', statType: 'grass' }, next);
+  assert.equal(state.stats.grass, 30);
+});
+
+test('성장 규칙: 3단계 에너지는 보통 100(70+30), 센 포켓몬 120(84+36, 3과목 70+30+20), 보호자가 바꾸면 비율대로', () => {
+  assert.deepEqual(evolutionCost(3, false), { single: 100, dual: [70, 30], triple: [58, 25, 17] });
+  assert.deepEqual(evolutionCost(3, true), { single: 120, dual: [84, 36], triple: [70, 30, 20] });
+  assert.deepEqual(evolutionCost(2, false).dual, [20, 10]); // 2단계는 그대로
+  try {
+    setGrowthRules({ stage3Energy: 200, heartPartner: 5, evolveHearts2: 10, ivMax: 99 as number });
+    assert.equal(growth().stage3Energy, 200);
+    assert.equal(growth().ivMax, 31); // 범위를 벗어난 값은 버림
+    assert.deepEqual(evolutionCost(3, false).dual, [140, 60]);
+    assert.equal(heartGoalOf(906), 10);
+    const bank = makeBank();
+    const state = started(bank);
+    const r = answerDaily(state, bank, ctx(bank));
+    assert.equal(r.hearts[0].amount, 5);
+  } finally {
+    setGrowthRules(null);
+  }
+  assert.equal(growth().stage3Energy, 100);
+});
+
+test('시뮬레이션 도우미: 모험 팀 💗를 진화 직전으로', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  state.owned.push({ uid: 'f1', species: 25, obtainedAt: 't' });
+  applyAction(state, { type: 'team', friends: ['f1'] }, ctx(bank));
+  assert.equal(simHearts(state, 'near'), 2);
+  assert.deepEqual([state.hearts![906], state.hearts![172]], [29, 79]); // 피카츄 계열 첫 모습은 피츄(172), 피카츄→라이츄 = 2→3단계
+});
+
+test('기존 기록: 새 항목이 없는 예전 기록도 그대로 읽힌다 (팀·💗·바꾸기 횟수 없음)', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  delete state.team; delete state.hearts; delete state.expExchange;
+  const view = childView(state, bank, '2026-10-03');
+  assert.deepEqual(view.team, []);
+  assert.deepEqual(view.hearts, {});
+  assert.equal(view.expExchange.left, 5);
 });

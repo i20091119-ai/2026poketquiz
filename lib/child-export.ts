@@ -1,5 +1,5 @@
 import { LOG_KINDS } from './activity-log.ts';
-import { TYPE_INFO, type TypeKey } from './game-config.ts';
+import { battleIvFromFeeds, TYPE_INFO, type TypeKey } from './game-config.ts';
 import type { GameState } from './game-engine.ts';
 import { isSpecies, shinyName, species } from './pokedex.ts';
 
@@ -90,11 +90,22 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
     성장: {
       보유포켓몬: pokemon,
       진화기록: of('evolve').map(plain),
-      스탯변화: of('stat').map(plain),
-      지금스탯: Object.fromEntries(Object.entries(state.stats).map(([t, v]) => [label(t), v])),
-      경험치: { 모은전체: state.exp, 스탯으로바꾼: state.expSpent ?? 0 },
+      에너지변화: of('stat').map(plain),
+      지금에너지: Object.fromEntries(Object.entries(state.stats).map(([t, v]) => [label(t), v])),
+      경험치: { 모은전체: state.exp, 에너지로바꾼: state.expSpent ?? 0 },
       사탕: { 보낸총량: state.candy?.sent ?? 0, 기록: candyRows.map(plain) },
       도감: { 기본: state.dex.length, 이로치: (state.shiny ?? []).length, 메가: (state.megas ?? []).length },
+      모험팀: {
+        파트너: state.owned.find(p => p.uid === state.partner) ? nameOf(state.owned.find(p => p.uid === state.partner)!.species) : null,
+        친구: (state.team ?? []).map(uid => state.owned.find(p => p.uid === uid)).filter(p => !!p).map(p => nameOf(p!.species)),
+        바꾼기록: of('team').map(plain),
+      },
+      친해짐: Object.fromEntries(Object.entries(state.hearts ?? {}).map(([id, n]) => [nameOf(Number(id)), n])),
+      배틀힘: {
+        계열별개체값: Object.fromEntries(Object.entries(state.battlePower ?? {}).map(([id, n]) => [nameOf(Number(id)), battleIvFromFeeds(n)])),
+        오른기록: of('star').map(plain),
+      },
+      경험치바꾸기오늘: state.expExchange ?? null,
     },
     보상: {
       볼연결과: of('ball').map(plain),

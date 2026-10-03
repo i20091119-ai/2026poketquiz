@@ -28,7 +28,7 @@ export function BagTab({ view, busy, onOpenBall, onUsePotion }: {
       <section className="panel">
         <span className="pill">BAG</span>
         <h2>나의 가방</h2>
-        <p>{empty ? '가방이 비어 있어. 일일미션 상자나 탐험 보상으로 볼과 아이템을 모아 봐!' : '볼을 눌러 포켓몬을 만나고, 열매와 상처약은 포켓몬에게 먹여서 스탯을 올려 줘.'}</p>
+        <p>{empty ? '가방이 비어 있어. 일일미션 상자나 탐험 보상으로 볼과 아이템을 모아 봐!' : '볼을 눌러 포켓몬을 만나고, 열매와 상처약은 포켓몬에게 먹여서 에너지와 배틀 힘을 올려 줘.'}</p>
       </section>
 
       {view.balls.length > 0 && (
@@ -120,7 +120,7 @@ function FeedDialog({ kind, view, busy, onClose, onFeed }: {
                   <small>{now + amount >= r.amount ? '진화 준비 완료!' : `진화까지 ${r.amount - now - amount} 남음`}</small>
                 </div>
               );
-            }) : <p className="muted">{evolutionsOf(chosen.species).length ? `이 아이템은 ${species(chosen.species).name}의 진화에 필요한 속성을 올려 주지는 않아. 그래도 스탯은 올라가!` : `${species(chosen.species).name}는 더 진화하지 않지만, 스탯은 올라가!`}</p>}
+            }) : <p className="muted">{evolutionsOf(chosen.species).length ? `이 아이템은 ${species(chosen.species).name}의 진화에 필요한 속성을 올려 주지는 않아. 그래도 에너지는 올라가!` : `${species(chosen.species).name}는 더 진화하지 않지만, 에너지는 올라가!`}</p>}
           </div>
         )}
 

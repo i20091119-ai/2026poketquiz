@@ -38,19 +38,80 @@ export const eulReul = (word: string) => {
 };
 
 /**
- * 배틀 힘(포켓로그 개체값 IV): 열매·상처약을 먹인 포켓몬의 진화 계열은 포켓로그 6개 능력치 개체값이 하나 먹일 때마다 +1.
- * 시작값은 포켓로그가 원래 쓰던 고정값 15, 최대 31 (기본 모습과 이로치는 같은 계열이면 같은 값).
+ * 성장 규칙 (모험 팀·💗 친해짐·★ 배틀 힘, 2026-10-03 부모님 결정). 처음 값은 여기서 정하고,
+ * 보호자 공간 전체 설정 탭 "성장 규칙"에서 바꾸면 바꾼 것만 settings.growth_rules 에 저장돼 이 값을 덮어씁니다.
+ * - 퀴즈 정답(일일미션·탐험) 하나에 모험 팀 파트너 💗 heartPartner, 친구 💗 heartFriend (친구를 안 골랐으면 파트너만)
+ * - 진화: 에너지 + 💗 (1→2단계 evolveHearts2, 2→3단계 evolveHearts3). 진화하면 그 계열 💗는 0부터
+ * - 3단계 에너지 합계: 보통 stage3Energy, 센 포켓몬 stage3EnergyStrong (속성 2개·3개면 아래 비율로 나눔)
+ * - ★ 배틀 힘(포켓로그 개체값, 6개 능력치 모두 +1): 다 진화한 포켓몬이 팀에서 💗 heartsPerStar 칸마다 +1,
+ *   열매·상처약 먹이기 +1, 그 포켓몬 속성 에너지 energyPerStar 로 바꾸기 +1. 최대 ivMax (포켓로그 개체값 최대 31)
+ * - 경험치 → 에너지 바꾸기: 하루 expExchangePerDay 번까지
  */
-export const BATTLE_IV = { base: 15, max: 31, perFeed: 1 } as const;
-/** 먹인 횟수 → 개체값 */
-export const battleIvFromFeeds = (feeds: number) => Math.min(BATTLE_IV.max, BATTLE_IV.base + Math.max(0, feeds) * BATTLE_IV.perFeed);
+export const GROWTH_DEFAULT = {
+  heartPartner: 2,
+  heartFriend: 1,
+  evolveHearts2: 30,
+  evolveHearts3: 80,
+  stage3Energy: 100,
+  stage3EnergyStrong: 120,
+  heartsPerStar: 10,
+  energyPerStar: 10,
+  ivMax: 31,
+  expExchangePerDay: 5,
+};
+export type GrowthRules = typeof GROWTH_DEFAULT;
+export type GrowthKey = keyof GrowthRules;
+/** 보호자 공간에서 고칠 때 보여 줄 이름과 고를 수 있는 범위 */
+export const GROWTH_FIELDS: { key: GrowthKey; label: string; min: number; max: number }[] = [
+  { key: 'heartPartner', label: '정답 하나에 파트너 💗', min: 0, max: 20 },
+  { key: 'heartFriend', label: '정답 하나에 친구 💗', min: 0, max: 20 },
+  { key: 'evolveHearts2', label: '1→2단계 진화 💗', min: 0, max: 500 },
+  { key: 'evolveHearts3', label: '2→3단계 진화 💗', min: 0, max: 1000 },
+  { key: 'stage3Energy', label: '3단계 에너지 (보통)', min: 10, max: 500 },
+  { key: 'stage3EnergyStrong', label: '3단계 에너지 (센 포켓몬)', min: 10, max: 600 },
+  { key: 'heartsPerStar', label: '💗 몇 칸마다 ★+1 (다 진화한 포켓몬)', min: 1, max: 200 },
+  { key: 'energyPerStar', label: '에너지 몇 개로 ★+1', min: 1, max: 200 },
+  { key: 'ivMax', label: '★ 최대 (포켓로그 개체값, 16~31)', min: 16, max: 31 },
+  { key: 'expExchangePerDay', label: '경험치 바꾸기 하루 한도', min: 1, max: 50 },
+];
+let growthOverrides: Partial<GrowthRules> = {};
+/** 보호자가 바꾼 성장 규칙을 맞춥니다 (서버는 요청마다, 아이·보호자 화면은 응답을 받을 때마다). 범위를 벗어난 값은 버림 */
+export function setGrowthRules(ov?: Partial<GrowthRules> | null) {
+  growthOverrides = cleanGrowthRules(ov);
+}
+export function cleanGrowthRules(ov?: Partial<Record<string, unknown>> | null): Partial<GrowthRules> {
+  const out: Partial<GrowthRules> = {};
+  for (const f of GROWTH_FIELDS) {
+    const v = ov?.[f.key];
+    if (Number.isInteger(v) && (v as number) >= f.min && (v as number) <= f.max) out[f.key] = v as number;
+  }
+  return out;
+}
+/** 지금 쓰는 성장 규칙 (처음 값 + 보호자가 바꾼 것) */
+export const growth = (): GrowthRules => ({ ...GROWTH_DEFAULT, ...growthOverrides });
+export const growthOverridesNow = (): Partial<GrowthRules> => ({ ...growthOverrides });
+
+/**
+ * 배틀 힘(포켓로그 개체값 IV): 진화 계열마다 6개 능력치 개체값이 ★+1 할 때마다 +1.
+ * 시작값은 포켓로그가 원래 쓰던 고정값 15, 최대 growth().ivMax (기본 31). 기본 모습과 이로치는 같은 계열이면 같은 값.
+ */
+export const BATTLE_IV = { base: 15, perFeed: 1 } as const;
+/** ★을 올린 횟수 → 개체값 */
+export const battleIvFromFeeds = (feeds: number) => Math.min(growth().ivMax, BATTLE_IV.base + Math.max(0, feeds) * BATTLE_IV.perFeed);
+/** 더 올릴 수 있는 최대 횟수 */
+export const battlePowerMaxFeeds = () => Math.max(0, growth().ivMax - BATTLE_IV.base);
 /** 배틀 힘 별 (5칸, 개체값 비율) */
-export const battleStars = (iv: number) => Math.max(0, Math.min(5, Math.round((iv / BATTLE_IV.max) * 5)));
+export const battleStars = (iv: number) => Math.max(0, Math.min(5, Math.round((iv / growth().ivMax) * 5)));
 
 /** 받침에 따라 은/는 (예: 국어는, 수학은) */
 export const eunNeun = (word: string) => {
   const code = word.charCodeAt(word.length - 1) - 0xac00;
   return word + (code >= 0 && code <= 11171 && code % 28 ? '은' : '는');
+};
+/** 받침에 따라 와/과 (예: 나오하와, 뜨아거와, 꾸왁스와, 이상해꽃과) */
+export const waGwa = (word: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  return word + (code >= 0 && code <= 11171 && code % 28 ? '과' : '와');
 };
 /** 받침에 따라 이/가 (예: 피카츄가, 이상해꽃이) */
 export const iGa = (word: string) => {
@@ -114,7 +175,7 @@ export const REWARD_PER_ANSWER = { daily: 5, explore: 1, exp: 10 };
  * 속성이 많은 과목은 한 속성에 문제가 덜 돌아가므로 스탯에 배수를 줍니다 (속성 수 ÷ 3).
  * 지금은 모든 과목이 속성 3개라 배수는 1입니다. 과목별 속성 수를 바꾸면 자동으로 맞춰집니다.
  */
-/** 모은 경험치를 원하는 속성 스탯으로 바꾸기: 경험치 cost → 고른 속성 +amount */
+/** 모은 경험치를 원하는 속성 에너지로 바꾸기: 경험치 cost → 고른 속성 +amount (하루 growth().expExchangePerDay 번까지) */
 export const EXP_EXCHANGE = { cost: 50, amount: 5 };
 /**
  * 경험치 선물: 지금까지 모은 경험치(스탯으로 바꿔 쓴 것 포함)가 every만큼 쌓일 때마다
@@ -137,23 +198,39 @@ export const DAILY_BOX_RULES: { minCorrect: number | 'all'; picks: number }[] = 
 ];
 
 /**
- * 진화 조건: 진화 후 포켓몬의 속성을 모읍니다. 진화하면 해당 스탯을 소모합니다.
+ * 진화 조건: 진화 후 포켓몬의 속성 에너지를 모읍니다(그리고 💗 친해짐, GROWTH_DEFAULT). 진화하면 해당 에너지를 소모합니다.
  * dual = [첫째 속성, 둘째 속성], single = 속성이 하나일 때.
+ * 3단계는 growth().stage3Energy 합계를 70:30 으로 나눠 씁니다 (아래 3단계 값은 처음 값 100일 때 모습).
  */
 export const EVOLUTION_COST: Record<number, { dual: [number, number]; single: number }> = {
   // 부모님 결정(2026-09-29): 3일 만에 도감 36마리를 채울 만큼 빨라서 2배로. 센 모습(3단계)일수록 훨씬 많이 필요하게
+  // 2026-10-03 모험 팀: 3단계만 80→100 (55+25 → 70+30)
   2: { dual: [20, 10], single: 30 },
-  3: { dual: [55, 25], single: 80 },
+  3: { dual: [70, 30], single: 100 },
 };
 
 /**
- * 센 포켓몬(lib/strong-pokemon.ts: 희귀 등급 진화형 + 인기 포켓몬)으로 진화할 때 필요한 스탯. 보통의 약 1.2배.
+ * 센 포켓몬(lib/strong-pokemon.ts: 희귀 등급 진화형 + 인기 포켓몬)으로 진화할 때 필요한 에너지. 보통의 약 1.2배.
  * triple = 도전 속성이 있는 포켓몬(원래 두 속성 + 다른 과목의 도전 속성 = 3과목).
+ * 3단계는 growth().stage3EnergyStrong 합계를 70:30 (3과목이면 7:3:2) 으로 나눠 씁니다.
  */
 export const EVOLUTION_COST_STRONG: Record<number, { dual: [number, number]; single: number; triple: [number, number, number] }> = {
   2: { dual: [24, 12], single: 36, triple: [20, 10, 6] },
-  3: { dual: [66, 30], single: 96, triple: [55, 25, 16] },
+  3: { dual: [84, 36], single: 120, triple: [70, 30, 20] },
 };
+/** 진화 단계(진화 후 모습의 단계)별 필요한 에너지. 3단계는 보호자가 바꾼 합계를 반영 */
+export function evolutionCost(stage: number, strong: boolean): { dual: [number, number]; single: number; triple: [number, number, number] } {
+  if (stage < 3) {
+    const c = EVOLUTION_COST_STRONG[2];
+    return strong ? c : { ...EVOLUTION_COST[2], triple: c.triple };
+  }
+  const total = strong ? growth().stage3EnergyStrong : growth().stage3Energy;
+  const a = Math.round(total * 0.7);
+  const t0 = Math.round(total * 7 / 12), t1 = Math.round(total * 3 / 12);
+  return { single: total, dual: [a, total - a], triple: [t0, t1, total - t0 - t1] };
+}
+/** 진화에 필요한 💗 (진화 후 모습의 단계 기준) */
+export const evolveHearts = (stage: number) => (stage >= 3 ? growth().evolveHearts3 : growth().evolveHearts2);
 
 // ---- 아이템 (열매·상처약) ----
 // 보상으로 받으면 가방에 들어가고, 아이가 포켓몬에게 먹이면 적힌 속성 스탯이 모두 오릅니다.
@@ -283,7 +360,7 @@ export const GIFT_EXP = 30;
 export const GIFT_CANDY = 3;
 export const GIFT_BALL: BallKind = 'poke';
 export const GIFT_CHOICE_INFO: Record<GiftChoice, { label: string; description: string }> = {
-  exp: { label: `경험치 +${GIFT_EXP}`, description: '바로 경험치가 올라. 스탯으로 바꿔 쓸 수 있어.' },
+  exp: { label: `경험치 +${GIFT_EXP}`, description: '바로 경험치가 올라. 에너지로 바꿔 쓸 수 있어.' },
   berry: { label: '원하는 열매 1개', description: '계열(과목)을 골라서 그 열매를 가방에 넣어.' },
   box: { label: '랜덤상자 1개', description: '열매·상처약·볼 중 하나가 들어 있어.' },
   candy: { label: `포켓로그 사탕 ${GIFT_CANDY}개`, description: '파트너 포켓몬에게 보내. 포켓로그를 켜면 들어가.' },

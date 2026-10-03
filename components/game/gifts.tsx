@@ -92,7 +92,7 @@ export function GiftOpenDialog({ gift, busy, onChoose, onClose, onOpenBalls, onR
           <div className="gift-result">
             {result.item?.kind === 'potion' && <><img src={ASSETS.potion[result.item.potion]} alt="" /><b>{POTIONS[result.item.potion].label}</b><small>{potionEffect(result.item.potion)} · 가방에 넣었어</small></>}
             {result.item?.kind === 'ball' && <><img src={ASSETS.ball[result.item.ball]} alt="" /><b>{BALLS[result.item.ball].label}</b><small>눌러서 포켓몬을 만나자</small></>}
-            {result.gift.opened?.choice === 'exp' && <><img src={ASSETS.exp} alt="" /><b>{GIFT_CHOICE_INFO.exp.label}</b><small>첫 화면에서 스탯으로 바꿀 수 있어</small></>}
+            {result.gift.opened?.choice === 'exp' && <><img src={ASSETS.exp} alt="" /><b>{GIFT_CHOICE_INFO.exp.label}</b><small>첫 화면에서 에너지로 바꿀 수 있어</small></>}
             {result.gift.opened?.choice === 'candy' && <><span className="gift-big">🍬</span><b>{result.gift.opened.got}</b><small>포켓로그를 켜면 들어가</small></>}
             {result.gift.opened?.choice === 'ticket' && <><span className="gift-big">🎟️</span><b>배틀 추가권 1장</b><small>배틀 탭에서 새 게임을 한 번 더 할 수 있어</small></>}
           </div>

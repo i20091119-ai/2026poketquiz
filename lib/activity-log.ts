@@ -1,4 +1,4 @@
-import { BALLS, TYPE_INFO, type TypeKey } from './game-config.ts';
+import { BALLS, battleIvFromFeeds, TYPE_INFO, type TypeKey } from './game-config.ts';
 import { boxItemLabel, type Action, type BoxItem, type Context, type GameState } from './game-engine.ts';
 import { evolutionRequirement, shinyName, species } from './pokedex.ts';
 
@@ -34,6 +34,8 @@ export const LOG_KINDS = {
   revive: '부활권 사용',
   day: '하루 활동 요약',
   limited: '기간 한정 이벤트(레인보우) 진행',
+  team: '모험 팀 바꾸기',
+  star: '★ 배틀 힘 오름(먹이기·에너지 바꾸기·💗)',
 } as const;
 
 export type Before = {
@@ -45,6 +47,8 @@ export type Before = {
   events: string;
   limited: string;
   ballKind?: string;
+  team: string;
+  power: Record<string, number>;
 };
 
 /** 행동을 적용하기 직전에 부릅니다 */
@@ -59,6 +63,8 @@ export function beforeAction(state: GameState, action: Action, today: string): B
     events: JSON.stringify(state.events ?? null),
     limited: JSON.stringify(state.limited ?? null),
     ballKind: action.type === 'openBall' ? state.balls.find(b => b.id === action.ballId)?.kind : undefined,
+    team: JSON.stringify([state.partner, ...(state.team ?? [])]),
+    power: { ...(state.battlePower ?? {}) },
   };
 }
 
@@ -95,6 +101,8 @@ export function afterAction(before: Before, state: GameState, action: Action, re
           attempt: action.mode === 'daily' ? before.tries + 1 : 1,
           final: r.final === false ? false : true,
           reviewed: r.reviewed === true,
+          // 모험 팀이 받은 💗 (이름·받은 수·지금 💗·★ 오른 수)
+          hearts: Array.isArray(r.hearts) && r.hearts.length ? (r.hearts as { name: string; amount: number; hearts: number; goal: number; stars: number }[]).map(h => ({ name: h.name, amount: h.amount, hearts: h.hearts, goal: h.goal, stars: h.stars || undefined })) : undefined,
         },
       });
     }
@@ -109,8 +117,8 @@ export function afterAction(before: Before, state: GameState, action: Action, re
   const expDelta = state.exp - before.exp;
   if (Object.keys(deltas).length || expDelta) {
     const reason = action.type === 'answer' ? `문제 정답(${action.mode === 'daily' ? '일일미션' : '탐험'})`
-      : action.type === 'usePotion' ? '아이템 먹임' : action.type === 'evolve' ? '진화로 스탯 사용'
-      : action.type === 'exchangeExp' ? '경험치를 스탯으로 바꿈' : action.type === 'openBall' ? '이미 있는 포켓몬(우정 보너스)'
+      : action.type === 'usePotion' ? '아이템 먹임' : action.type === 'evolve' ? '진화로 에너지 사용'
+      : action.type === 'exchangeExp' ? '경험치를 에너지로 바꿈' : action.type === 'energyStar' ? '에너지를 ★ 배틀 힘으로 바꿈' : action.type === 'openBall' ? '이미 있는 포켓몬(우정 보너스)'
       : action.type === 'openGift' ? '선물' : action.type;
     out.push({ kind: 'stat', data: { reason, deltas, exp: expDelta || undefined, statsAfter: Object.fromEntries(Object.entries(state.stats).map(([t, v]) => [statLabel(t), v])) } });
   }
@@ -187,6 +195,21 @@ export function afterAction(before: Before, state: GameState, action: Action, re
   if (candyDelta > 0) {
     const partner = state.owned.find(p => p.uid === state.partner);
     out.push({ kind: 'candy', data: { amount: candyDelta, source: action.type === 'openGift' ? '선물' : '일일미션 완료', species: partner ? species(partner.species).name : null } });
+  }
+
+  // 모험 팀이 바뀜 (파트너 + 친구)
+  const team = [state.partner, ...(state.team ?? [])];
+  if (JSON.stringify(team) !== before.team) {
+    const nameOf = (uid: string | null) => { const p = state.owned.find(p => p.uid === uid); return p ? (p.shiny ? shinyName(p.species) : species(p.species).name) : null; };
+    out.push({ kind: 'team', data: { partner: nameOf(state.partner), friends: (state.team ?? []).map(nameOf) } });
+  }
+  // ★ 배틀 힘이 오른 계열
+  for (const [root, n] of Object.entries(state.battlePower ?? {})) {
+    const was = before.power[root] ?? 0;
+    if (n > was) {
+      const how = action.type === 'usePotion' ? '먹이기' : action.type === 'energyStar' ? '에너지 바꾸기' : action.type === 'answer' ? '💗 (다 진화한 포켓몬)' : action.type;
+      out.push({ kind: 'star', data: { line: Number(root), name: species(Number(root)).name, up: n - was, battleIv: battleIvFromFeeds(n), how } });
+    }
   }
 
   return [...out, ...eventsChange(before, state)];

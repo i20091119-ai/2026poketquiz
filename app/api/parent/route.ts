@@ -1,10 +1,10 @@
 import { buildChildExport } from '@/lib/child-export';
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
-import { BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
+import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -15,7 +15,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -46,8 +46,8 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll] = await Promise.all([
-    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(),
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(),
   ]);
   const today = player.today;
   const gate = await battleGate(player, state);
@@ -68,6 +68,8 @@ async function overview(request: Request) {
     limitedEvents: LIMITED_EVENTS.map(e => ({ id: e.id, title: e.title, start: e.start, end: e.end, reminderAt: e.reminderAt, after: shiftDate(e.end, 1) })),
     /** 보호자 "속성 변경"에서 바꾼 센 포켓몬·도전 속성 */
     strong,
+    /** 성장 규칙 (모험 팀 💗·진화·★·바꾸기 한도): 지금 값, 처음 값, 보호자가 바꾼 것, 고칠 칸 */
+    growth: { now: growth(), defaults: GROWTH_DEFAULT, overrides: growthRules, fields: GROWTH_FIELDS },
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
     shiny: {
       chance: shinyChance, defaults: SHINY_CHANCE_DEFAULT, simAll: simShinyAll,
@@ -84,6 +86,9 @@ async function overview(request: Request) {
     child: {
       exp: state.exp, expSpent: state.expSpent ?? 0, stats: state.stats, owned: state.owned.length, dex: state.dex.length,
       partner: state.owned.find(p => p.uid === state.partner)?.species ?? null,
+      /** 모험 팀 (파트너 먼저): 번호·이로치·모은 💗·★ 배틀 힘(개체값) */
+      team: (() => { const t = teamOf(state); return [t.partner, ...t.friends].filter(p => !!p).map(p => ({ species: p!.species, shiny: !!p!.shiny, hearts: heartsOf(state, p!.species), iv: battleIvOf(state, p!.species) })); })(),
+      expExchange: expExchangeToday(state, today),
     },
     active: bank && {
       id: bank.id, title: bank.title,
@@ -219,7 +224,7 @@ export async function POST(request: Request) {
         if (strong === null || strong === defaultStrong(id)) delete ov.strong[id]; else ov.strong[id] = strong;
         await saveStrongOverrides(ov);
         setStrongOverrides(ov);
-        return json({ message: `${s.name}: ${isStrong(id) ? '센 포켓몬으로 정했어요. 진화에 스탯이 더 많이 들어요.' : '보통 포켓몬으로 정했어요.'}` });
+        return json({ message: `${s.name}: ${isStrong(id) ? '센 포켓몬으로 정했어요. 진화에 에너지가 더 많이 들어요.' : '보통 포켓몬으로 정했어요.'}` });
       }
       case 'setThirdType': {
         const id = Number(body.id);
@@ -234,6 +239,24 @@ export async function POST(request: Request) {
         const t = thirdTypeOf(id);
         return json({ message: `${s.name}: ${t ? `도전 속성을 ${TYPE_INFO[t].label}(${subjectOf(t)})로 정했어요.` : '도전 속성을 없앴어요.'}` });
       }
+      // ---- 성장 규칙 (모험 팀 💗·진화·★·바꾸기 한도) ----
+      case 'setGrowthRule': {
+        const key = String(body.key) as GrowthKey;
+        const field = GROWTH_FIELDS.find(f => f.key === key);
+        if (!field) throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+        const value = Number(body.value);
+        if (!Number.isInteger(value) || value < field.min || value > field.max) throw new ParentError(`${field.label}: ${field.min}~${field.max} 사이 정수로 넣어 주세요.`);
+        const rules = await getGrowthRules();
+        if (value === GROWTH_DEFAULT[key]) delete rules[key]; else rules[key] = value;
+        await saveGrowthRules(rules);
+        setGrowthRules(rules);
+        return json({ message: `${field.label}: ${value}(으)로 정했어요. 아이 화면에는 다시 열 때(1분 안) 반영돼요.` });
+      }
+      case 'resetGrowthRules':
+        await saveGrowthRules(null);
+        setGrowthRules(null);
+        return json({ message: '성장 규칙을 처음 값으로 되돌렸어요.' });
+
       case 'resetStrong': {
         await saveStrongOverrides({ strong: {}, third: {} });
         setStrongOverrides(null);
@@ -437,7 +460,28 @@ export async function POST(request: Request) {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const max = body.to === 'max';
         const { result } = await mutateState(state => { const n = simBattlePower(state, max ? 'max' : 5); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
-        return json({ message: `시험용 기록의 포켓몬 ${result}계열 배틀 힘을 ${max ? '최고(31)로' : '+5'} 맞췄어요. 포켓로그 팀 선택 화면의 능력치 그래프에서 확인할 수 있어요.` });
+        return json({ message: `시험용 기록의 포켓몬 ${result}계열 배틀 힘을 ${max ? `최고(${growth().ivMax})로` : '+5'} 맞췄어요. 포켓로그 팀 선택 화면의 능력치 그래프에서 확인할 수 있어요.` });
+      }
+      case 'simHearts': {
+        // 시험용 기록의 모험 팀 💗: near = 다음 정답 하나면 가득 / plus10 = 💗 10 더하기(다 진화한 포켓몬은 ★으로)
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const op = body.op === 'plus10' ? 'plus10' : 'near';
+        const { result } = await mutateState(state => { const n = simHearts(state, op); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
+        return json({ message: op === 'near' ? `모험 팀 ${result}마리의 💗를 가득 차기 1개 전으로 맞췄어요. 문제 하나를 맞히면 "친해졌어!"(다 진화했으면 ★+1)가 나와요.` : `모험 팀 ${result}마리에게 💗 10을 더했어요.` });
+      }
+      case 'simExpExchange': {
+        // 시험용 기록의 오늘 경험치 바꾸기 횟수: used = 다 쓴 것으로 / reset = 0으로
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const op = body.op === 'used' ? 'used' : 'reset';
+        const { today } = await simClock();
+        await mutateState(state => { simExpExchange(state, today, op); return { result: null, changed: true }; }, SIM_PLAYER);
+        return json({ message: op === 'used' ? '오늘 경험치 바꾸기를 다 쓴 것으로 했어요.' : '오늘 경험치 바꾸기 횟수를 0으로 되돌렸어요.' });
+      }
+      case 'simEnergy': {
+        // 시험용 기록: 모든 속성 에너지 +50, 경험치 +300 (진화·★ 바꾸기·경험치 바꾸기 시험용)
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        await mutateState(state => { simEnergy(state, 50, 300); return { result: null, changed: true }; }, SIM_PLAYER);
+        return json({ message: '시험용 기록에 모든 속성 에너지 +50, 경험치 +300을 넣었어요.' });
       }
       case 'simDate': {
         // 시험용 기록의 날짜를 이 날로 (기간 한정 이벤트 시험용). 지난 날짜로는 못 감. clock 을 주면 시각도 함께
