@@ -865,3 +865,22 @@ select { width: auto; min-width: 120px; }
 .parent-team-member { display: grid; justify-items: center; gap: 2px; border: 1px solid #dfe8dd; border-radius: 14px; padding: 10px; text-align: center; font-size: 14px; }
 .parent-team-member img { width: 72px; height: 72px; object-fit: contain; }
 .intro-partner { display: flex; justify-content: center; }
+
+/* 좁은 휴대폰(아이 폰 360px)에서 화면이 오른쪽으로 밀리지 않게 (2026-10-03):
+   위·아래 탭 묶음이 화면보다 넓어지면 페이지 전체가 넓어지고 팝업이 오른쪽으로 밀려 잘렸음 */
+html, body { overflow-x: clip; max-width: 100%; }
+.reward-dialog, .quiz-dialog { width: calc(100vw - 24px) !important; max-width: min(640px, calc(100vw - 24px)) !important; }
+.reward-dialog > *, .quiz-dialog > * { min-width: 0; }
+@media (max-width: 480px) {
+  .nav { gap: 0 !important; justify-content: space-between !important; }
+  .nav [data-slot=tabs-trigger] { flex: 1 1 0 !important; min-width: 0; flex-direction: column; gap: 2px; padding: 10px 2px !important; font-size: 13px !important; white-space: nowrap; }
+  .nav svg { margin-right: 0; }
+  .nav .tab-count { position: absolute; top: 2px; right: 4px; }
+}
+.feedback-explain { font-size: 18px; font-weight: 700; line-height: 1.6; color: #213f33; }
+.reward-dialog { max-height: 92dvh; overflow-y: auto; }
+@media (max-width: 480px) {
+  .exp-box { white-space: nowrap; gap: 6px; }
+  .exp-exchange { font-size: 12px; padding: 5px 9px; white-space: nowrap; }
+}
+@media (max-width: 480px) { .exp-box { padding: 8px 10px; } .exp-box strong { font-size: 22px; } }

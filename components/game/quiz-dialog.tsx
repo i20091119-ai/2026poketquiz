@@ -117,8 +117,9 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
             <div className={'feedback ' + (feedback.correct ? 'correct' : 'retry')} role="status">
               <b>{feedback.message}</b>
               {feedback.gained && <p className="gain-line"><TypeBadge type={feedback.gained.type} amount={'⚡+' + feedback.gained.amount} small /> 경험치 +{feedback.gained.exp}</p>}
+              {/* 풀이를 먼저 (정답이든 오답이든 아이가 설명을 한 번 더 보도록), 💗 소식은 그 아래 */}
+              {feedback.explanation && <p className="feedback-explain">📖 {feedback.explanation}</p>}
               {feedback.correct && feedback.hearts && <HeartLines hearts={feedback.hearts} />}
-              {feedback.explanation && <p>{feedback.explanation}</p>}
             </div>
           )}
           {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}
