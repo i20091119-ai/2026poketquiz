@@ -11,20 +11,21 @@ import { RainbowCard } from './rainbow';
 type Events = ChildView['events'];
 
 /** [이벤트] 탭: 도전 이벤트 두 개. 설명을 읽고 "도전할래!"를 눌러야 시작하고, 끝내면 다시 나오지 않아요. */
-export function EventTab({ events, limited, busy, onAccept, onExplore, onOpenBox, onLimitedAccept, onLimitedChange }: {
+export function EventTab({ events, limited, busy, onAccept, onExplore, onOpenBox, onLimitedAccept, onLimitedChange, onGoldChange }: {
   events: Events; limited: LimitedView[]; busy: boolean;
   onAccept: (id: EventId) => void;
   onExplore: (subject: Subject) => void;
   onOpenBox: () => void;
   onLimitedAccept: (id: string) => void;
   onLimitedChange: (id: string) => void;
+  onGoldChange: (id: string) => void;
 }) {
   const { allClear, streak } = events;
   // 기간 한정 이벤트: 열려 있는 것을 맨 위에, 끝난 것은 맨 아래 "끝난 이벤트"로
   const open = limited.filter(e => e.phase === 'active');
   const done = limited.filter(e => e.phase === 'ended');
   const none = allClear.hidden && streak.hidden && !open.length;
-  const card = (e: LimitedView) => <RainbowCard key={e.id} ev={e} busy={busy} onAccept={() => onLimitedAccept(e.id)} onExplore={onExplore} onChange={() => onLimitedChange(e.id)} />;
+  const card = (e: LimitedView) => <RainbowCard key={e.id} ev={e} busy={busy} onAccept={() => onLimitedAccept(e.id)} onExplore={onExplore} onChange={() => onLimitedChange(e.id)} onGoldChange={() => onGoldChange(e.id)} />;
   return (
     <div className="event-list">
       {open.map(card)}

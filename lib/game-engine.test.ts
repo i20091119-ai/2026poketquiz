@@ -857,7 +857,7 @@ function exploreAnswer(state: GameState, bank: ActiveBank, subject: typeof SUBJE
   const pq = nextExploreQuestion(state, bank, subject, c.today, c.random);
   assert.ok(pq, `${subject} 탐험 문제가 있어야 함`);
   const q = bank.questions.find(q => q.id === pq.id)!;
-  return applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: ok ? q.answer : (q.answer + 1) % 5 }, c) as { correct: boolean; rainbow: { kind: string; message: string; count: number } | null };
+  return applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: ok ? q.answer : (q.answer + 1) % 5 }, c) as { correct: boolean; rainbow: { kind: string; message: string; count: number; goal: number; stage: string } | null };
 }
 
 test('레인보우: 시작 전에는 아무 데도 안 보이고, 기간 중에만 열리며 이로치 확률 5배', () => {
@@ -1057,4 +1057,78 @@ test('레인보우 소개 팝업은 기기마다 한 번: 보호자 폰에서 �
   const old = started(bank);
   old.limited = { [RB.id]: { seen: c.today, streak: {}, used: {}, pieces: [], pieceAt: {} } };
   assert.deepEqual(limitedView(old, c.today, 0)[0].seenDevices, []);
+});
+
+test('레인보우 히든 스테이지: 무지개 규칙은 그대로, 변신 뒤에 황금 조각(20연속)이 열리고 이로치 하나 더', () => {
+  const bank = makeBank(6);
+  const state = started(bank);
+  state.banks[bank.id] = { solved: bank.questions.map(q => q.id), wrong: {}, review: {}, subjectRewards: [...SUBJECTS], masterClaimed: true };
+  state.owned.push({ uid: 'x2', species: 25, obtainedAt: 't' });
+  const c = rbCtx(bank);
+  applyAction(state, { type: 'limitedAccept', id: RB.id }, c);
+  // 무지개 규칙은 그대로 10연속
+  let r;
+  for (let i = 0; i < 10; i++) r = exploreAnswer(state, bank, '국어', true, c).rainbow!;
+  assert.equal(r!.kind, 'piece');
+  assert.equal(r!.goal, 10);
+  simLimited(state, RB.id, 'pieces5', c.today);
+  const last = SUBJECTS.find(s => !state.limited![RB.id].pieces.includes(s))!;
+  for (let i = 0; i < 10; i++) r = exploreAnswer(state, bank, last, true, c).rainbow!;
+  assert.equal(r!.kind, 'complete');
+  // 완성했지만 변신 전: 황금은 아직 안 열림, 탐험 연속도 안 셈
+  assert.equal(limitedView(state, c.today, 0)[0].gold, null);
+  assert.equal(nextExploreQuestion(state, bank, '국어', c.today, c.random), null);
+  const first = state.owned[0];
+  applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: first.uid }, c);
+  const v = limitedView(state, c.today, 0)[0];
+  assert.ok(v.gold);
+  assert.equal(v.gold!.introSeen, false); // 열릴 때 팝업
+  assert.equal(v.gold!.goal, 20);
+  applyAction(state, { type: 'limitedNotice', id: RB.id, notice: 'gold' }, c);
+  assert.equal(limitedView(state, c.today, 0)[0].gold!.introSeen, true);
+  // 황금: 20연속 (다 푼 과목은 맞힌 문제로 다시), 틀리면 0
+  for (let i = 0; i < 5; i++) assert.equal(exploreAnswer(state, bank, '영어', true, c).rainbow!.stage, 'gold');
+  const reset = exploreAnswer(state, bank, '영어', false, c).rainbow!;
+  assert.equal(reset.kind, 'reset');
+  for (let i = 0; i < 19; i++) r = exploreAnswer(state, bank, '수학', true, c).rainbow!;
+  assert.equal(r!.kind, 'progress');
+  assert.equal(r!.count, 19);
+  r = exploreAnswer(state, bank, '수학', true, c).rainbow!;
+  assert.equal(r.kind, 'piece');
+  assert.equal(r.message, '👑 수학 황금 조각 얻었다! 이제 5개 남았어!');
+  assert.deepEqual(state.limited![RB.id].pieces.length, 6); // 무지개 조각은 그대로
+  simLimited(state, RB.id, 'gold5', c.today);
+  const goldLast = SUBJECTS.find(s => !state.limited![RB.id].gold!.pieces.includes(s))!;
+  for (let i = 0; i < 20; i++) r = exploreAnswer(state, bank, goldLast, true, c).rainbow!;
+  assert.equal(r!.kind, 'complete');
+  assert.equal(r!.message, '👑 황금 조각 완성! 이로치로 바꿀 포켓몬을 하나 더 골라 봐!');
+  assert.equal(limitedView(state, c.today, 0)[0].gold!.canChange, true);
+  // 이미 이로치(첫 변신)는 안 됨, 다른 포켓몬은 됨, 한 번만
+  assert.throws(() => applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: first.uid, stage: 'gold' }, c), /이미 이로치/);
+  applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: 'x2', stage: 'gold' }, c);
+  assert.equal(state.owned.find(p => p.uid === 'x2')!.shiny, true);
+  assert.ok(state.shiny!.includes(25));
+  assert.throws(() => applyAction(state, { type: 'limitedShinyChange', id: RB.id, uid: 'x2', stage: 'gold' }, c), /이미 이로치로 바꿨/);
+  // 황금까지 끝나면 더 세지 않음
+  assert.equal(nextExploreQuestion(state, bank, '국어', c.today, c.random), null); // 다 푼 과목은 다시 풀기도 끝
+});
+
+test('레인보우 히든 스테이지: 이미 변신을 끝낸 기록은 다음에 열 때 황금 조각이 열림, 끝난 뒤엔 안 열림·정산에 남음', () => {
+  const bank = makeBank(6);
+  const mk = () => {
+    const s = started(bank);
+    s.limited = { [RB.id]: { acceptedAt: RB.start, seen: RB.start, streak: {}, used: {}, pieces: [...SUBJECTS], pieceAt: {}, completedAt: RB.start, changed: { uid: 'p1', species: 906, at: 't' } } };
+    return s;
+  };
+  const a = mk();
+  assert.equal(syncLimited(a, RB.start), true); // 배포 전에 변신까지 끝낸 아이도 열림
+  assert.ok(a.limited![RB.id].gold);
+  assert.equal(syncLimited(a, RB.start), false);
+  const b = mk();
+  syncLimited(b, shiftDate(RB.end, 1)); // 기간이 끝난 뒤에는 열리지 않고 정산만
+  assert.equal(b.limited![RB.id].gold, undefined);
+  assert.equal(b.limited![RB.id].ended!.goldPieces, undefined);
+  syncLimited(a, shiftDate(RB.end, 1));
+  assert.equal(a.limited![RB.id].ended!.goldPieces, 0);
+  assert.equal(a.limited![RB.id].ended!.candy, 3); // 사탕 규칙은 그대로
 });

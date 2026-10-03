@@ -41,9 +41,9 @@ function StreakRow({ s, goal, onExplore, busy }: { s: LimitedView['subjects'][nu
 }
 
 /** 이벤트 탭 카드 */
-export function RainbowCard({ ev, busy, onAccept, onExplore, onChange }: {
+export function RainbowCard({ ev, busy, onAccept, onExplore, onChange, onGoldChange }: {
   ev: LimitedView; busy: boolean;
-  onAccept: () => void; onExplore: (subject: Subject) => void; onChange: () => void;
+  onAccept: () => void; onExplore: (subject: Subject) => void; onChange: () => void; onGoldChange: () => void;
 }) {
   const ended = ev.phase === 'ended';
   const left = ev.total - ev.pieceCount;
@@ -58,6 +58,8 @@ export function RainbowCard({ ev, busy, onAccept, onExplore, onChange }: {
       {ended ? <>
         <p className="rainbow-big">모은 조각 {ev.pieceCount}개</p>
         {ev.changed && <ChangedPokemon ev={ev} />}
+        {ev.gold && <p className="rainbow-big gold-text">👑 황금 조각 {ev.gold.pieceCount}개</p>}
+        {ev.gold?.changed && <ChangedPokemon ev={ev} gold />}
         <p className="rainbow-text">{endMessage(ev)}</p>
       </> : !ev.accepted ? <>
         <p className="rainbow-text">탐험에서 한 과목을<br /><b>10문제 쭉 맞히면</b><br />그 과목 색 조각 1개!</p>
@@ -74,6 +76,7 @@ export function RainbowCard({ ev, busy, onAccept, onExplore, onChange }: {
           : ev.changed
             ? <ChangedPokemon ev={ev} />
             : <p className="rainbow-big">{left === 1 ? '와! 이제 딱 1개 남았어!' : `조각 ${left}개 남았어!`}</p>}
+        {ev.gold && <GoldStage ev={ev} busy={busy} onExplore={onExplore} onChange={onGoldChange} />}
         {!ev.completed && <>
           <div className="rainbow-rows">{ev.subjects.map(s => <StreakRow key={s.subject} s={s} goal={ev.goal} onExplore={onExplore} busy={busy} />)}</div>
           <p className="rainbow-hint">틀리면? 그 과목은 처음부터 다시!</p>
@@ -85,21 +88,64 @@ export function RainbowCard({ ev, busy, onAccept, onExplore, onChange }: {
   );
 }
 
-function ChangedPokemon({ ev }: { ev: LimitedView }) {
-  if (!ev.changed) return null;
+function ChangedPokemon({ ev, gold }: { ev: LimitedView; gold?: boolean }) {
+  const c = gold ? ev.gold?.changed : ev.changed;
+  if (!c) return null;
   return (
-    <div className="rainbow-changed">
-      <PokemonImage id={ev.changed.species} shiny className="rainbow-changed-img" />
-      <b>✨ {shinyName(ev.changed.species)}</b>
+    <div className={'rainbow-changed' + (gold ? ' gold' : '')}>
+      <PokemonImage id={c.species} shiny className="rainbow-changed-img" />
+      <b>{gold ? '👑' : '✨'} {shinyName(c.species)}</b>
       <small>이로치로 변신했어!</small>
     </div>
   );
 }
 
+/** 히든 스테이지 "황금 조각": 과목마다 20문제 연속 (동그라미 20개) */
+function GoldStage({ ev, busy, onExplore, onChange }: { ev: LimitedView; busy: boolean; onExplore: (subject: Subject) => void; onChange: () => void }) {
+  const g = ev.gold!;
+  const left = ev.total - g.pieceCount;
+  return (
+    <div className="gold-stage">
+      <p className="gold-title">👑 히든 스테이지 · 황금 조각</p>
+      <div className="rainbow-bar gold" role="img" aria-label={`황금 조각 ${g.pieceCount}개 / ${ev.total}개`}>
+        {g.subjects.map(s => <span key={s.subject} className={'rainbow-piece' + (s.piece ? ' on' : '')} style={{ ['--c' as string]: '#f2b705' }}><b>{s.subject}</b></span>)}
+      </div>
+      {g.canChange
+        ? <>
+            <p className="rainbow-big gold-text">👑 황금 조각 완성!</p>
+            <button className="primary glow big-button gold-button" disabled={busy} onClick={onChange}>이로치로 바꿀 포켓몬 하나 더 고르기 👑</button>
+          </>
+        : g.changed
+          ? <ChangedPokemon ev={ev} gold />
+          : <>
+              <p className="rainbow-text">과목마다 <b>20문제를 쭉</b> 맞히면 황금 조각!</p>
+              <p className="rainbow-big gold-text">{left === 1 ? '와! 이제 딱 1개 남았어!' : `황금 조각 ${left}개 남았어!`}</p>
+              <div className="rainbow-rows">
+                {g.subjects.map(s => (
+                  <div key={s.subject} className={'rainbow-row gold-row' + (s.piece ? ' done' : '')}>
+                    <span className="rainbow-chip" style={{ background: s.color }}>{s.subject}</span>
+                    <span className="rainbow-dots gold" aria-label={`${s.streak} / ${g.goal}`}>
+                      {Array.from({ length: g.goal }, (_, i) => <i key={i} className={i < s.streak ? 'on' : ''} />)}
+                    </span>
+                    <span className="rainbow-count">{s.piece ? '👑' : <>{s.streak}/{g.goal}</>}</span>
+                    {!s.piece && ev.phase === 'active' && <button className="secondary small" disabled={busy} onClick={() => onExplore(s.subject)}>탐험 <ArrowRight size={14} /></button>}
+                  </div>
+                ))}
+              </div>
+            </>}
+    </div>
+  );
+}
+
+/** 히든 스테이지가 열릴 때 (그리고 완성하지 못하고 끝났을 때) 쓰는 말 — 부모님 문구 그대로 */
+export const GOLD_OPEN_MESSAGE = '앗! 숨겨진 황금 조각이 나타났다! ✨ 과목마다 20문제를 쭉 맞히면 이로치를 하나 더 만들 수 있어!';
+const GOLD_MISSED_MESSAGE = '황금 조각은 정말 어려웠지? 여기까지 온 것도 대단해!';
+
 /** 끝났을 때 한 번 보여 주는 말 */
-export const endMessage = (ev: LimitedView) => ev.pieceCount >= ev.partial.minPieces
+export const endMessage = (ev: LimitedView) => (ev.pieceCount >= ev.partial.minPieces
   ? `이번엔 조각 ${ev.pieceCount}개 모았어! 잘했어! 선물로 사탕 ${ev.partial.candy}개 줄게 🍬`
-  : '이번 레인보우는 끝났어. 다음 이벤트에서 또 만나자!';
+  : '이번 레인보우는 끝났어. 다음 이벤트에서 또 만나자!')
+  + (ev.gold && !ev.gold.completed ? `\n${GOLD_MISSED_MESSAGE}` : '');
 
 const INTRO_PAGES = [
   <>
@@ -142,14 +188,16 @@ export function RainbowIntro({ ev, busy, onAccept, onLater }: { ev: LimitedView 
 }
 
 /** 한 번만 보여 주는 안내 (일요일 저녁 9시, 끝났을 때) */
-export function RainbowNotice({ ev, kind, onClose }: { ev: LimitedView | null; kind: 'remind' | 'end'; onClose: () => void }) {
+export function RainbowNotice({ ev, kind, onClose }: { ev: LimitedView | null; kind: 'remind' | 'end' | 'gold'; onClose: () => void }) {
+  const remindLeft = ev ? (ev.gold && !ev.gold.completed ? ev.total - ev.gold.pieceCount : ev.total - ev.pieceCount) : 0;
   return (
     <Dialog open={!!ev} onOpenChange={o => { if (!o) onClose(); }}>
-      <DialogContent className="reward-dialog rainbow-intro">
-        <DialogTitle className="intro-title">{kind === 'remind' ? '⏰ 레인보우 컬러체인지' : '🌈 레인보우 컬러체인지 끝!'}</DialogTitle>
+      <DialogContent className={'reward-dialog rainbow-intro' + (kind === 'gold' ? ' gold-intro' : '')}>
+        <DialogTitle className="intro-title">{kind === 'gold' ? '👑 히든 스테이지!' : kind === 'remind' ? '⏰ 레인보우 컬러체인지' : '🌈 레인보우 컬러체인지 끝!'}</DialogTitle>
         <DialogDescription className="sr-only">레인보우 이벤트 안내</DialogDescription>
-        {ev && <RainbowBar ev={ev} big />}
-        {ev && <p className="intro-text">{kind === 'remind' ? `오늘 밤 12시면 끝나! 조각 ${ev.total - ev.pieceCount}개 남았어!` : endMessage(ev)}</p>}
+        {ev && kind !== 'gold' && <RainbowBar ev={ev} big />}
+        {ev && kind === 'gold' && <div className="gold-burst"><ShinyBurst /><span>👑</span></div>}
+        {ev && <p className="intro-text pre-line">{kind === 'gold' ? GOLD_OPEN_MESSAGE : kind === 'remind' ? `오늘 밤 12시면 끝나! ${ev.gold && !ev.gold.completed ? '황금 ' : ''}조각 ${remindLeft}개 남았어!` : endMessage(ev)}</p>}
         <button className="primary big-button" onClick={onClose}>좋아!</button>
       </DialogContent>
     </Dialog>
@@ -160,8 +208,8 @@ export function RainbowNotice({ ev, kind, onClose }: { ev: LimitedView | null; k
  * 6개를 다 모았을 때: 가진 포켓몬 하나를 골라 이로치로 바꿈.
  * 고르기 → "이 포켓몬으로 할까?" → 조각 6개가 날아가 반짝이며 변신 → "✨ ○○가 반짝반짝 변신했어!"
  */
-export function ShinyChangeDialog({ ev, owned, busy, onChange, onClose }: {
-  ev: LimitedView | null; owned: OwnedPokemon[]; busy: boolean;
+export function ShinyChangeDialog({ ev, gold, owned, busy, onChange, onClose }: {
+  ev: LimitedView | null; gold?: boolean; owned: OwnedPokemon[]; busy: boolean;
   onChange: (uid: string) => Promise<{ species: number; message: string } | null>;
   onClose: () => void;
 }) {
@@ -169,7 +217,8 @@ export function ShinyChangeDialog({ ev, owned, busy, onChange, onClose }: {
   const [stage, setStage] = useState<'pick' | 'confirm' | 'fly' | 'done'>('pick');
   const [message, setMessage] = useState('');
   const candidates = owned.filter(p => !p.shiny);
-  const open = !!ev && (ev.canChange || stage === 'fly' || stage === 'done');
+  const canChange = gold ? !!ev?.gold?.canChange : !!ev?.canChange;
+  const open = !!ev && (canChange || stage === 'fly' || stage === 'done');
   const close = () => { if (stage === 'fly' || busy) return; setStage('pick'); setPicked(null); onClose(); };
   async function go() {
     if (!picked) return;
@@ -183,8 +232,8 @@ export function ShinyChangeDialog({ ev, owned, busy, onChange, onClose }: {
     <Dialog open={open} onOpenChange={o => { if (!o) close(); }}>
       <DialogContent className="reward-dialog rainbow-change">
         {stage === 'pick' && <>
-          <DialogTitle className="intro-title">🌈 무지개 완성!</DialogTitle>
-          <DialogDescription className="intro-text">이로치로 바꿀 포켓몬을 골라 봐!</DialogDescription>
+          <DialogTitle className="intro-title">{gold ? '👑 황금 조각 완성!' : '🌈 무지개 완성!'}</DialogTitle>
+          <DialogDescription className="intro-text">{gold ? '이로치로 바꿀 포켓몬을 하나 더 골라 봐!' : '이로치로 바꿀 포켓몬을 골라 봐!'}</DialogDescription>
           {candidates.length === 0
             ? <p className="intro-text">바꿀 수 있는 포켓몬이 없어. 모두 이로치야!</p>
             : <div className="change-grid">
@@ -215,7 +264,7 @@ export function ShinyChangeDialog({ ev, owned, busy, onChange, onClose }: {
           <DialogDescription className="sr-only">무지개 조각이 포켓몬에게 날아가요</DialogDescription>
           <div className={'change-stage' + (stage === 'done' ? ' done' : '')}>
             {stage === 'fly' && ev?.subjects.map((s, i) => (
-              <span key={s.subject} className="fly-piece" style={{ ['--c' as string]: s.color, ['--a' as string]: `${i * 60}deg`, animationDelay: `${i * 0.12}s` }} />
+              <span key={s.subject} className="fly-piece" style={{ ['--c' as string]: gold ? '#f2b705' : s.color, ['--a' as string]: `${i * 60}deg`, animationDelay: `${i * 0.12}s` }} />
             ))}
             {stage === 'done' && <ShinyBurst />}
             <PokemonImage id={picked.species} shiny={stage === 'done'} className="celebration-img change-pokemon" />

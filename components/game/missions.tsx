@@ -80,7 +80,10 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
           const mastered = e.total > 0 && e.solved === e.total;
           // 레인보우 이벤트: 이 과목 연속 수 (도전 중이고 아직 조각을 못 모은 과목만)
           const rbEv = view.limited.find(l => l.phase === 'active' && l.accepted);
-          const rb = rbEv?.subjects.find(s => s.subject === e.subject);
+          // 무지개를 다 모으고 황금 조각이 열렸으면 황금 진행을 보여 줌
+          const goldOn = !!rbEv?.gold && rbEv.completed && !rbEv.gold.completed;
+          const rb = goldOn ? rbEv!.gold!.subjects.find(s => s.subject === e.subject) : rbEv?.subjects.find(s => s.subject === e.subject);
+          const rbGoal = goldOn ? rbEv!.gold!.goal : rbEv?.goal ?? 10;
           return (
             <section className="panel explore-card" key={e.subject} style={{ borderTopColor: SUBJECT_INFO[e.subject].color }}>
               <h3>{e.subject}</h3>
@@ -94,7 +97,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
               {e.review > 0 && <p className="review-note"><RotateCcw size={14} /> 전에 틀린 문제 {e.review}개가 다시 나왔어!</p>}
               {e.reviewLater > 0 && <p className="review-note later">오늘 틀린 {e.reviewLater}문제는 다른 날 다시 나와요.</p>}
               {e.inDaily > 0 && <p className="review-note later">{e.inDaily}문제는 오늘의 미션에서 풀어요.</p>}
-              {rb && <p className="review-note rainbow-note">{rb.piece ? <>🌈 {rb.heart} {e.subject} 조각을 모았어!</> : <>🌈 레인보우 {rb.streak}/{rbEv!.goal}{e.rainbowReplay ? ' · 맞힌 문제로 다시 도전!' : ''}</>}</p>}
+              {rb && (!rbEv!.completed || goldOn) && <p className="review-note rainbow-note">{rb.piece ? <>{goldOn ? '👑' : '🌈'} {e.subject} {goldOn ? '황금 ' : ''}조각을 모았어!</> : <>{goldOn ? '👑 황금' : '🌈 레인보우'} {rb.streak}/{rbGoal}{e.rainbowReplay ? ' · 맞힌 문제로 다시 도전!' : ''}</>}</p>}
               {e.total === 0
                 ? <button className="secondary" disabled>문제가 없어요</button>
                 : mastered && !e.rewardClaimed

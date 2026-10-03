@@ -43,7 +43,9 @@ type Overview = {
       id: string; title: string; start: string; end: string; phase: 'before' | 'active' | 'ended';
       seen: string | null; acceptedAt: string | null; goal: number; pieces: Subject[]; streak: Record<Subject, number>;
       completedAt: string | null; changed: { species: number; name: string; at: string } | null;
-      ended: { date: string; pieces: number; candy: number } | null; shinyMultiplier: number; partial: { minPieces: number; candy: number };
+      ended: { date: string; pieces: number; candy: number; goldPieces?: number } | null; shinyMultiplier: number; partial: { minPieces: number; candy: number };
+      gold: { openedAt: string; goal: number; pieces: Subject[]; streak: Record<Subject, number>; completedAt: string | null; changed: { species: number; name: string; at: string } | null } | null;
+      hiddenGoal: number | null;
     }[];
   };
   /** 시뮬레이션에서 고를 기간 한정 이벤트 */
@@ -435,7 +437,11 @@ function LimitedRow({ l, sim, busy, call, reload }: { l: Overview['events']['lim
           <tr><td>조각</td><td>{l.pieces.length} / {SUBJECTS.length}{l.pieces.length ? ` (${l.pieces.join(', ')})` : ''}</td></tr>
           <tr><td>과목별 연속</td><td>{SUBJECTS.map(s => `${s} ${l.streak[s] ?? 0}/${l.goal}`).join(' · ')}</td></tr>
           <tr><td>완료</td><td>{l.completedAt ? `${l.completedAt} 무지개 완성` : '-'}{l.changed ? ` · ✨ ${l.changed.name}(으)로 변신` : l.completedAt ? ' · 아직 포켓몬 안 고름' : ''}</td></tr>
-          {l.ended && <tr><td>정산</td><td>{l.ended.date} · 조각 {l.ended.pieces}개 · {l.ended.candy ? `사탕 ${l.ended.candy}개 보냄` : '사탕 없음'}</td></tr>}
+          <tr><td>👑 히든</td><td>{l.gold
+            ? <>황금 조각 {l.gold.pieces.length} / {SUBJECTS.length} ({l.gold.openedAt} 열림){l.gold.completedAt ? ` · ${l.gold.completedAt} 완성` : ''}{l.gold.changed ? ` · ✨ ${l.gold.changed.name}(으)로 변신` : l.gold.completedAt ? ' · 아직 포켓몬 안 고름' : ''}<br />
+                <small className="muted">{SUBJECTS.map(s => `${s} ${l.gold!.streak[s] ?? 0}/${l.gold!.goal}`).join(' · ')}</small></>
+            : l.hiddenGoal ? `아직 안 열림 (무지개 완성 + 이로치 변신 뒤 열림, 과목마다 ${l.hiddenGoal}문제 연속)` : '-'}</td></tr>
+          {l.ended && <tr><td>정산</td><td>{l.ended.date} · 조각 {l.ended.pieces}개{l.ended.goldPieces !== undefined ? ` · 황금 조각 ${l.ended.goldPieces}개` : ''} · {l.ended.candy ? `사탕 ${l.ended.candy}개 보냄` : '사탕 없음'}</td></tr>}
         </tbody>
       </table>
       {(l.seen || l.acceptedAt) && l.phase !== 'ended' && (sim
@@ -773,6 +779,11 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
               <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'streak9' })) await reload(); }}>못 모은 과목 연속 9로</button>
               <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'pieces5' })) await reload(); }}>조각 5개로</button>
               <button className="secondary small" disabled={busy} onClick={async () => { if (window.confirm('시험용 기록의 이 이벤트 기록을 지울까요? (진짜 기록은 그대로)') && await call({ action: 'simLimited', id: l.id, op: 'reset' })) await reload(); }}>이벤트 기록 지우기</button>
+            </div>
+            <div className="button-row">
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'goldOpen' })) await reload(); }}>👑 황금 조각 열기(무지개+변신 끝낸 상태로)</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'gold19' })) await reload(); }}>황금 연속 19로</button>
+              <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simLimited', id: l.id, op: 'gold5' })) await reload(); }}>황금 조각 5개로</button>
             </div>
             <p className="muted">순서 예: ‘첫날로’ → 아이 화면 새로고침(팝업 3장) → 탐험에서 조각 얻기·틀려서 다시 세기 → ‘조각 5개로’ + ‘연속 9로’ → 1문제 맞혀 무지개 완성·변신 연출 → ‘마지막 날 {l.reminderAt}으로’(저녁 안내, 조각을 덜 모았을 때만) → ‘끝난 다음 날로’(결과·사탕). 날짜·시각은 시험용 기록에만 적용돼요.</p>
           </div>

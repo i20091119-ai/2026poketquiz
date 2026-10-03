@@ -18,7 +18,7 @@ export type AnswerResult = {
   reviewed?: boolean;
   gained?: { type: PublicQuestion['type']; amount: number; exp: number };
   /** 레인보우 이벤트 진행 (탐험에서만): 연속 수, 조각을 얻었는지, 아이에게 보여 줄 말 */
-  rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
+  rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; stage?: 'rainbow' | 'gold'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
 };
 
 type Props = {
@@ -37,10 +37,10 @@ type Props = {
 /** 레인보우 이벤트: 이 과목 연속 수(동그라미 10개)와 조각 소식 */
 function RainbowLine({ r }: { r: NonNullable<AnswerResult['rainbow']> }) {
   return (
-    <div className={'rainbow-line ' + r.kind} role="status">
+    <div className={'rainbow-line ' + r.kind + (r.stage === 'gold' ? ' gold' : '')} role="status">
       {r.message && <b>{r.message}</b>}
       {r.kind !== 'complete' && (
-        <span>🌈 {r.subject} <span className="rainbow-dots small">{Array.from({ length: r.goal }, (_, i) => <i key={i} className={i < r.count ? 'on' : ''} />)}</span> {r.count}/{r.goal}</span>
+        <span>{r.stage === 'gold' ? '👑' : '🌈'} {r.subject} <span className="rainbow-dots small">{Array.from({ length: r.goal }, (_, i) => <i key={i} className={i < r.count ? 'on' : ''} />)}</span> {r.count}/{r.goal}</span>
       )}
     </div>
   );
