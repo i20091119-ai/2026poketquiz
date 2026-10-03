@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
@@ -1131,4 +1131,33 @@ test('레인보우 히든 스테이지: 이미 변신을 끝낸 기록은 다음
   syncLimited(a, shiftDate(RB.end, 1));
   assert.equal(a.limited![RB.id].ended!.goldPieces, 0);
   assert.equal(a.limited![RB.id].ended!.candy, 3); // 사탕 규칙은 그대로
+});
+
+test('배틀 힘: 열매·상처약을 먹인 계열은 포켓로그 개체값 +1 (기본 15, 최대 31), 속성 스탯은 그대로 오름', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank); // 나오하(906)
+  const uid = state.owned[0].uid;
+  state.owned.push({ uid: 'sh', species: 907, obtainedAt: 't', shiny: true }); // 같은 계열 이로치(진화형)
+  state.owned.push({ uid: 'other', species: 25, obtainedAt: 't' });
+  assert.equal(battleIvOf(state, 906), 15);
+  state.potions.push({ id: 'm1', kind: 'apple' });
+  const grassBefore = state.stats.grass;
+  const r = applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, c) as { message: string; battleIv: number };
+  assert.equal(r.message, `${species(906).name}에게 먹였어! 속성 +5, 배틀 힘도 쑥!`);
+  assert.equal(state.stats.grass, grassBefore + 5); // 속성 스탯은 그대로 오름
+  assert.equal(r.battleIv, 16);
+  assert.equal(battleIvOf(state, 907), 16); // 같은 계열(이로치 진화형 포함)은 같은 값
+  assert.equal(battleIvOf(state, 25), 15); // 다른 계열은 그대로
+  const list = battleIvList(state);
+  assert.equal(list['906'], 16);
+  assert.equal(list['907'], 16);
+  assert.equal(list['25'], 15);
+  // 최대 31에서 멈춤
+  simBattlePower(state, 'max');
+  assert.equal(battleIvOf(state, 906), 31);
+  state.potions.push({ id: 'm2', kind: 'potion' });
+  const r2 = applyAction(state, { type: 'usePotion', potionId: 'm2', uid: 'other' }, c) as { message: string; battleIv: number };
+  assert.equal(r2.battleIv, 31);
+  assert.match(r2.message, /배틀 힘은 이미 최고야!/);
 });

@@ -764,6 +764,9 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
         <div className="button-row">
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveBalls' })) await reload(); }}>시험용 볼 +1씩 (이로치 볼 포함)</button>
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveShinies' })) await reload(); }}>가진 포켓몬마다 이로치도 +1</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simPotions' })) await reload(); }}>시험용 열매·상처약 +1씩</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simBattlePower' })) await reload(); }}>배틀 힘 +5 (모든 포켓몬)</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simBattlePower', to: 'max' })) await reload(); }}>배틀 힘 최고로</button>
           <button className={shinyAll ? 'primary small' : 'secondary small'} disabled={busy} onClick={async () => { if (await call({ action: 'simShinyAll', on: !shinyAll })) await reload(); }}>{shinyAll ? '✨ 이로치 100% 켜짐 (누르면 끔)' : '볼 열 때 이로치 100%로 켜기'}</button>
         </div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>

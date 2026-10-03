@@ -6,6 +6,7 @@ import type { ChildView, OwnedPokemon } from '@/lib/game-engine';
 import { ASSETS } from '@/lib/assets';
 import { evolutionRequirement, evolutionsOf, isStrong, shinyName, species, thirdTypeOf, TOTAL_SPECIES } from '@/lib/pokedex';
 import { megaByKey, megaImages, megaLabel, MEGA_EMOJI, TOTAL_MEGAS, type MegaForm } from '@/lib/megas';
+import { BATTLE_IV, battleIvFromFeeds, battleStars } from '@/lib/game-config';
 import { dexNo, PokemonImage, TypeBadge } from './common';
 import { rootOf } from '@/lib/pokedex';
 
@@ -158,6 +159,18 @@ function MegaImage({ art, name }: { art: number; name: string }) {
   );
 }
 
+/** 배틀 힘: 열매·상처약을 먹일수록 포켓로그에서 세지는 정도 (별 5칸, 개체값 비율) */
+export function BattlePower({ feeds }: { feeds: number }) {
+  const iv = battleIvFromFeeds(feeds);
+  const stars = battleStars(iv);
+  return (
+    <p className="battle-power" title={`포켓로그 개체값 ${iv} / ${BATTLE_IV.max}`}>
+      💪 배틀 힘 <span className="power-stars" aria-label={`별 ${stars}개 / 5개`}>{Array.from({ length: 5 }, (_, i) => <i key={i} className={i < stars ? 'on' : ''}>★</i>)}</span>
+      {iv >= BATTLE_IV.max && <b className="power-max"> 배틀 힘 최고!</b>}
+    </p>
+  );
+}
+
 /** 포켓로그에서 이 포켓몬(계열)이 도달한 최고 레벨. 새 판은 레벨 5부터 다시 시작하지만 최고 기록은 남습니다. */
 function BattleLevel({ level }: { level?: number }) {
   return <p className="battle-level">{level ? <>⚔️ 포켓로그 최고 <b>Lv.{level}</b></> : <span className="muted">⚔️ 포켓로그 기록 없음</span>}</p>;
@@ -179,6 +192,7 @@ function OwnedCard({ pokemon, view, busy, onPartner, onEvolve }: {
       <h3>{pokemon.shiny ? `✨ ${shinyName(s.id)}` : s.name}</h3>
       <div className="type-row">{s.types.map(t => <TypeBadge key={t} type={t} small />)}</div>
       <BattleLevel level={view.battleLevels[rootOf(s.id)]} />
+      <BattlePower feeds={view.battlePower[rootOf(s.id)] ?? 0} />
       {!isPartner && <button className="secondary" disabled={busy} onClick={() => onPartner(pokemon.uid)}>파트너로 함께하기</button>}
       <div className="evolutions">
         {targets.length === 0 && <p className="final-evolution">더 이상 진화하지 않아요</p>}
