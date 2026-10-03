@@ -8,17 +8,20 @@ import { EXP_EXCHANGE, SUBJECTS, SUBJECT_INFO, SUBJECT_TYPES, STARTERS, TYPE_INF
 import type { ChildView } from '@/lib/game-engine';
 import { evolutionRequirement, evolutionsOf, rootOf, shinyName, species, typesLabel } from '@/lib/pokedex';
 import { dexNo, goTo, PokemonImage, TypeBadge } from './common';
+import { TeamDialog, TeamStrip } from './adventure';
 
 /* eslint-disable @next/next/no-img-element */
 
-/** 첫 화면: 파트너 포켓몬과 경험치, 속성 스탯 */
-export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }: {
+/** 첫 화면: 파트너 포켓몬과 경험치, 모험 팀, 속성 에너지 */
+export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift, onSaveTeam, onIntro }: {
   view: ChildView; busy: boolean; onChoosePartner: (uid: string) => void; onExchange: (type: TypeKey) => Promise<boolean>; onExpGift: () => void;
+  onSaveTeam: (friends: string[]) => Promise<boolean>; onIntro: () => void;
 }) {
   const gift = view.expGifts;
   const partner = view.owned.find(p => p.uid === view.partner);
   const [picking, setPicking] = useState(false);
   const [exchanging, setExchanging] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   return (
     <section className="home panel">
       <div className="partner-stage" style={{ backgroundImage: `url(${ASSETS.homeBackground})` }}>
@@ -31,7 +34,7 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
             {view.battleLevels[rootOf(partner.species)] ? <small className="partner-battle-level">⚔️ 포켓로그 최고 Lv.{view.battleLevels[rootOf(partner.species)]}</small> : null}
             <div className="exp-box">
               <img src={ASSETS.exp} alt="" /> 경험치 <strong>{view.exp.toLocaleString()}</strong>
-              <button className="exp-exchange" disabled={busy} onClick={() => setExchanging(true)}>스탯으로 바꾸기</button>
+              <button className="exp-exchange" disabled={busy} onClick={() => setExchanging(true)}>⚡ 에너지로 바꾸기</button>
             </div>
             {gift.ready > 0
               ? <button className="primary glow exp-gift-ready" disabled={busy} onClick={onExpGift}>
@@ -45,7 +48,9 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
           </div>
         </>}
       </div>
+      <TeamStrip view={view} busy={busy} onEdit={() => setTeamOpen(true)} onIntro={onIntro} />
       <StatBoard stats={view.stats} />
+      {teamOpen && <TeamDialog view={view} busy={busy} open onClose={() => setTeamOpen(false)} onSave={onSaveTeam} />}
       {exchanging && <ExchangeDialog view={view} busy={busy} onClose={() => setExchanging(false)} onExchange={onExchange} />}
       <Dialog open={picking} onOpenChange={setPicking}>
         <DialogContent className="reward-dialog">
@@ -71,7 +76,7 @@ export function HomePanel({ view, busy, onChoosePartner, onExchange, onExpGift }
   );
 }
 
-/** 경험치를 원하는 속성 스탯으로 바꾸기. 파트너 진화에 필요한 속성을 먼저 보여 줍니다. */
+/** 경험치를 원하는 속성 에너지로 바꾸기 (하루 growth().expExchangePerDay 번까지). 파트너 진화에 필요한 속성을 먼저 보여 줍니다. */
 function ExchangeDialog({ view, busy, onClose, onExchange }: {
   view: ChildView; busy: boolean; onClose: () => void; onExchange: (type: TypeKey) => Promise<boolean>;
 }) {
@@ -84,17 +89,19 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
   }
   const [chosen, setChosen] = useState<TypeKey | null>(needed.keys().next().value ?? null);
   const enough = view.exp >= cost;
-  const times = Math.floor(view.exp / cost);
+  const todayLeft = view.expExchange.left;
+  const times = Math.min(Math.floor(view.exp / cost), todayLeft);
 
   return (
     <Dialog open onOpenChange={o => { if (!o && !busy) onClose(); }}>
       <DialogContent className="reward-dialog exchange-dialog">
-        <DialogTitle>경험치를 스탯으로 바꾸기</DialogTitle>
+        <DialogTitle>⚡ 경험치를 에너지로 바꾸기</DialogTitle>
         <DialogDescription>
-          경험치 {cost}을 내면 고른 속성 스탯이 {amount} 올라. {enough ? `지금 ${times}번 바꿀 수 있어!` : `경험치를 ${cost - view.exp} 더 모으면 바꿀 수 있어.`}
+          경험치 {cost}을 내면 고른 속성 에너지가 {amount} 올라. {todayLeft < 1 ? '' : enough ? `지금 ${times}번 바꿀 수 있어!` : `경험치를 ${cost - view.exp} 더 모으면 바꿀 수 있어.`}
         </DialogDescription>
+        <p className={'exchange-today' + (todayLeft < 1 ? ' done' : '')}>{todayLeft > 0 ? `오늘 바꾸기 ${todayLeft}번 남았어` : '오늘은 다 바꿨어. 내일 또 바꿀 수 있어!'}</p>
         {partner && needed.size > 0 && (
-          <p className="exchange-hint">★ 표시는 {species(partner.species).name}의 진화에 필요한 속성이야.</p>
+          <p className="exchange-hint">🌱 표시는 {species(partner.species).name}의 진화에 필요한 속성이야.</p>
         )}
         <div className="exchange-groups">
           {SUBJECTS.map(subject => (
@@ -105,7 +112,7 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
                 return (
                   <button key={t} className={'exchange-type' + (t === chosen ? ' current' : '') + (need ? ' needed' : '')} onClick={() => setChosen(t)}>
                     <img src={ASSETS.type(t)} alt="" />
-                    <span>{need ? '★ ' : ''}{TYPE_INFO[t].label}</span>
+                    <span>{need ? '🌱 ' : ''}{TYPE_INFO[t].label}</span>
                     <b>{view.stats[t]}{need ? <small> / {need}</small> : null}</b>
                   </button>
                 );
@@ -113,9 +120,9 @@ function ExchangeDialog({ view, busy, onClose, onExchange }: {
             </div>
           ))}
         </div>
-        <button className="primary" disabled={busy || !enough || !chosen}
-          onClick={async () => { if (chosen && await onExchange(chosen) && view.exp - cost < cost) onClose(); }}>
-          {!enough ? `경험치가 ${cost - view.exp} 부족해` : chosen ? `경험치 ${cost} → ${TYPE_INFO[chosen].label} +${amount}` : '속성을 골라 줘'}
+        <button className="primary" disabled={busy || !enough || !chosen || todayLeft < 1}
+          onClick={async () => { if (chosen && await onExchange(chosen) && (view.exp - cost < cost || todayLeft <= 1)) onClose(); }}>
+          {todayLeft < 1 ? '오늘은 다 바꿨어' : !enough ? `경험치가 ${cost - view.exp} 부족해` : chosen ? `경험치 ${cost} → ${TYPE_INFO[chosen].label} 에너지 +${amount}` : '속성을 골라 줘'}
         </button>
         <button className="secondary" onClick={onClose}>닫기</button>
       </DialogContent>
@@ -184,7 +191,8 @@ export function BattleTab({ left, perDay, tickets, gate, reviveTickets, busy, on
 export function StatBoard({ stats }: { stats: ChildView['stats'] }) {
   return (
     <div className="stat-board">
-      <h3>나의 속성 스탯</h3>
+      <h3>⚡ 나의 속성 에너지</h3>
+      <p className="stat-sub">포켓몬을 진화시킬 때 써요</p>
       <div className="stat-groups">
         {SUBJECTS.map(subject => (
           <div className="stat-group" key={subject} style={{ borderColor: SUBJECT_INFO[subject].color }}>

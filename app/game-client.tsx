@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Backpack, BookOpen, Compass, Gift, PartyPopper, Settings, Sun, Swords } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,7 +15,8 @@ import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
-import { type Subject } from '@/lib/game-config';
+import { setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
+import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { versionLabel } from '@/lib/version';
@@ -24,7 +25,7 @@ import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 type Quiz = { mode: 'daily' | 'explore'; subject?: Subject; question: PublicQuestion };
 /** 보호자 시뮬레이션 중일 때 서버가 알려 주는 날짜 정보 (아니면 null) */
 type Sim = { today: string; dayOffset: number; clock?: string | null } | null;
-type GameResponse = { view: ChildView; strong?: StrongOverrides; sim?: Sim; battleGate?: BattleGateView };
+type GameResponse = { view: ChildView; strong?: StrongOverrides; growth?: Partial<GrowthRules>; sim?: Sim; battleGate?: BattleGateView };
 /** 화면이 열려 있을 때 새 선물·쉬는 시간을 알아채는 간격 */
 const POLL_MS = 60_000;
 
@@ -53,8 +54,14 @@ export default function Game() {
   const changeId = change?.id ?? null;
   const autoChangeShown = useRef(new Set<string>());
   const rainbowJustDone = useRef(false);
+  /** 모험 팀 업데이트 안내 (기기마다 한 번): null = 아직 기기 기억을 안 읽음 */
+  // 기기 브라우저에 기억한 값 (화면을 처음 그릴 때는 "봤음"으로 두고, 브라우저에서 실제 값을 읽음)
+  const introStored = useSyncExternalStore(subscribeStorage, adventureIntroSeen, () => true);
+  const [introDone, setIntroDone] = useState(false);
+  const introSeen = introStored || introDone;
+  const [introOpen, setIntroOpen] = useState(false);
 
-  const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
+  const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setGrowthRules(data.growth); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
     getJson<GameResponse>('/api/game', signal).then(
       data => { apply(data); setError(''); return data.view; },
@@ -75,11 +82,11 @@ export default function Game() {
 
   // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
   useEffect(() => {
-    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId) return;
+    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId || introOpen || introSeen === false) return;
     if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.phase === 'active' && e.gold && !e.gold.introSeen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
-  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId]);
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen]);
 
   // 레인보우를 다 모았는데 아직 포켓몬을 안 골랐으면 (앱을 열 때 한 번) 고르기 창을 띄움
   useEffect(() => {
@@ -198,6 +205,10 @@ export default function Game() {
   const goldEv = calm && !introEv && !endEv ? view.limited.find(e => e.phase === 'active' && e.gold && !e.gold.introSeen) ?? null : null;
   const remindEv = calm && !introEv && !endEv && !goldEv ? view.limited.find(e => e.remind && !e.remindSeen) ?? null : null;
   const changeEv = changeId ? view.limited.find(e => e.id === changeId) ?? null : null;
+  // 모험 팀 업데이트 안내: 이 기기에서 처음이면 (다른 안내 팝업이 다 끝난 뒤) 한 번
+  const showIntro = introOpen || (calm && introSeen === false && !introEv && !endEv && !goldEv && !remindEv && !(view.events.allClear.completedAt && !view.events.allClear.celebrated));
+  const closeIntro = () => { markAdventureIntroSeen(); setIntroDone(true); setIntroOpen(false); };
+  const saveTeam = async (friends: string[]) => { const r = await act<{ message: string }>({ type: 'team', friends }); if (r) setNotice(r.message); return !!r; };
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
   async function reviveFromHistory(runId: string) {
     if (busy) return;
@@ -229,6 +240,7 @@ export default function Game() {
         ) : <>
           <HomePanel view={view} busy={busy} onChoosePartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
             onExpGift={() => setReward({ kind: 'exp' })}
+            onSaveTeam={saveTeam} onIntro={() => setIntroOpen(true)}
             onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
@@ -249,7 +261,9 @@ export default function Game() {
             <TabsContent value="pokedex">
               <PokedexTab view={view} busy={busy}
                 onPartner={async uid => { const r = await act<{ message: string }>({ type: 'partner', uid }); if (r) setNotice(r.message); }}
-                onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}/>
+                onEvolve={async (uid, target) => { const r = await act<{ evolved: number; message: string }>({ type: 'evolve', uid, target }); if (r) setEvolved({ id: r.evolved, message: r.message }); }}
+                onNotice={message => { setError(''); setNotice(message); }}
+                onEnergyStar={async (uid, statType) => { const r = await act<{ message: string }>({ type: 'energyStar', uid, statType }); if (r) setNotice(r.message); return !!r; }} />
             </TabsContent>
             <TabsContent value="bag">
               <BagTab view={view} busy={busy}
@@ -343,6 +357,8 @@ export default function Game() {
         onChange={uid => act<{ species: number; message: string }>({ type: 'limitedShinyChange', id: changeId!, uid, stage: change?.gold ? 'gold' : 'rainbow' })}
         onClose={() => setChange(null)} />
 
+      {view.partner && <AdventureIntro key={showIntro ? 'intro-on' : 'intro-off'} view={view} open={showIntro} busy={busy} onClose={closeIntro} onSave={saveTeam} />}
+
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (
         <GiftOpenDialog
@@ -386,6 +402,9 @@ export default function Game() {
     </main>
   );
 }
+
+/** 다른 탭에서 기기 저장이 바뀌면 다시 읽음 */
+const subscribeStorage = (cb: () => void) => { window.addEventListener('storage', cb); return () => window.removeEventListener('storage', cb); };
 
 /** 이 기기의 이름표 (기기 브라우저에 한 번 만들어 둠). 기간 한정 이벤트 소개 팝업을 기기마다 한 번씩 띄우는 데만 씀 */
 let memoryDeviceId = '';

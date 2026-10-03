@@ -1,7 +1,7 @@
 import { globalScene } from "#app/global-scene";
-import { quizShinyName } from "#app/quiz-link";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
+import { quizBattlePowerLabel, quizShinyName } from "#app/quiz-link";
 import { speciesEggMoves } from "#balance/egg-moves";
 import { allAbilities, allMoves } from "#data/data-lists";
 import { GrowthRate, getGrowthRateColor } from "#data/exp";
@@ -45,6 +45,8 @@ export class StarterSummary extends Phaser.GameObjects.Container {
   private type2Icon: Phaser.GameObjects.Sprite;
   private pokemonLuckLabelText: Phaser.GameObjects.Text;
   private pokemonLuckText: Phaser.GameObjects.Text;
+  /** 퀴즈 연동: 배틀 힘 ★★★☆☆ (퀴즈 앱에서 키운 개체값) */
+  private pokemonBattlePowerText: BBCodeText;
   private pokemonGenderText: Phaser.GameObjects.Text;
   private readonly pokemonUncaughtText: Phaser.GameObjects.Text;
   private pokemonAbilityLabelText: Phaser.GameObjects.Text;
@@ -355,7 +357,12 @@ export class StarterSummary extends Phaser.GameObjects.Container {
     ) //
       .setOrigin(0);
 
+    // 속성 아이콘 바로 위 줄 (행운 표시는 이 글 오른쪽으로 밀어 냄)
+    this.pokemonBattlePowerText = addBBCodeTextObject(8, 89.5, "", TextStyle.WINDOW_ALT, { fontSize: "48px" }) //
+      .setOrigin(0);
+
     pokemonPermanentInfoContainer.add([
+      this.pokemonBattlePowerText,
       this.type1Icon,
       this.type2Icon,
       this.pokemonGrowthRateLabelText,
@@ -649,6 +656,10 @@ export class StarterSummary extends Phaser.GameObjects.Container {
     const { shiny, formIndex, female, variant, abilityIndex, natureIndex, teraType } = options;
 
     const species = speciesDataRegistry.getSpecies(starterId);
+    this.pokemonBattlePowerText.setText(quizBattlePowerLabel(starterId));
+    const luckX = 8 + this.pokemonBattlePowerText.displayWidth + 5;
+    this.pokemonLuckLabelText.setX(luckX);
+    this.pokemonLuckText.setX(luckX + this.pokemonLuckLabelText.displayWidth + 2);
 
     this.updateCandyTooltip();
 

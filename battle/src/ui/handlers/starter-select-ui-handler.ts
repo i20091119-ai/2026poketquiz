@@ -5,7 +5,7 @@ import { globalScene } from "#app/global-scene";
 import { settings } from "#app/global-settings-manager";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
-import { hasQuizNormalStarter, hasQuizShinyStarter } from "#app/quiz-link";
+import { hasQuizNormalStarter, hasQuizShinyStarter, quizTeamStarterCells } from "#app/quiz-link";
 import { QUIZ_RULES } from "#app/quiz-rules";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -2344,6 +2344,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     const sort = this.filterBar.getVals(DropDownColumn.SORT)[0];
     sortStarterSpecies(this.filteredStarterIds, sort.val, sort.dir);
     this.markShinyCells();
+    this.moveTeamCellsFirst();
 
     this.updateScroll();
     this.tryUpdateValue();
@@ -2377,6 +2378,27 @@ export class StarterSelectUiHandler extends MessageUiHandler {
       seen.add(starterId);
       return again || (hasQuizShinyStarter(starterId) && !hasQuizNormalStarter(starterId));
     });
+  }
+
+  /**
+   * 퀴즈 연동(모험 팀): 퀴즈 앱 모험 팀 3마리(파트너 먼저) 칸을 맨 앞으로 옮깁니다. 다른 포켓몬도 그 뒤에 그대로 있어 고를 수 있어요.
+   * 정렬·이로치 칸 표시가 끝난 뒤에 부르고, 칸마다 이로치 여부를 같이 옮깁니다.
+   */
+  private moveTeamCellsFirst(): void {
+    const cells = this.filteredStarterIds.map((id, i) => ({ id, shiny: this.filteredShinyCells[i] ?? false }));
+    const front: typeof cells = [];
+    for (const member of quizTeamStarterCells()) {
+      const index = cells.findIndex(c => c.id === member.starter && c.shiny === member.shiny);
+      if (index >= 0) {
+        front.push(...cells.splice(index, 1));
+      }
+    }
+    if (front.length === 0) {
+      return;
+    }
+    const ordered = [...front, ...cells];
+    this.filteredStarterIds = ordered.map(c => c.id);
+    this.filteredShinyCells = ordered.map(c => c.shiny);
   }
 
   /**

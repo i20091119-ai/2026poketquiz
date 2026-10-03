@@ -1,7 +1,7 @@
 // D1 저장소 접근. 서버(라우트)에서만 사용합니다.
 import { env } from 'cloudflare:workers';
 import { defaultRules, normalizeRules, type RestRule } from '../battle-rest.ts';
-import { DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SHINY_CHANCE_MAX, SUBJECTS, type GiftLimits, type ShinyBallKind, type Subject } from '../game-config.ts';
+import { cleanGrowthRules, setGrowthRules, type GrowthRules, DEFAULT_GRADE, GIFT_LIMIT_DEFAULT, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SHINY_CHANCE_MAX, SUBJECTS, type GiftLimits, type ShinyBallKind, type Subject } from '../game-config.ts';
 import { initialState, type ActiveBank, type GameState, type Question } from '../game-engine.ts';
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
@@ -142,6 +142,23 @@ export async function loadStrongOverrides(): Promise<StrongOverrides> {
   const ov = await getStrongOverrides();
   setStrongOverrides(ov);
   return ov;
+}
+
+/** 보호자 공간 "성장 규칙"에서 바꾼 숫자 (바꾼 것만, lib/game-config.ts GROWTH_DEFAULT 를 덮어씀) */
+export async function getGrowthRules(): Promise<Partial<GrowthRules>> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'growth_rules'").first<{ value: string }>();
+  try { return cleanGrowthRules(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveGrowthRules(rules: Partial<GrowthRules> | null) {
+  const clean = cleanGrowthRules(rules);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'growth_rules'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('growth_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 요청을 처리하기 전에 성장 규칙을 맞춥니다 (💗·진화·★·바꾸기 한도 계산에 씀) */
+export async function loadGrowthRules(): Promise<Partial<GrowthRules>> {
+  const rules = await getGrowthRules();
+  setGrowthRules(rules);
+  return rules;
 }
 
 export async function getBattleEvolutionAllowed(): Promise<boolean> {

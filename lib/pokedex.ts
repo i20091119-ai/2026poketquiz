@@ -1,6 +1,6 @@
 import raw from './data/pokedex.json' with { type: 'json' };
 import shinyColors from './data/shiny-colors.json' with { type: 'json' };
-import { EVOLUTION_COST, EVOLUTION_COST_STRONG, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from './game-config.ts';
+import { evolutionCost, evolveHearts, growth, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type Subject, type TypeKey } from './game-config.ts';
 import { POPULAR_STRONG, THIRD_TYPE } from './strong-pokemon.ts';
 
 export type Species = {
@@ -32,6 +32,16 @@ const nextOf = new Map<number, number[]>();
 for (const s of SPECIES) if (s.from) nextOf.set(s.from, [...(nextOf.get(s.from) ?? []), s.id]);
 /** 이 포켓몬이 진화할 수 있는 다음 모습들 (이브이처럼 여러 갈래일 수 있음) */
 export const evolutionsOf = (id: number) => nextOf.get(id) ?? [];
+/** 더 진화하지 않는 모습 (다 진화한 포켓몬) */
+export const isFinalForm = (id: number) => evolutionsOf(id).length === 0;
+/**
+ * 💗 게이지가 가득 차는 칸 수: 진화 전이면 다음 진화에 필요한 💗, 다 진화했으면 ★+1 까지의 칸 (growth().heartsPerStar)
+ */
+export function heartGoalOf(id: number): number {
+  const next = evolutionsOf(id);
+  if (!next.length) return growth().heartsPerStar;
+  return Math.max(...next.map(t => evolveHearts(species(t).stage)));
+}
 
 export type Requirement = { type: TypeKey; amount: number }[];
 
@@ -57,7 +67,7 @@ export function defaultStrong(id: number): boolean {
 /** 바꾸기 전 기본 도전 속성 ('' = 없음) */
 export const defaultThird = (id: number): TypeKey | '' => THIRD_TYPE[id] ?? '';
 
-/** 센 포켓몬: 진화에 스탯이 더 많이 드는 포켓몬 */
+/** 센 포켓몬: 진화에 에너지가 더 많이 드는 포켓몬 */
 export function isStrong(id: number): boolean {
   const s = byId.get(id);
   if (!s || s.from === null) return false;
@@ -81,11 +91,11 @@ export function thirdTypeChoices(id: number): TypeKey[] {
 }
 export const isValidThird = (id: number, t: TypeKey) => thirdTypeChoices(id).includes(t);
 
-/** 진화 후 포켓몬(target)의 속성을 기준으로 필요한 스탯을 계산합니다. 센 포켓몬은 더 많이, 도전 속성이 있으면 3과목. */
+/** 진화 후 포켓몬(target)의 속성을 기준으로 필요한 에너지를 계산합니다. 센 포켓몬은 더 많이, 도전 속성이 있으면 3과목. */
 export function evolutionRequirement(target: number): Requirement {
   const s = species(target);
   if (isStrong(target)) {
-    const cost = EVOLUTION_COST_STRONG[s.stage] ?? EVOLUTION_COST_STRONG[3];
+    const cost = evolutionCost(s.stage, true);
     const third = thirdTypeOf(target);
     if (third && s.types.length === 2) {
       return [{ type: s.types[0], amount: cost.triple[0] }, { type: s.types[1], amount: cost.triple[1] }, { type: third, amount: cost.triple[2] }];
@@ -93,7 +103,7 @@ export function evolutionRequirement(target: number): Requirement {
     if (s.types.length === 1) return [{ type: s.types[0], amount: cost.single }];
     return [{ type: s.types[0], amount: cost.dual[0] }, { type: s.types[1], amount: cost.dual[1] }];
   }
-  const cost = EVOLUTION_COST[s.stage] ?? EVOLUTION_COST[3];
+  const cost = evolutionCost(s.stage, false);
   if (s.types.length === 1) return [{ type: s.types[0], amount: cost.single }];
   return [{ type: s.types[0], amount: cost.dual[0] }, { type: s.types[1], amount: cost.dual[1] }];
 }

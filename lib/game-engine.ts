@@ -1,13 +1,13 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
-  eunNeun, iGa, SUBJECT_INFO, POTIONS, BATTLE_IV, battleIvFromFeeds, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
+  eunNeun, eulReul, iGa, SUBJECT_INFO, POTIONS, battleIvFromFeeds, battlePowerMaxFeeds, evolveHearts, growth, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
   EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
   SHINY_CHANCE_DEFAULT, type ShinyBallKind,
   type BallKind, type GiftChoice, type GiftLimits, type GiftSender, type GiftSize, type PotionKind, type ReplySticker, type Subject, type TypeKey,
 } from './game-config.ts';
-import { CATCH_POOLS, evolutionRequirement, evolutionsOf, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
+import { CATCH_POOLS, evolutionRequirement, evolutionsOf, heartGoalOf, isFinalForm, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
 import { RARE_POKEMON } from './rare-pokemon.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
@@ -102,8 +102,17 @@ export type GameState = {
   reviveTickets?: number;
   /** 기간 한정 이벤트 진행 (이벤트 id → 진행). lib/limited-events.ts */
   limited?: Record<string, LimitedProgress>;
-  /** 배틀 힘: 진화 계열 첫 모습 번호 → 열매·상처약을 먹인 횟수 (포켓로그 개체값 = 15 + 횟수, 최대 31) */
+  /**
+   * 배틀 힘: 진화 계열 첫 모습 번호 → ★을 올린 횟수 (포켓로그 개체값 = 15 + 횟수, 최대 growth().ivMax).
+   * 열매·상처약 먹이기, 에너지로 바꾸기, 다 진화한 포켓몬의 💗로 오름 (처음엔 열매·상처약만이었음)
+   */
   battlePower?: Record<string, number>;
+  /** 모험 팀 친구 (파트너 말고 최대 2마리, 가진 포켓몬 uid). 없으면 파트너 혼자 */
+  team?: string[];
+  /** 💗 친해짐: 진화 계열 첫 모습 번호 → 모은 💗. 진화하면 0부터, 다 진화한 포켓몬은 growth().heartsPerStar 칸마다 ★+1 */
+  hearts?: Record<string, number>;
+  /** 경험치 → 에너지 바꾸기: 날짜와 그날 바꾼 횟수 (하루 growth().expExchangePerDay 번까지) */
+  expExchange?: { date: string; count: number };
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -259,17 +268,121 @@ export function battleIvList(state: GameState): Record<string, number> {
   for (const id of [...state.owned.map(p => p.species), ...(state.shiny ?? [])]) out[id] = battleIvOf(state, id);
   return out;
 }
+/** ★ 배틀 힘 +1 (최대면 그대로). 올랐으면 true */
+function raiseBattlePower(state: GameState, speciesId: number): boolean {
+  const root = String(rootOf(speciesId));
+  const now = state.battlePower?.[root] ?? 0;
+  if (now >= battlePowerMaxFeeds()) return false;
+  (state.battlePower ??= {})[root] = now + 1;
+  return true;
+}
+const isMaxPower = (state: GameState, speciesId: number) => (state.battlePower?.[String(rootOf(speciesId))] ?? 0) >= battlePowerMaxFeeds();
 /** 시뮬레이션 도우미(시험용 기록에만): 열매·상처약을 종류마다 1개씩 가방에 */
 export function simGivePotions(state: GameState): number {
   const kinds = Object.keys(POTIONS) as PotionKind[];
   for (const kind of kinds) (state.potions ??= []).push({ id: nextId(state, 'm'), kind });
   return kinds.length;
 }
-/** 시뮬레이션 도우미(시험용 기록에만): 가진 포켓몬 계열마다 먹인 횟수를 n 더함 (n = 'max'면 최대로) */
+/** 시뮬레이션 도우미(시험용 기록에만): 가진 포켓몬 계열마다 ★ 올린 횟수를 n 더함 (n = 'max'면 최대로) */
 export function simBattlePower(state: GameState, n: number | 'max'): number {
   const roots = [...new Set(state.owned.map(p => String(rootOf(p.species))))];
-  for (const r of roots) (state.battlePower ??= {})[r] = n === 'max' ? BATTLE_IV.max - BATTLE_IV.base : Math.min(BATTLE_IV.max - BATTLE_IV.base, (state.battlePower?.[r] ?? 0) + n);
+  const max = battlePowerMaxFeeds();
+  for (const r of roots) (state.battlePower ??= {})[r] = n === 'max' ? max : Math.min(max, (state.battlePower?.[r] ?? 0) + n);
   return roots.length;
+}
+
+// ---------- 모험 팀 · 💗 친해짐 ----------
+const pokemonName = (p: OwnedPokemon) => (p.shiny ? shinyName(p.species) : species(p.species).name);
+/** 모험 팀: 파트너 + 친구(가진 포켓몬 중 파트너가 아닌 것, 최대 2마리). 없어진 포켓몬은 뺌 */
+export function teamOf(state: GameState): { partner: OwnedPokemon | null; friends: OwnedPokemon[] } {
+  const partner = state.owned.find(p => p.uid === state.partner) ?? null;
+  const friends = [...new Set(state.team ?? [])]
+    .filter(uid => uid !== state.partner)
+    .map(uid => state.owned.find(p => p.uid === uid))
+    .filter((p): p is OwnedPokemon => !!p)
+    .slice(0, TEAM_FRIENDS);
+  return { partner, friends };
+}
+export const TEAM_FRIENDS = 2;
+export const heartsOf = (state: GameState, speciesId: number) => state.hearts?.[String(rootOf(speciesId))] ?? 0;
+/** 💗 하나를 받은 결과 (정답 화면 안내에 씀) */
+export type HeartGain = {
+  uid: string; species: number; shiny: boolean; name: string; role: 'partner' | 'friend';
+  amount: number; hearts: number; goal: number;
+  /** 다 진화한 포켓몬인지 (💗가 차면 ★+1) */
+  final: boolean;
+  /** 이번에 진화할 만큼 💗가 찼는지 */
+  filled: boolean;
+  /** 이번에 오른 ★ 수 */
+  stars: number;
+  /** ★이 최대인지 */
+  maxed: boolean;
+};
+/**
+ * 포켓몬 한 마리(계열)에 💗를 더합니다. 진화 전: 진화에 필요한 만큼까지 쌓임.
+ * 다 진화한 포켓몬: heartsPerStar 칸이 찰 때마다 ★+1 하고 0부터 (★이 최대면 칸이 찬 채로 멈춤).
+ */
+function addHearts(state: GameState, p: OwnedPokemon, amount: number, role: HeartGain['role']): HeartGain {
+  const root = String(rootOf(p.species));
+  const goal = heartGoalOf(p.species);
+  const final = isFinalForm(p.species);
+  const before = state.hearts?.[root] ?? 0;
+  let now = Math.min(goal, before + Math.max(0, amount));
+  let stars = 0;
+  if (final) {
+    now = before + Math.max(0, amount);
+    while (now >= goal && goal > 0 && raiseBattlePower(state, p.species)) { now -= goal; stars += 1; }
+    now = Math.min(goal, now);
+  }
+  (state.hearts ??= {})[root] = now;
+  return {
+    uid: p.uid, species: p.species, shiny: !!p.shiny, name: pokemonName(p), role,
+    amount: Math.max(0, now - before) + stars * goal, hearts: now, goal, final,
+    filled: !final && before < goal && now >= goal, stars, maxed: isMaxPower(state, p.species),
+  };
+}
+/** 퀴즈 정답 하나: 모험 팀 파트너 💗 heartPartner, 친구 💗 heartFriend (같은 계열이 둘이면 한 번만) */
+function giveTeamHearts(state: GameState): HeartGain[] {
+  const { partner, friends } = teamOf(state);
+  const g = growth();
+  const out: HeartGain[] = [];
+  const seen = new Set<number>();
+  const members: [OwnedPokemon, HeartGain['role'], number][] = [
+    ...(partner ? [[partner, 'partner', g.heartPartner] as [OwnedPokemon, HeartGain['role'], number]] : []),
+    ...friends.map(p => [p, 'friend', g.heartFriend] as [OwnedPokemon, HeartGain['role'], number]),
+  ];
+  for (const [p, role, amount] of members) {
+    const root = rootOf(p.species);
+    if (seen.has(root) || amount <= 0) continue;
+    seen.add(root);
+    out.push(addHearts(state, p, amount, role));
+  }
+  return out;
+}
+/** 경험치 → 에너지 바꾸기: 오늘 바꾼 횟수와 남은 횟수 */
+export function expExchangeToday(state: GameState, today: string) {
+  const used = state.expExchange?.date === today ? state.expExchange.count : 0;
+  const perDay = growth().expExchangePerDay;
+  return { used, perDay, left: Math.max(0, perDay - used) };
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 모험 팀 💗. 'near' = 다음 정답 하나면 가득 차게, 'plus10' = 💗 10 더하기(규칙대로 ★ 전환) */
+export function simHearts(state: GameState, op: 'near' | 'plus10'): number {
+  const { partner, friends } = teamOf(state);
+  const members = [partner, ...friends].filter((p): p is OwnedPokemon => !!p);
+  for (const p of members) {
+    if (op === 'plus10') addHearts(state, p, 10, p === partner ? 'partner' : 'friend');
+    else (state.hearts ??= {})[String(rootOf(p.species))] = Math.max(0, heartGoalOf(p.species) - 1);
+  }
+  return members.length;
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 오늘 경험치 바꾸기 횟수 'used' = 다 쓴 것으로 / 'reset' = 0으로 */
+export function simExpExchange(state: GameState, today: string, op: 'used' | 'reset'): void {
+  state.expExchange = { date: today, count: op === 'used' ? growth().expExchangePerDay : 0 };
+}
+/** 시뮬레이션 도우미(시험용 기록에만): 모든 속성 에너지 +n, 경험치 +exp */
+export function simEnergy(state: GameState, n: number, exp: number): void {
+  for (const t of TYPE_KEYS) state.stats[t] += n;
+  state.exp += exp;
 }
 
 /** 이로치 볼: 아이가 가진 포켓몬의 1단계(계열 첫 모습) 중 하나. 아직 이로치가 없는 계열을 먼저 */
@@ -696,6 +809,10 @@ export type Action =
   | { type: 'usePotion'; potionId: string; uid: string }
   | { type: 'evolve'; uid: string; target: number }
   | { type: 'exchangeExp'; statType: TypeKey }
+  /** 모험 팀: 친구 2마리까지 (partner 를 주면 파트너도 함께 바꿈) */
+  | { type: 'team'; friends: string[]; partner?: string }
+  /** 포켓몬 카드의 교환: 그 포켓몬 속성 에너지 energyPerStar → ★+1 */
+  | { type: 'energyStar'; uid: string; statType: TypeKey }
   | { type: 'expGift'; pick: number }
   | { type: 'openGift'; id: string; choice: GiftChoice; subject?: Subject }
   | { type: 'replyGift'; id: string; sticker: ReplySticker; text?: string }
@@ -735,8 +852,41 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'partner': {
       const p = state.owned.find(p => p.uid === action.uid);
       if (!p) fail('아직 만나지 못한 포켓몬이에요.');
+      // 모험 팀 친구였으면 자리를 바꿈 (원래 파트너가 그 친구 자리로)
+      const old = state.partner;
+      if (state.team?.includes(p.uid)) state.team = state.team.map(uid => (uid === p.uid ? old : uid)).filter((uid): uid is string => !!uid);
       state.partner = p.uid;
       return { message: `이제 ${species(p.species).name}와 함께 모험해요!` };
+    }
+
+    case 'team': {
+      needStarter();
+      if (!Array.isArray(action.friends) || action.friends.some(uid => typeof uid !== 'string')) fail('친구를 다시 골라 주세요.');
+      let partner = state.partner!;
+      if (action.partner !== undefined) {
+        if (!state.owned.some(p => p.uid === action.partner)) fail('파트너를 다시 골라 주세요.');
+        partner = action.partner;
+      }
+      const friends = [...new Set(action.friends)].filter(uid => uid !== partner);
+      if (friends.length > TEAM_FRIENDS) fail(`친구는 ${TEAM_FRIENDS}마리까지 고를 수 있어.`);
+      if (friends.some(uid => !state.owned.some(p => p.uid === uid))) fail('아직 만나지 못한 포켓몬이에요.');
+      state.partner = partner;
+      state.team = friends;
+      return { team: friends, message: friends.length ? '모험 팀을 만들었어! 함께 모험을 떠나자!' : '파트너와 둘이서 모험을 떠나자!' };
+    }
+
+    case 'energyStar': {
+      needStarter();
+      const p = state.owned.find(p => p.uid === action.uid);
+      if (!p) fail('포켓몬을 골라 주세요.');
+      if (!species(p.species).types.includes(action.statType)) fail('이 포켓몬의 속성 에너지를 골라 줘.');
+      if (isMaxPower(state, p.species)) fail('배틀 힘은 이미 최고야!');
+      const cost = growth().energyPerStar;
+      const have = state.stats[action.statType];
+      if (have < cost) fail(`${typeLabel(action.statType)} 에너지가 ${cost - have}개 더 필요해!`);
+      state.stats[action.statType] -= cost;
+      raiseBattlePower(state, p.species);
+      return { type: action.statType, cost, battleIv: battleIvOf(state, p.species), message: '⭐ 배틀 힘이 올랐어! 배틀에서 더 세졌어!' };
     }
 
     case 'answer': {
@@ -806,12 +956,15 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const rewarded = action.mode === 'daily' || newlySolved;
       if (action.mode === 'daily') state.daily!.correct.push(q.id);
       const statGain = statReward(q.subject, action.mode);
+      // 모험 팀 💗: 정답 하나에 파트너 💗2, 친구 💗1 (보상을 받는 정답만)
+      let hearts: HeartGain[] = [];
       if (rewarded) {
         state.stats[q.type] += statGain;
         state.exp += REWARD_PER_ANSWER.exp;
+        hearts = giveTeamHearts(state);
       }
       return {
-        correct: true, explanation: q.explanation, reviewed,
+        correct: true, explanation: q.explanation, reviewed, hearts,
         gained: rewarded ? { type: q.type, amount: statGain, exp: REWARD_PER_ANSWER.exp } : undefined,
         message: reviewed ? '지난번에 틀린 문제, 이번엔 맞혔어!' : '정답이야!',
         /** 이 답으로 오늘의 미션이 끝나 사탕을 보냈으면 그 내용 */
@@ -916,8 +1069,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       return {
         caught: id, tier, shiny, ...result,
         message: shiny
-          ? (result.duplicate ? `✨ 이로치 ${shinyName(id)}를 또 만났어! 우정 보너스를 받았어.` : `✨ 이로치다! ${shinyName(id)}를 잡았어!`)
-          : (result.duplicate ? `${name}를 또 만났어! 우정 보너스를 받았어.` : `${name}를 잡았어!`),
+          ? (result.duplicate ? `✨ 이로치 ${eulReul(shinyName(id))} 또 만났어! 우정 보너스를 받았어.` : `✨ 이로치다! ${eulReul(shinyName(id))} 잡았어!`)
+          : (result.duplicate ? `${eulReul(name)} 또 만났어! 우정 보너스를 받았어.` : `${eulReul(name)} 잡았어!`),
       };
     }
 
@@ -930,15 +1083,13 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const { amount } = POTIONS[item.kind];
       const types = potionTargets(item.kind);
       for (const t of types) state.stats[t] += amount;
-      // 배틀 힘: 먹인 포켓몬의 진화 계열(기본·이로치 같이) 포켓로그 개체값 +1, 최대 31
-      const root = String(rootOf(p.species));
-      const before = battleIvOf(state, p.species);
-      if (before < BATTLE_IV.max) (state.battlePower ??= {})[root] = (state.battlePower?.[root] ?? 0) + 1;
+      // 배틀 힘: 먹인 포켓몬의 진화 계열(기본·이로치 같이) ★+1 (포켓로그 개체값 +1, 최대 growth().ivMax)
+      const up = raiseBattlePower(state, p.species);
       const iv = battleIvOf(state, p.species);
-      const name = p.shiny ? shinyName(p.species) : species(p.species).name;
+      const name = pokemonName(p);
       return {
-        types, amount, battleIv: iv, battleIvUp: iv > before,
-        message: iv > before ? `${name}에게 먹였어! 속성 +${amount}, 배틀 힘도 쑥!` : `${name}에게 먹였어! 속성 +${amount}, 배틀 힘은 이미 최고야!`,
+        types, amount, battleIv: iv, battleIvUp: up,
+        message: up ? `${name}에게 먹였어! 에너지 +${amount}, 배틀 힘도 쑥!` : `${name}에게 먹였어! 에너지 +${amount}, 배틀 힘은 이미 최고야!`,
       };
     }
 
@@ -948,8 +1099,13 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!evolutionsOf(p.species).includes(action.target)) fail('이 모습으로는 진화할 수 없어요.');
       const req = evolutionRequirement(action.target);
       const missing = req.filter(r => state.stats[r.type] < r.amount);
-      if (missing.length) fail('스탯이 부족해요: ' + missing.map(r => `${typeLabel(r.type)} ${r.amount - state.stats[r.type]}`).join(', '));
+      if (missing.length) fail('에너지가 부족해요: ' + missing.map(r => `${typeLabel(r.type)} ${r.amount - state.stats[r.type]}`).join(', '));
+      // 💗 친해짐 (2026-10-03부터의 진화): 진화하면 그 계열 💗는 0부터
+      const needHearts = evolveHearts(species(action.target).stage);
+      const hearts = heartsOf(state, p.species);
+      if (hearts < needHearts) fail(`💗가 ${needHearts - hearts}개 더 필요해! 모험 팀으로 문제를 더 풀어 보자`);
       for (const r of req) state.stats[r.type] -= r.amount;
+      (state.hearts ??= {})[String(rootOf(p.species))] = 0;
       const before = species(p.species).name;
       p.species = action.target;
       // 이로치는 진화해도 이로치: 진화한 모습도 이로치 도감에 (기본 도감에는 넣지 않음)
@@ -962,11 +1118,18 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       needStarter();
       if (!TYPE_KEYS.includes(action.statType)) fail('속성을 골라 주세요.');
       const { cost, amount } = EXP_EXCHANGE;
+      const day = expExchangeToday(state, ctx.today);
+      if (day.left < 1) fail('오늘은 다 바꿨어. 내일 또 바꿀 수 있어!');
       const left = expAvailable(state);
       if (left < cost) fail(`경험치가 ${cost - left} 더 필요해요.`);
       state.expSpent = (state.expSpent ?? 0) + cost;
       state.stats[action.statType] += amount;
-      return { type: action.statType, amount, message: `경험치 ${cost}로 ${typeLabel(action.statType)} 스탯 +${amount}!` };
+      state.expExchange = { date: ctx.today, count: day.used + 1 };
+      const todayLeft = day.left - 1;
+      return {
+        type: action.statType, amount, todayLeft,
+        message: `경험치 ${cost} → ${typeLabel(action.statType)} 에너지 +${amount}! ` + (todayLeft > 0 ? `오늘 바꾸기 ${todayLeft}번 남았어.` : '오늘은 다 바꿨어. 내일 또 바꿀 수 있어!'),
+      };
     }
 
     case 'expGift': {
@@ -1560,8 +1723,14 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     /** 포켓로그 이벤트에서 받은 이로치 (도감에 색깔별로 따로 표시) */
     shiny: state.shiny ?? [],
     megas: state.megas ?? [],
-    /** 배틀 힘: 진화 계열 첫 모습 번호 → 먹인 횟수 (개체값 = battleIvFromFeeds) */
+    /** 배틀 힘: 진화 계열 첫 모습 번호 → ★ 올린 횟수 (개체값 = battleIvFromFeeds) */
     battlePower: state.battlePower ?? {},
+    /** 모험 팀 친구 (파트너 말고, 가진 포켓몬 uid) */
+    team: teamOf(state).friends.map(p => p.uid),
+    /** 💗 친해짐: 진화 계열 첫 모습 번호 → 모은 💗 */
+    hearts: state.hearts ?? {},
+    /** 경험치 → 에너지 바꾸기: 오늘 바꾼 횟수, 하루 한도, 남은 횟수 */
+    expExchange: expExchangeToday(state, today),
     /** 기간 한정 이벤트 (시작 전에는 비어 있음) */
     limited: limitedView(state, today, minutes),
   };

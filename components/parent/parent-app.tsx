@@ -7,9 +7,9 @@ import { getJson, goTo, postJson, TypeBadge } from '@/components/game/common';
 import { StatBoard } from '@/components/game/home';
 import { ASSETS } from '@/lib/assets';
 import type { RestRule } from '@/lib/battle-rest';
-import { BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECT_INFO, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
+import { setGrowthRules, type GrowthKey, type GrowthRules, BATTLE_PASSWORD_MIN, CHOICE_COUNT, GIFT_LETTER_MAX, GIFT_REASON_MAX, GIFT_REASONS, GIFT_SENDERS, GIFT_SIZES, GIFT_CHOICE_INFO, GRADES, REPLY_STICKERS, SUBJECT_AREAS, SUBJECT_INFO, SUBJECTS, SUBJECT_TYPES, TYPE_INFO, type GiftLimits, type GiftSender, type GiftSize, type Subject, type TypeKey } from '@/lib/game-config';
 import type { ActivityDay, AreaReport, PublicGift, Question } from '@/lib/game-engine';
-import { defaultStrong, defaultThird, evolutionRequirement, isStrong, setStrongOverrides, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
+import { defaultStrong, defaultThird, evolutionRequirement, heartGoalOf, isStrong, setStrongOverrides, shinyName, species, SPECIES, subjectOf, thirdTypeChoices, thirdTypeOf, TOTAL_SPECIES, type StrongOverrides } from '@/lib/pokedex';
 import { PokemonImage } from '@/components/game/common';
 import { aiRequestText } from '@/lib/question-import';
 import { UPDATES, versionLabel } from '@/lib/version';
@@ -19,6 +19,8 @@ type BankSummary = { id: number; title: string; grade: string; keywords: Keyword
 type Overview = {
   /** 속성 변경(센 포켓몬·도전 속성)에서 바꾼 것 */
   strong: StrongOverrides;
+  /** 성장 규칙 (모험 팀 💗·진화·★·바꾸기 한도): 지금 값, 처음 값, 바꾼 것, 고칠 칸 */
+  growth: { now: GrowthRules; defaults: GrowthRules; overrides: Partial<GrowthRules>; fields: { key: GrowthKey; label: string; min: number; max: number }[] };
   /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
@@ -63,7 +65,12 @@ type Overview = {
     clock: string; clockFixed: boolean;
     summary: { partner: number | null; exp: number; owned: number; dailyDone: boolean; battleLeft: number; battleWave: number; battleMinutes: number };
   };
-  child: { exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null };
+  child: {
+    exp: number; expSpent: number; stats: Record<TypeKey, number>; owned: number; dex: number; partner: number | null;
+    /** 모험 팀 (파트너 먼저): 번호·이로치·모은 💗·★ 배틀 힘(개체값) */
+    team: { species: number; shiny: boolean; hearts: number; iv: number }[];
+    expExchange: { used: number; perDay: number; left: number };
+  };
   active: null | {
     id: number; title: string;
     subjects: { subject: Subject; total: number; solved: number; review: number }[];
@@ -91,6 +98,7 @@ export default function ParentApp() {
     getJson<Overview | { loggedIn: false; passwordConfigured: boolean }>('/api/parent').then(data => {
       if (!data.loggedIn) { setPasswordConfigured(data.passwordConfigured); setAuth('login'); return; }
       setStrongOverrides(data.strong);
+      setGrowthRules(data.growth.overrides);
       setOverview(data);
       setAuth('ok');
     }, e => setError((e as Error).message)), []);
@@ -218,7 +226,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <h2>{child.partner ? `${species(child.partner).name}와 모험 중` : '아직 파트너를 고르지 않았어요'}</h2>
           </div>
           <div className="parent-summary">
-            <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (스탯으로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
+            <span>모은 경험치 {child.exp.toLocaleString()}{child.expSpent ? ` (에너지로 바꾼 ${child.expSpent.toLocaleString()})` : ''}</span>
             <span>보유 포켓몬 {child.owned}마리</span>
             <span>도감 {child.dex} / {TOTAL_SPECIES}</span>
           </div>
@@ -242,6 +250,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       </div>
 
       {tab === 'report' && <>
+        <TeamReport child={child} ivMax={overview.growth.now.ivMax} />
         <section className="panel parent-section"><StatBoard stats={child.stats} /></section>
         <ActivitySection days={overview.activity} />
         {active ? (
@@ -331,7 +340,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <button className="secondary" disabled={busy || battleLimit === overview.battle.limit} onClick={async () => { if (await call({ action: 'setBattleLimit', minutes: battleLimit })) await reload(); }}>저장</button>
           </div>
           <h2>배틀 중 진화 허용</h2>
-          <p className="muted">꺼 두면(기본) 포켓로그 판 안에서 레벨이 올라도 진화하지 않고, 진화의 돌 같은 진화 아이템도 보상에 나오지 않아요. 포켓몬 진화는 퀴즈 스탯으로만 해요. 지금은 <b>{overview.battle.evolution ? '허용' : '막음'}</b>.</p>
+          <p className="muted">꺼 두면(기본) 포켓로그 판 안에서 레벨이 올라도 진화하지 않고, 진화의 돌 같은 진화 아이템도 보상에 나오지 않아요. 포켓몬 진화는 퀴즈 에너지로만 해요. 지금은 <b>{overview.battle.evolution ? '허용' : '막음'}</b>.</p>
           <div className="inline-form">
             <button className="secondary" disabled={busy}
               onClick={async () => { if (await call({ action: 'setBattleEvolution', allowed: !overview.battle.evolution })) await reload(); }}>
@@ -366,6 +375,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <button className="secondary" disabled={busy || grade === overview.grade} onClick={async () => { if (await call({ action: 'setGrade', grade })) await reload(); }}>저장</button>
           </div>
         </section>
+        <GrowthEditor overview={overview} busy={busy} call={call} reload={reload} />
         <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
@@ -378,7 +388,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         {/* 이 칸은 항상 개발 탭의 맨 아래에 둡니다. 새 칸을 추가할 때는 이 위에 넣어 주세요. */}
         <section className="panel parent-section danger-zone">
           <h2>아이 게임 처음부터 다시 하기</h2>
-          <p>파트너, 포켓몬, 스탯, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
+          <p>파트너, 포켓몬, 에너지, 경험치, 푼 문제 기록이 모두 지워지고 <b>파트너 고르기부터</b> 다시 시작해요. 문제은행은 그대로 남아요.</p>
           <div><button className="secondary danger" disabled={busy} onClick={async () => {
             if (!window.confirm('정말 아이 게임 기록을 모두 지우고 처음부터 시작할까요? 되돌릴 수 없어요.')) return;
             if (await call({ action: 'resetChild' })) await reload();
@@ -766,8 +776,22 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simGiveShinies' })) await reload(); }}>가진 포켓몬마다 이로치도 +1</button>
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simPotions' })) await reload(); }}>시험용 열매·상처약 +1씩</button>
           <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simBattlePower' })) await reload(); }}>배틀 힘 +5 (모든 포켓몬)</button>
-          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simBattlePower', to: 'max' })) await reload(); }}>배틀 힘 최고로</button>
+          <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simBattlePower', to: 'max' })) await reload(); }}>배틀 힘 최고로 (모든 포켓몬)</button>
           <button className={shinyAll ? 'primary small' : 'secondary small'} disabled={busy} onClick={async () => { if (await call({ action: 'simShinyAll', on: !shinyAll })) await reload(); }}>{shinyAll ? '✨ 이로치 100% 켜짐 (누르면 끔)' : '볼 열 때 이로치 100%로 켜기'}</button>
+        </div>
+        <div className="sim-limited">
+          <b>🎒 모험 팀 · 💗 · ★ 시험</b>
+          <div className="button-row">
+            <button className="secondary small" disabled={busy} onClick={() => { try { localStorage.removeItem('pq-adventure-intro-v1'); } catch { /* 저장이 막혀 있으면 그냥 */ } goTo(childScreen)({ preventDefault() {} }); }}>이 기기에서 업데이트 안내 6장 다시 보기</button>
+            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simEnergy' })) await reload(); }}>에너지 +50 (모든 속성) · 경험치 +300</button>
+            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'near' })) await reload(); }}>모험 팀 💗 가득 차기 1개 전으로</button>
+            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'plus10' })) await reload(); }}>모험 팀 💗 +10</button>
+          </div>
+          <div className="button-row">
+            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simExpExchange', op: 'used' })) await reload(); }}>오늘 경험치 바꾸기 다 쓴 것으로</button>
+            <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simExpExchange', op: 'reset' })) await reload(); }}>오늘 경험치 바꾸기 0번으로</button>
+          </div>
+          <p className="muted">순서 예: ‘업데이트 안내 다시 보기’(6장째에서 친구 2마리 고르기) → 일일미션·탐험 정답에서 ‘💗 +2! 파트너랑 친해지고 있어!’ 확인 → ‘에너지 +50’ + ‘💗 가득 차기 1개 전’ → 문제 하나 맞히면 ‘친해졌어!’ → 도감에서 진화. 다 진화한 포켓몬이 팀에 있으면 💗가 차면서 ★+1. 도감 카드의 ‘⚡ 에너지 10 → ★+1’, 가방에서 열매 먹이기, ‘배틀 힘 최고로’ 뒤 포켓로그 팀 선택 화면의 별·‘배틀 힘 최고!’, 첫 화면의 ‘다 컸어!’ 안내도 확인해 보세요.</p>
         </div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
         {limitedEvents.map(l => (
@@ -1056,7 +1080,7 @@ function QuestionForm({ initial, busy, onSave }: { initial: Question; busy: bool
 type StrongFilter = 'third' | 'strong' | 'changed' | 'all';
 const STRONG_PAGE = 60;
 /**
- * 속성 변경: 센 포켓몬(진화에 스탯이 더 드는 포켓몬)과 도전 속성(3과목이 되게 더 모아야 하는 속성)을 바꿉니다.
+ * 속성 변경: 센 포켓몬(진화에 에너지가 더 드는 포켓몬)과 도전 속성(3과목이 되게 더 모아야 하는 속성)을 바꿉니다.
  * 격자(그림·이름·속성)에서 포켓몬을 누르면 팝업이 뜨고, 거기서 고칩니다.
  * 기본값은 lib/strong-pokemon.ts, 바꾼 것은 기록 저장소 settings.strong_overrides 에 남습니다.
  */
@@ -1081,7 +1105,7 @@ function StrongEditor({ overview, busy, call, reload }: { overview: Overview; bu
     <section className="panel parent-section strong-editor">
       <h2>속성 변경 (센 포켓몬 💥)</h2>
       <p className="muted">
-        센 포켓몬은 진화에 스탯이 약 1.2배 들어요. 도전 속성이 있으면 원래 두 속성과 다른 과목의 스탯까지 모아야 해요(3과목).
+        센 포켓몬은 진화에 에너지가 약 1.2배 들어요. 도전 속성이 있으면 원래 두 속성과 다른 과목의 에너지까지 모아야 해요(3과목).
         지금 센 포켓몬 {strongCount}종, 그중 도전 속성 {thirdCount}종. 포켓몬 그림을 누르면 설정 창이 떠요.
       </p>
       <div className="strong-tools">
@@ -1121,7 +1145,7 @@ function StrongEditor({ overview, busy, call, reload }: { overview: Overview; bu
   );
 }
 
-/** 포켓몬 하나의 속성 설정 팝업: 센 포켓몬 여부, 도전 속성, 필요한 스탯 */
+/** 포켓몬 하나의 속성 설정 팝업: 센 포켓몬 여부, 도전 속성, 필요한 에너지 */
 function StrongDialog({ id, changed, busy, act, onClose }: { id: number | null; changed: Set<number>; busy: boolean; act: (body: Record<string, unknown>) => Promise<void>; onClose: () => void }) {
   const s = id ? species(id) : null;
   const strong = id ? isStrong(id) : false;
@@ -1167,8 +1191,8 @@ function ExportSection({ busy, call }: { busy: boolean; call: Call }) {
   return (
     <section className="panel parent-section">
       <h2><Download size={20} style={{ verticalAlign: '-3px' }} /> 아이 기록 내보내기</h2>
-      <p>문제 풀이(고른 답·시도), 하루 활동 시간, 포켓로그 판 기록, 포켓몬·진화·스탯, 볼·상자·선물·이벤트를 한 파일(JSON)로 내려받아요. 시험용(시뮬레이션) 기록은 들어가지 않아요.</p>
-      <p className="muted">고른 답·진화·스탯 변화·볼 결과처럼 예전에는 저장하지 않던 항목은 <b>이 업데이트를 올린 날부터</b> 쌓여요. 그 전 내용은 이전에 남아 있던 것(하루 퀴즈 시간 35일, 포켓로그 하루 기록 14일, 보유 포켓몬 얻은 날, 선물 기록)만 들어가요. 파일 맨 앞 &lsquo;기록시작&rsquo;에 항목별 시작일이 적혀 있어요.</p>
+      <p>문제 풀이(고른 답·시도), 하루 활동 시간, 포켓로그 판 기록, 포켓몬·진화·에너지, 볼·상자·선물·이벤트를 한 파일(JSON)로 내려받아요. 시험용(시뮬레이션) 기록은 들어가지 않아요.</p>
+      <p className="muted">고른 답·진화·에너지 변화·볼 결과처럼 예전에는 저장하지 않던 항목은 <b>이 업데이트를 올린 날부터</b> 쌓여요. 그 전 내용은 이전에 남아 있던 것(하루 퀴즈 시간 35일, 포켓로그 하루 기록 14일, 보유 포켓몬 얻은 날, 선물 기록)만 들어가요. 파일 맨 앞 &lsquo;기록시작&rsquo;에 항목별 시작일이 적혀 있어요.</p>
       <div><button className="primary small" disabled={busy} onClick={async () => {
         const data = await call<{ file?: unknown; message?: string }>({ action: 'exportChild' });
         if (!data?.file) return;
@@ -1208,6 +1232,58 @@ function ShinyChanceEditor({ overview, busy, call, reload }: { overview: Overvie
           setDraft({}); await reload();
         }}>저장</button>
         {changed && <button className="secondary" disabled={busy} onClick={async () => { if (await call({ action: 'resetShinyChance' })) { setDraft({}); await reload(); } }}>처음 값으로</button>}
+      </div>
+    </section>
+  );
+}
+
+/** 학습 현황: 모험 팀 3마리와 💗·★, 오늘 경험치 바꾸기 */
+function TeamReport({ child, ivMax }: { child: Overview['child']; ivMax: number }) {
+  return (
+    <section className="panel parent-section">
+      <h2>🎒 모험 팀</h2>
+      {child.team.length === 0 ? <p className="muted">아직 파트너가 없어요.</p> : (
+        <div className="parent-team">
+          {child.team.map((m, i) => (
+            <div key={i} className="parent-team-member">
+              <PokemonImage id={m.species} shiny={m.shiny} />
+              <b>{i === 0 ? '파트너' : '친구'} · {m.shiny ? `✨ ${shinyName(m.species)}` : species(m.species).name}</b>
+              <span>💗 {m.hearts} / {heartGoalOf(m.species)}</span>
+              <span>★ 배틀 힘 {m.iv} / {ivMax}{m.iv >= ivMax ? ' (최고)' : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="muted">친구를 안 골랐으면 파트너만 💗를 받아요. 오늘 경험치→에너지 바꾸기 {child.expExchange.used} / {child.expExchange.perDay}번.</p>
+    </section>
+  );
+}
+
+/** 전체 설정: 성장 규칙 숫자 (처음 값은 lib/game-config.ts GROWTH_DEFAULT, 바꾼 것만 저장) */
+function GrowthEditor({ overview, busy, call, reload }: { overview: Overview; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const { now, defaults, fields } = overview.growth;
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const value = (k: GrowthKey) => draft[k] ?? String(now[k]);
+  const dirty = fields.filter(f => draft[f.key] !== undefined && Number(draft[f.key]) !== now[f.key]);
+  const changed = fields.some(f => now[f.key] !== defaults[f.key]);
+  return (
+    <section className="panel parent-section shiny-chance">
+      <h2>🎒 성장 규칙 (모험 팀 · 💗 · ★)</h2>
+      <p className="muted">퀴즈 정답으로 모험 팀이 받는 💗, 진화에 필요한 💗와 3단계 에너지, ★ 배틀 힘(포켓로그 개체값) 올리기, 경험치 바꾸기 하루 한도예요. 바꾸면 아이 화면에는 다시 열 때(1분 안) 적용돼요. 이미 진화한 포켓몬과 쌓인 에너지·💗는 그대로예요.</p>
+      <div className="chance-grid">
+        {fields.map(f => (
+          <label key={f.key}>
+            <span>{f.label} <small className="muted">(기본 {defaults[f.key]})</small></span>
+            <span className="chance-input"><input type="number" min={f.min} max={f.max} step={1} inputMode="numeric" value={value(f.key)} onChange={e => setDraft(d => ({ ...d, [f.key]: e.target.value }))} /></span>
+          </label>
+        ))}
+      </div>
+      <div className="button-row">
+        <button className="primary small" disabled={busy || dirty.length === 0} onClick={async () => {
+          for (const f of dirty) { if (!(await call({ action: 'setGrowthRule', key: f.key, value: Number(draft[f.key]) }))) return; }
+          setDraft({}); await reload();
+        }}>저장</button>
+        {changed && <button className="secondary" disabled={busy} onClick={async () => { if (await call({ action: 'resetGrowthRules' })) { setDraft({}); await reload(); } }}>처음 값으로</button>}
       </div>
     </section>
   );
