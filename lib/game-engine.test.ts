@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
@@ -1320,4 +1320,103 @@ test('기존 기록: 새 항목이 없는 예전 기록도 그대로 읽힌다 (
   assert.deepEqual(view.team, []);
   assert.deepEqual(view.hearts, {});
   assert.equal(view.expExchange.left, 5);
+});
+
+// ---------- 나들이 체험보고서 (2026-10-04) ----------
+import { OUTING_DEFAULT, firstSentence, stepProblem } from './outing.ts';
+function outingStart() {
+  const bank = makeBank();
+  const state = started(bank);
+  const o = createOuting(state, { from: 'mom', place: '동물원', date: '2026-10-05', letter: '재밌었지?', sights: ['호랑이', '기린'], photoIds: [], candidates: [243, 244, 245] }, 't');
+  return { bank, state, o };
+}
+const oc = (bank: ActiveBank, today: string) => ({ ...ctx(bank), today, now: today + 'T01:00:00Z', outingRules: OUTING_DEFAULT });
+
+test('나들이: 도전할래! → 7일 기한, 단계마다 저장(조건 확인), 제출 → 부모님 확인 대기', () => {
+  const { bank, state, o } = outingStart();
+  assert.equal(o.status, 'open');
+  assert.throws(() => applyAction(state, { type: 'outingSave', id: o.id, step: 1, data: {} }, oc(bank, '2026-10-05')), /지금은 고칠 수 없어/);
+  applyAction(state, { type: 'outingAccept', id: o.id }, oc(bank, '2026-10-05'));
+  assert.equal(o.deadline, '2026-10-11'); // 1일째 10/5 → 7일째 10/11 밤 12시
+  assert.equal(outingView(state, '2026-10-05')[0].daysLeft, 7);
+  assert.throws(() => applyAction(state, { type: 'outingSave', id: o.id, step: 2, data: {} }, oc(bank, '2026-10-05')), /앞 단계부터/);
+  assert.throws(() => applyAction(state, { type: 'outingSave', id: o.id, step: 1, data: { when: '어제', who: '엄마와', where: '동물원' } }, oc(bank, '2026-10-05')), /날씨/);
+  const r1 = { when: '어제', who: '엄마와', where: '동물원', weather: '☀️ 맑음' };
+  assert.equal(firstSentence(r1), '어제 엄마와 동물원에 갔다.');
+  assert.equal(firstSentence({ ...r1, when: '10월 5일 일요일' }), '10월 5일 일요일에 엄마와 동물원에 갔다.');
+  applyAction(state, { type: 'outingSave', id: o.id, step: 1, data: { ...r1, first: '어제 엄마와 동물원에 갔다.' } }, oc(bank, '2026-10-05'));
+  assert.equal(o.stage, 1);
+  assert.throws(() => applyAction(state, { type: 'outingSave', id: o.id, step: 2, data: { did: ['a', 'b', 'c'], order: '짧다' } }, oc(bank, '2026-10-05')), /10글자 넘게/);
+  assert.match(stepProblem(3, { sight: '호랑이', look: '크다', sound: '어흥', doing: '걷기', detail: '호랑이가 컸고 무서웠다' }, OUTING_DEFAULT)!, /두 문장/);
+  simOutingFill(state, o.id, 7, '2026-10-05T01:00:00Z');
+  const r = applyAction(state, { type: 'outingSubmit', id: o.id }, oc(bank, '2026-10-06')) as { message: string };
+  assert.match(r.message, /부모님께 보냈어/);
+  assert.equal(o.status, 'submitted');
+  assert.equal(o.onTime, true);
+  assert.throws(() => applyAction(state, { type: 'outingSave', id: o.id, step: 3, data: {} }, oc(bank, '2026-10-06')), /읽는 중/);
+  assert.equal(outingReport(state, '2026-10-06').waiting, 1);
+});
+
+test('나들이: 고치기 요청은 1번, 고치는 동안·확인 대기는 기한에서 빠짐, 승인하면 마스터볼 3개(고르기 전엔 숨김)', () => {
+  const { bank, state, o } = outingStart();
+  applyAction(state, { type: 'outingAccept', id: o.id }, oc(bank, '2026-10-05'));
+  simOutingFill(state, o.id, 7, '2026-10-05T01:00:00Z');
+  applyAction(state, { type: 'outingSubmit', id: o.id }, oc(bank, '2026-10-11'));
+  reviewOuting(state, o.id, { by: 'dad', approve: false, text: '기린 이야기도 써 줄래?' }, 't', seeded());
+  assert.equal(o.status, 'revise');
+  assert.equal(outingView(state, '2026-10-20')[0].revision?.by, 'dad');
+  // 기한(10/11)이 지나도 고치는 중이면 늦은 것으로 치지 않음
+  assert.equal(syncOutings(state, '2026-10-20', seeded()), false);
+  applyAction(state, { type: 'outingSave', id: o.id, step: 4, data: { learned: '기린은 혀가 까만색이라는 것을 알게 되었다.' } }, oc(bank, '2026-10-20'));
+  applyAction(state, { type: 'outingSubmit', id: o.id }, oc(bank, '2026-10-20'));
+  assert.equal(o.status, 'submitted');
+  assert.throws(() => reviewOuting(state, o.id, { by: 'mom', approve: false, text: '한 번 더' }, 't', seeded()), /1번까지/);
+  reviewOuting(state, o.id, { by: 'mom', approve: true, text: '정말 잘 썼어!', sticker: 'love' }, 't', seeded(), 0);
+  assert.equal(o.status, 'approved');
+  assert.throws(() => reviewOuting(state, o.id, { by: 'dad', approve: true, text: '나도' }, 't', seeded()), /이미 다른 보호자/);
+  const v = outingView(state, '2026-10-20')[0];
+  assert.equal(v.reward?.balls, null); // 고르기 전에는 내용이 안 보임
+  assert.equal(v.approval?.by, 'mom');
+  const pick = applyAction(state, { type: 'outingPick', id: o.id, pick: 1 }, oc(bank, '2026-10-20')) as { caught: number; balls: { species: number }[] };
+  assert.ok([243, 244, 245].includes(pick.caught));
+  assert.deepEqual(pick.balls.map(b => b.species).sort(), [243, 244, 245]);
+  assert.ok(state.owned.some(p => p.species === pick.caught));
+  assert.equal(o.status, 'rewarded');
+  assert.equal(outingView(state, '2026-10-20')[0].reward?.balls?.length, 3); // 고른 뒤엔 나머지도 보여 줌
+  assert.throws(() => applyAction(state, { type: 'outingPick', id: o.id, pick: 0 }, oc(bank, '2026-10-20')), /열 수 없어/);
+});
+
+test('나들이: 기한 넘김 — 3단계 이상이면 랜덤상자 1개, 미만이면 보상 없이 끝. 그 뒤에도 마저 쓰면 완성본(보상 없음)', () => {
+  const a = outingStart();
+  applyAction(a.state, { type: 'outingAccept', id: a.o.id }, oc(a.bank, '2026-10-05'));
+  simOutingFill(a.state, a.o.id, 3, '2026-10-05T01:00:00Z');
+  const balls = a.state.balls.length + a.state.potions.length;
+  assert.equal(syncOutings(a.state, '2026-10-11', seeded()), false); // 마지막 날은 아직 기한 안
+  assert.equal(syncOutings(a.state, '2026-10-12', seeded()), true);
+  assert.equal(a.o.status, 'late');
+  assert.ok(a.o.late?.box);
+  assert.equal(a.state.balls.length + a.state.potions.length, balls + 1);
+  simOutingFill(a.state, a.o.id, 7, '2026-10-12T01:00:00Z');
+  applyAction(a.state, { type: 'outingSubmit', id: a.o.id }, oc(a.bank, '2026-10-13'));
+  assert.equal(a.o.status, 'lateDone');
+  assert.equal(a.o.reward, undefined);
+
+  const b = outingStart();
+  applyAction(b.state, { type: 'outingAccept', id: b.o.id }, oc(b.bank, '2026-10-05'));
+  simOutingFill(b.state, b.o.id, 2, '2026-10-05T01:00:00Z');
+  const n = b.state.balls.length + b.state.potions.length;
+  syncOutings(b.state, '2026-10-12', seeded());
+  assert.equal(b.o.status, 'late');
+  assert.equal(b.o.late?.box, null);
+  assert.equal(b.state.balls.length + b.state.potions.length, n);
+});
+
+test('나들이: 규칙은 도전할래! 때 고정되고, 예전 기록(나들이 없음)도 그대로 읽힌다', () => {
+  const { bank, state, o } = outingStart();
+  applyAction(state, { type: 'outingAccept', id: o.id }, { ...oc(bank, '2026-10-05'), outingRules: { ...OUTING_DEFAULT, revisionMax: 0, days: 3 } });
+  assert.equal(o.deadline, '2026-10-07');
+  assert.equal(o.rules?.revisionMax, 0);
+  const old = started(bank); delete old.outings;
+  assert.deepEqual(childView(old, bank, '2026-10-05').outings, []);
+  assert.throws(() => createOuting(state, { from: 'mom', place: '바다', date: '2026-10-05', letter: '', sights: ['게'], photoIds: [], candidates: [243, 243, 245] }, 't'), /서로 다르게/);
 });

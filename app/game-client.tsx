@@ -17,6 +17,7 @@ import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type Rewar
 import { ASSETS } from '@/lib/assets';
 import { setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
+import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter } from '@/components/game/outing';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { versionLabel } from '@/lib/version';
@@ -60,6 +61,12 @@ export default function Game() {
   const [introDone, setIntroDone] = useState(false);
   const introSeen = introStored || introDone;
   const [introOpen, setIntroOpen] = useState(false);
+  /** 나들이 체험보고서: 쓰는 창, 마스터볼 창, 보고서 모음, 이번 실행에 이미 보여 준 안내 */
+  const [writingId, setWritingId] = useState<string | null>(null);
+  const [rewardId, setRewardId] = useState<string | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [nudgeDone, setNudgeDone] = useState(false);
+  const autoReward = useRef(new Set<string>());
 
   const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setGrowthRules(data.growth); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
@@ -82,11 +89,12 @@ export default function Game() {
 
   // 안 받은 선물이 있으면 팝업으로 알려 줍니다 (한 번에 하나, 다른 창이 열려 있지 않을 때)
   useEffect(() => {
-    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId || introOpen || introSeen === false) return;
+    if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId || introOpen || introSeen === false || writingId || rewardId) return;
+    if (view.outings.some(o => (o.status === 'open' && !o.seenDevices.includes(deviceId())) || (o.status === 'late' && !o.late?.seen))) return;
     if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.phase === 'active' && e.gold && !e.gold.introSeen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
-  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen]);
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen, writingId, rewardId]);
 
   // 레인보우를 다 모았는데 아직 포켓몬을 안 골랐으면 (앱을 열 때 한 번) 고르기 창을 띄움
   useEffect(() => {
@@ -97,6 +105,13 @@ export default function Game() {
     const g = view.limited.find(e => e.gold?.canChange && !autoChangeShown.current.has(e.id + ':gold'));
     if (g) { autoChangeShown.current.add(g.id + ':gold'); setChange({ id: g.id, gold: true }); }
   }, [view, quiz, reward, ballQueue.length, giftPopup, opening, replying, changeId]);
+
+  // 부모님이 승인한 보고서가 있으면 (이번 실행에 한 번) 칭찬·마스터볼 창을 띄움
+  useEffect(() => {
+    if (!view?.partner || quiz || reward || ballQueue.length || giftPopup || opening || replying || changeId || writingId || rewardId) return;
+    const o = view.outings.find(o => o.status === 'approved' && !autoReward.current.has(o.id));
+    if (o) { autoReward.current.add(o.id); setRewardId(o.id); }
+  }, [view, quiz, reward, ballQueue.length, giftPopup, opening, replying, changeId, writingId, rewardId]);
 
   // 보호자 화면의 "하루 퀴즈 시간": 화면이 보이는 동안만 세어 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
   useEffect(() => {
@@ -195,7 +210,8 @@ export default function Game() {
   const ev = view.events;
   const eventAlerts = (!ev.allClear.hidden && !ev.allClear.accepted ? 1 : 0) + (!ev.streak.hidden && !ev.streak.accepted ? 1 : 0)
     + (ev.streak.completedAt && !ev.streak.hidden ? 1 : 0)
-    + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange || e.gold?.canChange).length;
+    + view.limited.filter(e => (e.phase === 'active' && !e.accepted) || e.canChange || e.gold?.canChange).length
+    + view.outings.filter(o => o.status === 'open' || o.status === 'revise' || o.status === 'approved').length;
   // 레인보우 팝업: 처음 열면 3장 소개 → 끝났을 때 결과 → 마지막 날 저녁 안내 (다른 창이 없을 때 하나씩)
   const calm = !quiz && !reward && !ballQueue.length && !giftPopup && !opening && !replying && !changeId;
   // 소개 팝업은 기기마다 한 번: 다른 기기(보호자 폰)에서 봤어도 이 기기에서 처음이면 뜸. 도전을 시작했으면 안 뜸
@@ -208,6 +224,13 @@ export default function Game() {
   // 모험 팀 업데이트 안내: 이 기기에서 처음이면 (다른 안내 팝업이 다 끝난 뒤) 한 번
   const showIntro = introOpen || (calm && introSeen === false && !introEv && !endEv && !goldEv && !remindEv && !(view.events.allClear.completedAt && !view.events.allClear.celebrated));
   const closeIntro = () => { markAdventureIntroSeen(); setIntroDone(true); setIntroOpen(false); };
+  // 나들이 체험보고서 안내 (다른 팝업이 없을 때 하나씩): 소개(기기마다 한 번) → 기한 넘김 안내 → 칭찬·마스터볼(이번 실행에 한 번) → 이어 쓸까?(이번 실행에 한 번)
+  const outingCalm = calm && !showIntro && !introEv && !endEv && !goldEv && !remindEv && !writingId && !rewardId && !galleryOpen;
+  const outingIntro = outingCalm ? view.outings.find(o => o.status === 'open' && !o.seenDevices.includes(deviceId())) ?? null : null;
+  const outingLate = outingCalm && !outingIntro ? view.outings.find(o => o.status === 'late' && !o.late?.seen) ?? null : null;
+  const outingNudge = outingCalm && !outingIntro && !outingLate && !nudgeDone && !nudgeSeenThisRun() ? view.outings.find(o => o.status === 'writing' || o.status === 'revise') ?? null : null;
+  const writingOuting = writingId ? view.outings.find(o => o.id === writingId) ?? null : null;
+  const rewardOuting = rewardId ? view.outings.find(o => o.id === rewardId) ?? null : null;
   const saveTeam = async (friends: string[]) => { const r = await act<{ message: string }>({ type: 'team', friends }); if (r) setNotice(r.message); return !!r; };
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
   async function reviveFromHistory(runId: string) {
@@ -282,6 +305,14 @@ export default function Game() {
             <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate}
               reviveTickets={view.events.reviveTickets} busy={busy} onRevive={runId => void reviveFromHistory(runId)} /></TabsContent>
             <TabsContent value="event">
+              {view.outings.filter(o => o.status !== 'rewarded' && o.status !== 'lateDone').map(o => (
+                <OutingCard key={o.id} o={o} view={view} busy={busy}
+                  onAccept={async () => { const r = await act<{ message: string }>({ type: 'outingAccept', id: o.id }); if (r) { setNotice(r.message); setWritingId(o.id); } }}
+                  onWrite={() => setWritingId(o.id)} onReward={() => setRewardId(o.id)} onGallery={() => setGalleryOpen(true)} />
+              ))}
+              {view.outings.some(o => o.status === 'rewarded' || o.status === 'lateDone') && (
+                <button className="secondary outing-gallery-btn" onClick={() => setGalleryOpen(true)}>📒 체험보고서 모음 ({view.outings.filter(o => o.status !== 'open').length})</button>
+              )}
               <EventTab events={view.events} limited={view.limited} busy={busy}
                 onLimitedAccept={async id => { const r = await act<{ message: string }>({ type: 'limitedAccept', id }); if (r) setNotice(r.message); }}
                 onLimitedChange={id => setChange({ id, gold: false })}
@@ -359,6 +390,19 @@ export default function Game() {
 
       {view.partner && <AdventureIntro key={showIntro ? 'intro-on' : 'intro-off'} view={view} open={showIntro} busy={busy} onClose={closeIntro} onSave={saveTeam} />}
 
+      <OutingIntro key={outingIntro ? 'oi-' + outingIntro.id : 'oi-none'} o={outingIntro} view={view} busy={busy}
+        onAccept={async () => { if (!outingIntro) return; const id = outingIntro.id; const r = await act<{ message: string }>({ type: 'outingAccept', id }); if (r) { setNotice(r.message); setTab2('event'); setWritingId(id); } }}
+        onLater={() => { if (outingIntro) void act({ type: 'outingSeen', id: outingIntro.id, device: deviceId() }); }} />
+      <OutingNudge o={outingLate ?? outingNudge} view={view} kind={outingLate ? 'late' : 'continue'}
+        onGo={() => { markNudgeSeen(); setNudgeDone(true); if (outingNudge) { setTab2('event'); setWritingId(outingNudge.id); } }}
+        onClose={() => { if (outingLate) void act({ type: 'outingLateSeen', id: outingLate.id }); else { markNudgeSeen(); setNudgeDone(true); } }} />
+      {writingOuting && <OutingWriter key={writingOuting.id} o={writingOuting} view={view} busy={busy} onClose={() => setWritingId(null)}
+        onSave={async (step, data) => { const r = await act<{ message: string }>({ type: 'outingSave', id: writingOuting.id, step, data: data as Record<string, unknown> }); if (r) setNotice(r.message); return !!r; }}
+        onSubmit={async () => { const r = await act<{ message: string }>({ type: 'outingSubmit', id: writingOuting.id }); if (r) setNotice(r.message); return !!r; }} />}
+      {rewardOuting && <OutingReward key={rewardOuting.id} o={rewardOuting} view={view} busy={busy} onClose={() => setRewardId(null)}
+        onPick={pick => act<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string }>({ type: 'outingPick', id: rewardOuting.id, pick })} />}
+      <OutingGallery open={galleryOpen} outings={view.outings} onClose={() => setGalleryOpen(false)} onWrite={id => { setGalleryOpen(false); setWritingId(id); }} />
+
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (
         <GiftOpenDialog
@@ -402,6 +446,10 @@ export default function Game() {
     </main>
   );
 }
+
+/** 나들이 "보고서 이어 쓸까?"는 앱을 열 때(이 탭 실행 동안) 한 번만 */
+function nudgeSeenThisRun(): boolean { try { return sessionStorage.getItem('pq-outing-nudge') === '1'; } catch { return false; } }
+function markNudgeSeen() { try { sessionStorage.setItem('pq-outing-nudge', '1'); } catch { /* 저장이 막혀 있으면 이번 화면 동안만 */ } }
 
 /** 다른 탭에서 기기 저장이 바뀌면 다시 읽음 */
 const subscribeStorage = (cb: () => void) => { window.addEventListener('storage', cb); return () => window.removeEventListener('storage', cb); };

@@ -6,6 +6,7 @@ import { initialState, type ActiveBank, type GameState, type Question } from '..
 import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
 import type { LogEntry } from '../activity-log.ts';
+import { cleanOutingRules, OUTING_DEFAULT, type OutingRules } from '../outing.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
@@ -372,3 +373,32 @@ export async function readActivity(player: PlayerId = REAL_PLAYER): Promise<{ si
     rows: (res.results ?? []).map(r => ({ seq: r.seq, at: r.at, date: r.date, kind: r.kind, data: JSON.parse(r.data) as Record<string, unknown> })),
   };
 }
+
+// ---------- 나들이 체험보고서: 사진·그림 (migrations/0005_outing_media.sql) ----------
+/** 그림 하나 최대 크기 (base64 글자 수, 약 450KB) */
+export const MEDIA_MAX_CHARS = 600_000;
+/** data:image/...;base64,... 를 받아 저장하고 번호를 돌려줍니다 */
+export async function saveMedia(player: PlayerId, kind: 'photo' | 'drawing', dataUrl: string): Promise<string> {
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!m) throw new Error('그림 형식을 읽지 못했어요.');
+  if (m[2].length > MEDIA_MAX_CHARS) throw new Error('그림이 너무 커요. 다시 시도해 주세요.');
+  const id = crypto.randomUUID();
+  await db().prepare('INSERT INTO media (id, player, kind, mime, data, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, player, kind, m[1], m[2], new Date().toISOString()).run();
+  return id;
+}
+export async function getMedia(id: string): Promise<{ mime: string; data: string } | null> {
+  return (await db().prepare('SELECT mime, data FROM media WHERE id = ?').bind(id).first<{ mime: string; data: string }>()) ?? null;
+}
+/** 보호자 설정: 나들이 규칙 (settings.outing_rules, 바꾼 것만) */
+export async function getOutingRules(): Promise<Partial<OutingRules>> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'outing_rules'").first<{ value: string }>();
+  try { return cleanOutingRules(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveOutingRules(rules: Partial<OutingRules> | null) {
+  const clean = cleanOutingRules(rules);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'outing_rules'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('outing_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 지금 쓰는 나들이 규칙 (처음 값 + 바꾼 것) */
+export const outingRulesNow = async (): Promise<OutingRules> => ({ ...OUTING_DEFAULT, ...(await getOutingRules()) });

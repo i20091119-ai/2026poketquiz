@@ -34,6 +34,7 @@ export const LOG_KINDS = {
   revive: '부활권 사용',
   day: '하루 활동 요약',
   limited: '기간 한정 이벤트(레인보우) 진행',
+  outing: '나들이 체험보고서(단계·제출·확인·보상)',
   team: '모험 팀 바꾸기',
   star: '★ 배틀 힘 오름(먹이기·에너지 바꾸기·💗)',
 } as const;
@@ -49,6 +50,7 @@ export type Before = {
   ballKind?: string;
   team: string;
   power: Record<string, number>;
+  outings: string;
 };
 
 /** 행동을 적용하기 직전에 부릅니다 */
@@ -65,8 +67,12 @@ export function beforeAction(state: GameState, action: Action, today: string): B
     ballKind: action.type === 'openBall' ? state.balls.find(b => b.id === action.ballId)?.kind : undefined,
     team: JSON.stringify([state.partner, ...(state.team ?? [])]),
     power: { ...(state.battlePower ?? {}) },
+    outings: outingSummary(state),
   };
 }
+
+const outingKey = (o: NonNullable<GameState['outings']>[number]) => `${o.id}|${o.status}|${o.stage}|${o.revisions.length}|${o.reward?.picked ?? ''}|${JSON.stringify(o.report).length}`;
+const outingSummary = (state: GameState) => JSON.stringify((state.outings ?? []).map(outingKey));
 
 const statLabel = (t: string) => TYPE_INFO[t as TypeKey]?.label ?? t;
 
@@ -76,6 +82,11 @@ export function eventsChange(before: Before, state: GameState): LogEntry[] {
   const out: LogEntry[] = now === before.events ? [] : [{ kind: 'event', data: { events: state.events ?? null } }];
   // 기간 한정 이벤트: 조각·연속 수·이로치 변신·정산이 바뀌면 그때의 모습을 남김
   if (JSON.stringify(state.limited ?? null) !== before.limited) out.push({ kind: 'limited', data: { limited: state.limited ?? null } });
+  // 나들이 체험보고서: 단계·상태·확인·보상이 바뀌면 그 보고서의 모습을 남김 (글 내용 포함)
+  if ((before.outings ?? '') !== outingSummary(state)) {
+    const was = JSON.parse(before.outings || '[]') as string[];
+    for (const o of state.outings ?? []) if (!was.includes(outingKey(o))) out.push({ kind: 'outing', data: { id: o.id, place: o.place, status: o.status, stage: o.stage, report: o.report, revisions: o.revisions, approval: o.approval ?? null, reward: o.reward ?? null, late: o.late ?? null } });
+  }
   return out;
 }
 

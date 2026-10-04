@@ -1,9 +1,9 @@
 import { afterAction, beforeAction, eventsChange, type LogEntry } from '@/lib/activity-log';
 import { daySummary } from '@/lib/activity-log';
-import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, type Action } from '@/lib/game-engine';
+import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, syncOutings, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, appendActivity, json, latestDefeat, loadGrowthRules, loadStrongOverrides, mutateState, shinyChanceFor } from '@/lib/server/store';
+import { activeBank, appendActivity, json, latestDefeat, loadGrowthRules, loadStrongOverrides, mutateState, outingRulesNow, shinyChanceFor } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
@@ -32,8 +32,9 @@ export async function GET(request: Request) {
       const a = ensureDaily(state, bank, today, secureRandom);
       const b = syncEvents(state, bank, today); // 도전 이벤트 진도 (연속 기록 끊김·올클리어 완료)
       const c = syncLimited(state, today); // 기간 한정 이벤트가 끝났으면 정산 (조각 3개 이상이면 사탕)
+      const d = syncOutings(state, today, secureRandom); // 나들이 보고서 기한이 지났으면 정리 (시도 인정이면 랜덤상자)
       log = safeLog(() => eventsChange(before, state));
-      return { result: null, changed: a || b || c };
+      return { result: null, changed: a || b || c || d };
     }, player.id);
     await appendActivity(player.id, today, log);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin) return json({ error: '페이지에서 다시 시도해 주세요.' }, 403);
     const body = await request.text();
-    if (body.length > 5000) return json({ error: '요청 내용이 너무 길어요.' }, 400);
+    if (body.length > 12000) return json({ error: '요청 내용이 너무 길어요.' }, 400);
     let action: Action;
     try { action = JSON.parse(body); } catch { return json({ error: '요청을 읽지 못했어요.' }, 400); }
     if (!action || typeof action !== 'object') return json({ error: '요청을 확인해 주세요.' }, 400);
@@ -58,13 +59,15 @@ export async function POST(request: Request) {
     const [bank, player, strong, growth] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides(), loadGrowthRules()]);
     const { today } = player;
     const shinyChance = await shinyChanceFor(player.id); // 볼을 열 때 이로치 확률 (보호자 개발자 메뉴, 시뮬레이션이면 100%)
+    const outingRules = action.type === 'outingAccept' ? await outingRulesNow() : undefined; // 나들이 보고서 규칙 (도전할래! 때 고정)
     let log: LogEntry[] = [];
     const { state, result } = await mutateState(state => {
-      const ctx = { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance };
+      const ctx = { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance, outingRules };
       const before = beforeAction(state, action, today);
       const result = applyAction(state, action, ctx);
       syncEvents(state, bank, today); // 이 행동으로 이벤트가 진행·완료됐을 수 있음
       syncLimited(state, today);
+      syncOutings(state, today, secureRandom);
       // 활동 기록을 만들다 오류가 나도 게임 동작은 그대로 진행
       log = safeLog(() => action.type === 'quizTime' ? [daySummary(state, today)] : [...afterAction(before, state, action, result, ctx), ...(action.type === 'answer' ? [daySummary(state, today)] : [])]);
       return { result, changed: true };

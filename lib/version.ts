@@ -1,6 +1,6 @@
 // 화면에 보여 주는 버전 이름. 새 기능을 올릴 때 여기 숫자와 아래 "바뀐 것(UPDATES)"만 고치면 됩니다.
 // 날짜는 인터넷에 올릴 때(만들 때) 자동으로 들어갑니다 (vite.config.ts 의 __BUILD_DATE__).
-export const APP_VERSION = '1.24';
+export const APP_VERSION = '1.25';
 
 /** 하루치 바뀐 것. date는 'YYYY-MM-DD', version은 그날 마지막으로 올린 버전 이름 */
 export interface UpdateDay {
@@ -20,8 +20,11 @@ export interface UpdateDay {
 export const UPDATES: UpdateDay[] = [
   {
     date: '2026-10-04',
-    version: '1.24',
+    version: '1.25',
     items: [
+      '🧺 나들이 체험보고서: 보호자가 열고, 아이가 7단계로 보고서를 써요',
+      '부모님 확인(칭찬·고치기 1번) → 마스터볼 3개 중 하나 = 전설 포켓몬',
+      '기한 7일, 넘기면 3단계 이상은 랜덤상자. 체험보고서 모음·인쇄용 보기',
       '정답·오답 화면에서 📖 풀이를 💗 소식보다 위에 크게',
       '고침: 좁은 휴대폰에서 화면·팝업 오른쪽이 잘리던 것(위 탭이 화면보다 넓었음)',
     ],
