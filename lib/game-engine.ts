@@ -9,6 +9,7 @@ import {
 } from './game-config.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, heartGoalOf, isFinalForm, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
 import { RARE_POKEMON } from './rare-pokemon.ts';
+import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
 export type Question = {
@@ -113,6 +114,8 @@ export type GameState = {
   hearts?: Record<string, number>;
   /** 경험치 → 에너지 바꾸기: 날짜와 그날 바꾼 횟수 (하루 growth().expExchangePerDay 번까지) */
   expExchange?: { date: string; count: number };
+  /** 나들이 체험보고서 이벤트 (lib/outing.ts). 오래된 것부터, 끝난 것도 보고서 모음으로 남음 */
+  outings?: Outing[];
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -822,10 +825,20 @@ export type Action =
   | { type: 'limitedSeen'; id: string; device?: string }
   | { type: 'limitedAccept'; id: string }
   | { type: 'limitedShinyChange'; id: string; uid: string; stage?: 'rainbow' | 'gold' }
-  | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' | 'gold' };
+  | { type: 'limitedNotice'; id: string; notice: 'remind' | 'end' | 'gold' }
+  | { type: 'outingSeen'; id: string; device?: string }
+  | { type: 'outingAccept'; id: string }
+  | { type: 'outingSave'; id: string; step: number; data: Record<string, unknown> }
+  | { type: 'outingSubmit'; id: string }
+  | { type: 'outingPick'; id: string; pick: number }
+  | { type: 'outingLateSeen'; id: string };
 
 /** shinyChance: 볼을 열 때 이로치가 나올 확률(%)을 덮어씀 (보호자 개발자 메뉴·시뮬레이션). 없으면 기본값 */
-export type Context = { bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>> };
+export type Context = {
+  bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>>;
+  /** 나들이 체험보고서 규칙 (보호자가 바꾼 것 포함). 도전할래!를 누를 때 그 이벤트에 고정 */
+  outingRules?: OutingRules;
+};
 
 function needPick(value: unknown) {
   if (!Number.isInteger(value) || (value as number) < 0 || (value as number) > 2) fail('3개 중 하나를 골라 주세요.');
@@ -834,6 +847,12 @@ function needPick(value: unknown) {
 function needBank(bank: ActiveBank | null) {
   if (!bank) fail('아직 이번 주 문제은행이 없어요. 보호자에게 알려 주세요.');
   return bank;
+}
+
+function needOuting(state: GameState, id: string): Outing {
+  const o = (state.outings ?? []).find(o => o.id === id);
+  if (!o) fail('나들이 보고서를 찾을 수 없어요. 새로고침해 주세요.');
+  return o;
 }
 
 export function applyAction(state: GameState, action: Action, ctx: Context) {
@@ -1280,6 +1299,79 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!gold) openGoldStage(def, lp, ctx.today); // 무지개 변신을 끝내면 히든 황금 조각이 열림
       return { uid: p.uid, species: p.species, message: `✨ ${iGa(species(p.species).name)} 반짝반짝 변신했어! 이로치 도감에 들어갔어!` };
     }
+    case 'outingSeen': {
+      const o = needOuting(state, action.id);
+      const device = typeof action.device === 'string' ? action.device.slice(0, 64) : '';
+      if (device && !(o.seenDevices ??= []).includes(device)) o.seenDevices.push(device);
+      return { ok: true };
+    }
+    case 'outingAccept': {
+      needStarter();
+      const o = needOuting(state, action.id);
+      if (o.status !== 'open') fail('이 보고서는 이미 시작했어.');
+      o.rules = { ...(ctx.outingRules ?? OUTING_DEFAULT) };
+      o.status = 'writing';
+      o.acceptedAt = ctx.now;
+      o.acceptedDate = ctx.today;
+      o.deadline = addDays(ctx.today, o.rules.days - 1);
+      return { message: `좋아! ${o.place} 체험보고서를 써 보자. ${o.rules.days}일 안에 내면 마스터볼을 열 수 있어!` };
+    }
+    case 'outingSave': {
+      const o = needOuting(state, action.id);
+      if (!['writing', 'revise', 'late'].includes(o.status)) fail(o.status === 'submitted' ? '부모님이 읽는 중이야. 조금만 기다려 줘!' : '지금은 고칠 수 없어.');
+      const step = Number(action.step);
+      if (!Number.isInteger(step) || step < 1 || step > 7) fail('단계를 다시 골라 줘.');
+      if (step > o.stage + 1) fail('앞 단계부터 차례로 해 보자!');
+      const data = cleanStep(step, action.data ?? {});
+      if (step === 6 && data.picture?.kind === 'photo' && !o.photoIds.includes(data.picture.mediaId)) fail('부모님이 올린 사진 중에서 골라 줘.');
+      const next = { ...o.report, ...data };
+      const problem = stepProblem(step, next, o.rules ?? OUTING_DEFAULT);
+      if (problem) fail(problem);
+      o.report = next;
+      o.stage = Math.max(o.stage, step);
+      if (o.status === 'revise') { const last = o.revisions[o.revisions.length - 1]; if (last) last.fixedAt = ctx.now; }
+      return { stage: o.stage, message: step === 7 ? '다 됐어! 이제 부모님께 보내 볼까?' : `${step}단계 저장! 잘했어!` };
+    }
+    case 'outingSubmit': {
+      const o = needOuting(state, action.id);
+      if (o.stage < 7) fail('7단계를 모두 마쳐야 낼 수 있어.');
+      for (let step = 1; step <= 7; step++) { const p = stepProblem(step, o.report, o.rules ?? OUTING_DEFAULT); if (p) fail(`${step}단계: ${p}`); }
+      if (o.status === 'writing' || o.status === 'revise') {
+        o.submittedAt ??= ctx.now;
+        o.onTime ??= true;
+        o.status = 'submitted';
+        o.completedAt ??= ctx.today;
+        return { message: '보고서를 부모님께 보냈어! 부모님이 읽고 있어.' };
+      }
+      if (o.status === 'late') {
+        o.status = 'lateDone';
+        o.completedAt = ctx.today;
+        return { message: '보고서를 끝까지 썼어! 보고서 모음에 완성본으로 들어갔어.' };
+      }
+      fail('지금은 낼 수 없어.');
+    }
+    case 'outingPick': {
+      const o = needOuting(state, action.id);
+      if (o.status !== 'approved' || !o.reward) fail('아직 마스터볼을 열 수 없어.');
+      const pick = needPick(action.pick);
+      const ball = o.reward.balls[pick];
+      const added = addPokemon(state, ball.species, ctx.now, ball.shiny);
+      o.reward.picked = pick;
+      o.reward.pickedAt = ctx.now;
+      o.reward.duplicate = added.duplicate;
+      o.status = 'rewarded';
+      const name = ball.shiny ? shinyName(ball.species) : species(ball.species).name;
+      return {
+        balls: o.reward.balls, picked: pick, caught: ball.species, shiny: ball.shiny, duplicate: added.duplicate,
+        message: added.duplicate ? `${eulReul(name)} 또 만났어! 우정 보너스를 받았어.` : `${ball.shiny ? '✨ 이로치다! ' : ''}전설의 포켓몬 ${eulReul(name)} 만났어!`,
+      };
+    }
+    case 'outingLateSeen': {
+      const o = needOuting(state, action.id);
+      if (o.late) o.late.seen = true;
+      return { ok: true };
+    }
+
     case 'limitedNotice': {
       const lp = state.limited?.[String(action.id)];
       if (lp && action.notice === 'remind') lp.remindSeen = true;
@@ -1733,6 +1825,125 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     expExchange: expExchangeToday(state, today),
     /** 기간 한정 이벤트 (시작 전에는 비어 있음) */
     limited: limitedView(state, today, minutes),
+    /** 나들이 체험보고서 이벤트 */
+    outings: outingView(state, today),
   };
 }
 export type ChildView = ReturnType<typeof childView>;
+
+// ---------- 나들이 체험보고서 (lib/outing.ts) ----------
+export type OutingInput = { from: GiftSender; place: string; date: string; letter: string; sights: string[]; photoIds: string[]; candidates: number[] };
+/** 보호자가 나들이 이벤트를 엶 (아이 화면에는 소개 팝업 → 도전할래!) */
+export function createOuting(state: GameState, input: OutingInput, now: string): Outing {
+  const place = String(input.place ?? '').trim().slice(0, 30);
+  if (!place) fail('나들이 장소를 적어 주세요.');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.date))) fail('다녀온 날짜를 골라 주세요.');
+  if (!(input.from in GIFT_SENDERS)) fail('보내는 사람을 골라 주세요.');
+  const sights = [...new Set((input.sights ?? []).map(s => String(s).trim().slice(0, 20)).filter(Boolean))].slice(0, 12);
+  if (!sights.length) fail('본 것(동물 등)을 하나 이상 적어 주세요.');
+  const candidates = (input.candidates ?? []).map(Number);
+  if (candidates.length !== 3 || new Set(candidates).size !== 3 || candidates.some(id => !Number.isInteger(id) || !isSpecies(id))) fail('전설 후보 3마리를 서로 다르게 골라 주세요.');
+  const photoIds = (input.photoIds ?? []).filter(id => typeof id === 'string' && /^[a-z0-9-]{8,64}$/.test(id)).slice(0, 5);
+  const o: Outing = {
+    id: nextId(state, 'o'), createdAt: now, from: input.from, place, date: input.date,
+    letter: String(input.letter ?? '').trim().slice(0, GIFT_LETTER_MAX), sights, photoIds, candidates,
+    status: 'open', report: {}, stage: 0, revisions: [],
+  };
+  (state.outings ??= []).push(o);
+  return o;
+}
+/** 아직 도전하지 않은 이벤트만 지울 수 있음 (보호자가 잘못 열었을 때) */
+export function deleteOuting(state: GameState, id: string): void {
+  const o = needOuting(state, id);
+  if (o.status !== 'open') fail('아이가 이미 시작한 보고서는 지울 수 없어요.');
+  state.outings = (state.outings ?? []).filter(x => x.id !== id);
+}
+/**
+ * 부모님 확인: approve(칭찬 + 스티커 → 마스터볼 3개 준비) 또는 revise(고쳐 볼 곳 1개 → 아이가 고쳐서 다시 냄).
+ * 엄마·아빠 중 먼저 처리한 사람이 기록됨. 고치기 요청은 시작할 때 정한 횟수까지.
+ */
+export function reviewOuting(state: GameState, id: string, review: { by: GiftSender; approve: boolean; text: string; sticker?: string }, now: string, random: Random, shinyChance?: number): Outing {
+  const o = needOuting(state, id);
+  if (o.status !== 'submitted') fail(o.status === 'approved' || o.status === 'rewarded' ? '이미 다른 보호자가 확인했어요.' : '아직 확인할 보고서가 아니에요.');
+  if (!(review.by in GIFT_SENDERS)) fail('누가 쓰는지 골라 주세요.');
+  const text = String(review.text ?? '').trim().slice(0, GIFT_LETTER_MAX);
+  if (!text) fail(review.approve ? '칭찬 한 줄을 적어 주세요.' : '고쳐 볼 곳 1개를 적어 주세요.');
+  if (review.approve) {
+    const sticker = REPLY_STICKERS.some(s => s.key === review.sticker) ? review.sticker! : REPLY_STICKERS[0].key;
+    o.approval = { by: review.by, at: now, praise: text, sticker };
+    const useShiny = (o.rules ?? OUTING_DEFAULT).shiny;
+    const chance = shinyChance ?? SHINY_CHANCE_DEFAULT.master;
+    o.reward = { balls: shuffle(o.candidates, random).map(sp => ({ species: sp, shiny: useShiny && random() * 100 < chance })) };
+    o.status = 'approved';
+  } else {
+    const max = (o.rules ?? OUTING_DEFAULT).revisionMax;
+    if (o.revisions.length >= max) fail(`고치기 요청은 ${max}번까지예요(시작할 때 정한 규칙). 칭찬으로 확인해 주세요.`);
+    o.revisions.push({ by: review.by, at: now, note: text });
+    o.status = 'revise';
+  }
+  return o;
+}
+/** 기한이 지났는데 아직 안 냈으면: 시도 인정 단계 이상이면 랜덤상자 1개, 아니면 보상 없이 끝. 바뀌었으면 true */
+export function syncOutings(state: GameState, today: string, random: Random): boolean {
+  let changed = false;
+  for (const o of state.outings ?? []) {
+    if (o.status !== 'writing' || !o.deadline || today <= o.deadline) continue;
+    const rules = o.rules ?? OUTING_DEFAULT;
+    let box: string | null = null;
+    if (o.stage >= rules.attemptStage) {
+      const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
+      const item: BoxItem = row.item.kind === 'potion' ? rollPotion(row.item.potion) : { kind: 'ball', ball: row.item.ball };
+      grant(state, item);
+      box = boxItemLabel(item);
+    }
+    o.status = 'late';
+    o.late = { date: today, stage: o.stage, box };
+    changed = true;
+  }
+  return changed;
+}
+/** 아이 화면용: 마스터볼 내용은 고르기 전에는 숨김, 기한을 넘기면 전설 후보도 숨김 */
+export function outingView(state: GameState, today: string) {
+  return (state.outings ?? []).map(o => {
+    const revealed = o.status === 'rewarded';
+    return {
+      id: o.id, status: o.status, from: o.from, place: o.place, date: o.date, letter: o.letter, sights: o.sights, photoIds: o.photoIds,
+      seenDevices: o.seenDevices ?? [], acceptedDate: o.acceptedDate ?? null, deadline: o.deadline ?? null,
+      daysLeft: o.deadline ? Math.max(0, Math.floor((Date.parse(o.deadline) - Date.parse(today)) / 86400000) + 1) : null,
+      rules: o.rules ?? null, report: o.report, stage: o.stage, onTime: o.onTime ?? null,
+      revision: o.status === 'revise' ? o.revisions[o.revisions.length - 1] ?? null : null,
+      approval: o.approval ?? null,
+      reward: o.reward ? { picked: o.reward.picked ?? null, balls: revealed ? o.reward.balls : null, duplicate: o.reward.duplicate ?? false } : null,
+      late: o.late ?? null,
+      page: outingPage(o),
+    };
+  });
+}
+export type OutingView = ReturnType<typeof outingView>[number];
+/** 보호자 화면용: 모든 내용 + 확인 대기 수 */
+export function outingReport(state: GameState, today: string) {
+  const list = (state.outings ?? []).map(o => ({
+    ...o, page: outingPage(o), daysLeft: o.deadline ? Math.max(0, Math.floor((Date.parse(o.deadline) - Date.parse(today)) / 86400000) + 1) : null,
+    owned: o.candidates.map(id => state.owned.some(p => p.species === id)),
+    chars: charCount([o.report.first, o.report.order, o.report.detail, o.report.learned, o.report.because].join('')),
+  }));
+  return { list: [...list].reverse(), waiting: list.filter(o => o.status === 'submitted').length };
+}
+/** 시뮬레이션 도우미(시험용 기록에만): n단계까지 예시 글로 채움 (그림은 photoIds 첫 장 또는 빈 그림 번호) */
+export function simOutingFill(state: GameState, id: string, upTo: number, now: string): void {
+  const o = needOuting(state, id);
+  if (o.status === 'open') { o.rules = { ...OUTING_DEFAULT, ...(o.rules ?? {}) }; o.status = 'writing'; o.acceptedAt = now; o.acceptedDate = now.slice(0, 10); o.deadline = addDays(o.acceptedDate, o.rules.days - 1); }
+  const sight = o.sights[0] ?? '호랑이';
+  const sample: Outing['report'] = {
+    when: '지난 주말', who: '엄마, 아빠와', where: o.place, weather: '☀️ 맑음', first: `지난 주말에 엄마, 아빠와 ${o.place}에 갔다.`,
+    did: ['도착하기', `${sight} 보기`, '집에 오기'], order: `먼저, ${o.place}에 도착했다. 그다음, ${eulReul(sight)} 보았다. 마지막으로, 집에 왔다.`,
+    sight, look: '크고 줄무늬가 있었다', sound: '어흥', doing: '바위 위를 걸었다', detail: `줄무늬가 있는 큰 ${iGa(sight)} 어흥 소리를 냈다. 바위 위를 천천히 걸어 다녔다.`,
+    learned: `${eunNeun(sight)} 낮에 잠을 많이 잔다는 것을 알게 되었다.`,
+    feeling: '신기했다', because: `${eulReul(sight)} 이렇게 가까이에서 본 것은 처음이었기 때문이다.`,
+    picture: { kind: o.photoIds[0] ? 'photo' : 'drawing', mediaId: o.photoIds[0] ?? 'sim-drawing-0000' },
+    checks: { missing: true, period: true, read: true },
+  };
+  const keys: Record<number, (keyof Outing['report'])[]> = { 1: ['when', 'who', 'where', 'weather', 'first'], 2: ['did', 'order'], 3: ['sight', 'look', 'sound', 'doing', 'detail'], 4: ['learned'], 5: ['feeling', 'because'], 6: ['picture'], 7: ['checks'] };
+  for (let step = 1; step <= Math.min(7, upTo); step++) for (const k of keys[step]) (o.report as Record<string, unknown>)[k] = sample[k];
+  o.stage = Math.max(o.stage, Math.min(7, upTo));
+}

@@ -13,6 +13,7 @@ import { defaultStrong, defaultThird, evolutionRequirement, heartGoalOf, isStron
 import { PokemonImage } from '@/components/game/common';
 import { aiRequestText } from '@/lib/question-import';
 import { UPDATES, versionLabel } from '@/lib/version';
+import { OutingCreate, OutingReports, OutingRulesEditor, type OutingOverview } from './outing-parent';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
@@ -21,6 +22,8 @@ type Overview = {
   strong: StrongOverrides;
   /** 성장 규칙 (모험 팀 💗·진화·★·바꾸기 한도): 지금 값, 처음 값, 바꾼 것, 고칠 칸 */
   growth: { now: GrowthRules; defaults: GrowthRules; overrides: Partial<GrowthRules>; fields: { key: GrowthKey; label: string; min: number; max: number }[] };
+  /** 나들이 체험보고서 (목록·확인 대기·규칙) */
+  outing: OutingOverview;
   /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
@@ -231,6 +234,12 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <span>도감 {child.dex} / {TOTAL_SPECIES}</span>
           </div>
         </div>
+        {overview.outing.waiting > 0 && (
+          <div className="reply-badge">
+            <b>🧺 체험보고서 확인 대기 {overview.outing.waiting}개</b>
+            <button className="secondary small" onClick={() => go('events')}>읽으러 가기</button>
+          </div>
+        )}
         {newReplies > 0 && (
           <div className="reply-badge">
             <b>💌 새 답장 {newReplies}개</b>
@@ -244,7 +253,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       <div className="parent-tabs main" role="tablist">
         {MAIN_TABS.map(t => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} className={'parent-tab' + (tab === t.key ? ' on' : '')} onClick={() => go(t.key)}>
-            {t.label}{t.key === 'gift' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}
+            {t.label}{t.key === 'gift' && newReplies > 0 && <span className="tab-count">{newReplies}</span>}{t.key === 'events' && overview.outing.waiting > 0 && <span className="tab-count">{overview.outing.waiting}</span>}
           </button>
         ))}
       </div>
@@ -267,6 +276,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
       </>}
 
+      {tab === 'events' && <OutingReports overview={overview.outing} sim={overview.sim.active} busy={busy} call={call} reload={reload} />}
       {tab === 'events' && <EventsSection events={overview.events} sim={overview.sim.active} busy={busy} call={call} reload={reload} />}
 
       {tab === 'battlelog' && <>
@@ -318,6 +328,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       </>}
 
       {tab === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
+      {tab === 'gift' && <OutingCreate overview={overview.outing} busy={busy} call={call} reload={reload} />}
 
       {/* 아래 탭 묶음 (항상 보임, 처음엔 배틀 설정): 아이 화면의 [배틀 | 이벤트 | 선물] 처럼 */}
       <div className="parent-lower">
@@ -376,6 +387,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
           </div>
         </section>
         <GrowthEditor overview={overview} busy={busy} call={call} reload={reload} />
+        <OutingRulesEditor overview={overview.outing} busy={busy} call={call} reload={reload} />
         <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
