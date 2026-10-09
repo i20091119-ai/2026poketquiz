@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getJson, goTo, openParent, PokemonImage, postJson } from '@/components/game/common';
 import { BattleTab, HomePanel, StarterPicker, type BattleGateView } from '@/components/game/home';
-import { AllClearDialog, EventTab } from '@/components/game/events';
+import { AllClearDialog, EventTab, outingFinished, pastEvents, PastEventsDialog } from '@/components/game/events';
 import { RainbowIntro, RainbowNotice, ShinyChangeDialog } from '@/components/game/rainbow';
 import { writeRevivedSession } from '@/lib/battle-save';
 import { GiftOpenDialog, GiftPopup, GiftTab, ReplyDialog, type GiftOpenResult } from '@/components/game/gifts';
@@ -65,6 +65,7 @@ export default function Game() {
   const [writingId, setWritingId] = useState<string | null>(null);
   const [rewardId, setRewardId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [pastOpen, setPastOpen] = useState(false);
   const [nudgeDone, setNudgeDone] = useState(false);
   const autoReward = useRef(new Set<string>());
 
@@ -305,15 +306,13 @@ export default function Game() {
             <TabsContent value="battle"><BattleTab left={view.battle.left} perDay={view.battle.perDay} tickets={view.battle.tickets} gate={gate}
               reviveTickets={view.events.reviveTickets} busy={busy} onRevive={runId => void reviveFromHistory(runId)} /></TabsContent>
             <TabsContent value="event">
-              {view.outings.filter(o => o.status !== 'rewarded' && o.status !== 'lateDone').map(o => (
+              {view.outings.filter(o => !outingFinished(o)).map(o => (
                 <OutingCard key={o.id} o={o} view={view} busy={busy}
                   onAccept={async () => { const r = await act<{ message: string }>({ type: 'outingAccept', id: o.id }); if (r) { setNotice(r.message); setWritingId(o.id); } }}
                   onWrite={() => setWritingId(o.id)} onReward={() => setRewardId(o.id)} onGallery={() => setGalleryOpen(true)} />
               ))}
-              {view.outings.some(o => o.status === 'rewarded' || o.status === 'lateDone') && (
-                <button className="secondary outing-gallery-btn" onClick={() => setGalleryOpen(true)}>📒 체험보고서 모음 ({view.outings.filter(o => o.status !== 'open').length})</button>
-              )}
-              <EventTab events={view.events} limited={view.limited} busy={busy}
+              <EventTab otherActive={view.outings.filter(o => !outingFinished(o)).length}
+                pastCount={pastEvents(view).length} onPast={() => setPastOpen(true)} events={view.events} limited={view.limited} busy={busy}
                 onLimitedAccept={async id => { const r = await act<{ message: string }>({ type: 'limitedAccept', id }); if (r) setNotice(r.message); }}
                 onLimitedChange={id => setChange({ id, gold: false })}
                 onGoldChange={id => setChange({ id, gold: true })}
@@ -401,6 +400,7 @@ export default function Game() {
         onSubmit={async () => { const r = await act<{ message: string }>({ type: 'outingSubmit', id: writingOuting.id }); if (r) setNotice(r.message); return !!r; }} />}
       {rewardOuting && <OutingReward key={rewardOuting.id} o={rewardOuting} view={view} busy={busy} onClose={() => setRewardId(null)}
         onPick={pick => act<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string }>({ type: 'outingPick', id: rewardOuting.id, pick })} />}
+      <PastEventsDialog open={pastOpen} view={view} onClose={() => setPastOpen(false)} onWrite={id => { setPastOpen(false); setWritingId(id); }} />
       <OutingGallery open={galleryOpen} outings={view.outings} onClose={() => setGalleryOpen(false)} onWrite={id => { setGalleryOpen(false); setWritingId(id); }} />
 
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />

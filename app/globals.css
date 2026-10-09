@@ -999,3 +999,10 @@ html, body { overflow-x: clip; max-width: 100%; }
 .sticker-pick { border: 2px solid transparent; border-radius: 10px; background: #fff; padding: 2px; }
 .sticker-pick.on { border-color: #17674e; }
 .sticker-pick img { width: 44px; height: 44px; }
+
+/* ---------- 지난 이벤트 모음 (2026-10-09) ---------- */
+.past-events-btn { width: 100%; }
+.past-events .event-list { display: grid; gap: 12px; text-align: left; }
+.past-card .pill { background: #eef2ee; color: #5c6e64; }
+.past-reward { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.past-reward img { width: 80px; height: 80px; object-fit: contain; }
