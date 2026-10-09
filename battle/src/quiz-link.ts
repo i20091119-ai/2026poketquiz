@@ -698,19 +698,46 @@ let landscapeDismissed = false;
 const isPortrait = () => window.innerHeight > window.innerWidth;
 const isTouchPhone = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
 
-/** 전체 화면으로 바꾼 뒤 가로로 고정. 사용자가 누른 순간에 불러야 휴대폰이 허락합니다. */
-async function goLandscape(): Promise<boolean> {
+/** 버튼을 누른 뒤 잠깐은 "세로"라도 안내를 다시 띄우지 않음 (화면이 돌아가는 중일 수 있어서) */
+let landscapeTriedAt = 0;
+const errName = (err: unknown) => (err instanceof Error ? err.name || err.message : String(err)).slice(0, 40);
+
+/**
+ * 전체 화면으로 바꾼 뒤 가로로 고정. 사용자가 누른 순간에 불러야 휴대폰이 허락합니다.
+ * 전체 화면과 가로 고정을 따로 시도하고, 휴대폰마다 받는 이름이 달라 landscape → landscape-primary 순서로 해 봅니다.
+ * detail: 무엇이 됐고 안 됐는지 (안내 창 아래 작은 글씨로 보여 줘서 부모님이 알려 줄 수 있게)
+ */
+async function goLandscape(): Promise<{ ok: boolean; detail: string }> {
   const orientation = screen.orientation as LockableOrientation | undefined;
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+  let fs = "이미";
+  if (!document.fullscreenElement) {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+        fs = "됨";
+      } else {
+        fs = "없음";
+      }
+    } catch (err) {
+      fs = `안됨(${errName(err)})`;
     }
-    await orientation?.lock?.("landscape");
-    return true;
-  } catch (err) {
-    console.warn("가로 화면으로 바꾸지 못했어요:", err);
-    return false;
   }
+  let lock = "없음";
+  if (orientation?.lock) {
+    for (const kind of ["landscape", "landscape-primary"]) {
+      try {
+        await orientation.lock(kind);
+        lock = `됨(${kind})`;
+        break;
+      } catch (err) {
+        lock = `안됨(${errName(err)})`;
+      }
+    }
+  }
+  const app = window.matchMedia?.("(display-mode: standalone)").matches ? "앱" : "브라우저";
+  const detail = `전체화면 ${fs} · 가로고정 ${lock} · ${app}`;
+  console.log("가로 화면 시도:", detail);
+  return { ok: lock.startsWith("됨"), detail };
 }
 
 function hideLandscapeOverlay(): void {
@@ -748,13 +775,33 @@ function showLandscapeOverlay(): void {
   stay.textContent = "그냥 세로로 할래";
   stay.style.cssText =
     "display:block;width:100%;padding:10px;border:0;background:none;color:#666;font-size:15px;text-decoration:underline;touch-action:manipulation";
+  const info = document.createElement("div");
+  info.style.cssText = "font-size:11px;color:#999;margin-top:8px;word-break:keep-all";
+  const failText = "휴대폰의 '자동 회전'을 켜고 옆으로 눕혀 줘. 그래도 안 돌아가면 엄마 아빠에게 알려 줘!";
   go.addEventListener("click", async e => {
     e.stopPropagation();
-    const ok = await goLandscape();
+    go.disabled = true;
+    go.textContent = "돌리는 중…";
+    const { ok, detail } = await goLandscape();
+    info.textContent = detail;
+    landscapeTriedAt = Date.now();
     if (ok) {
-      hideLandscapeOverlay();
+      // 가로 고정이 됐다고 해도 실제로 돌아갔는지 잠깐 뒤에 확인 (안 돌아갔으면 같은 창을 그대로 다시 띄우지 않고 안내를 바꿈)
+      wrap.style.visibility = "hidden";
+      setTimeout(() => {
+        if (isPortrait()) {
+          wrap.style.visibility = "visible";
+          text.textContent = failText;
+          go.disabled = false;
+          go.textContent = "다시 해 보기";
+        } else {
+          hideLandscapeOverlay();
+        }
+      }, 1500);
     } else {
-      text.textContent = "휴대폰을 옆으로 눕혀 줘. 그래도 안 돌아가면 엄마 아빠에게 알려 줘!";
+      text.textContent = failText;
+      go.disabled = false;
+      go.textContent = "다시 해 보기";
     }
   });
   stay.addEventListener("click", e => {
@@ -762,7 +809,7 @@ function showLandscapeOverlay(): void {
     landscapeDismissed = true;
     hideLandscapeOverlay();
   });
-  box.append(icon, title, text, go, stay);
+  box.append(icon, title, text, go, stay, info);
   wrap.append(box);
   // 게임이 터치를 가로채지 않도록 안내 창 안의 입력은 여기서 멈춤
   for (const type of ["pointerdown", "pointerup", "touchstart", "touchend", "keydown"]) {
@@ -773,6 +820,10 @@ function showLandscapeOverlay(): void {
 
 function checkLandscape(): void {
   if (isPortrait()) {
+    // 방금 버튼을 눌렀으면 결과는 버튼 쪽에서 확인함
+    if (Date.now() - landscapeTriedAt < 2000) {
+      return;
+    }
     showLandscapeOverlay();
   } else {
     hideLandscapeOverlay();
