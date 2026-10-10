@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill, openRetryToday, lockedToday } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
@@ -179,6 +179,42 @@ test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다
   assert.equal(r.reviewed, true);
   assert.equal(state.exp, exp + 10);
   applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day2);
+});
+
+test('보호자 "오늘 다시 풀게 열기": 오늘 틀려 잠긴 문제를 그 과목만 오늘 다시 풀 수 있다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const day1 = ctx(bank);
+  const [q, ...others] = bank.questions.filter(q => q.subject === '국어');
+  const h = bank.questions.find(q => q.subject === '역사')!;
+  for (const o of others) applyAction(state, { type: 'answer', mode: 'explore', questionId: o.id, choice: o.answer }, day1);
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, day1);
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: h.id, choice: wrongOf(bank, h.id) }, day1);
+  assert.equal(lockedToday(state, bank, '국어', day1.today), 1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day1.today, seeded()), null);
+
+  assert.equal(openRetryToday(state, bank, '국어', day1.today), 1);
+  assert.equal(lockedToday(state, bank, '국어', day1.today), 0);
+  assert.equal(lockedToday(state, bank, '역사', day1.today), 1); // 다른 과목은 그대로
+  assert.equal(state.banks[bank.id].wrong[q.id], 1); // 틀린 횟수 기록은 그대로
+  assert.equal(nextExploreQuestion(state, bank, '국어', day1.today, seeded())?.id, q.id);
+  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1) as { reviewed: boolean };
+  assert.equal(r.reviewed, true);
+  applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day1);
+  assert.equal(openRetryToday(state, bank, '국어', day1.today), 0);
+});
+
+test('보호자 "오늘 다시 풀게 열기": 오늘의 미션에서 틀린 문제도 탐험에서 다시 풀 수 있다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const day1 = ctx(bank);
+  ensureDaily(state, bank, day1.today, seeded());
+  const id = state.daily!.questionIds[0];
+  const q = bank.questions.find(x => x.id === id)!;
+  for (let i = 0; i < DAILY_ATTEMPTS; i++) applyAction(state, { type: 'answer', mode: 'daily', questionId: id, choice: wrongOf(bank, id) }, day1);
+  assert.equal(openRetryToday(state, bank, q.subject, day1.today), 1);
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: id, choice: q.answer }, day1);
+  assert.ok(state.banks[bank.id].solved.includes(id));
 });
 
 test('오늘의 미션 문제는 탐험에서 빠진다 (하루에 두 번 풀지 않기)', () => {

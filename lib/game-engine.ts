@@ -116,6 +116,8 @@ export type GameState = {
   expExchange?: { date: string; count: number };
   /** 나들이 체험보고서 이벤트 (lib/outing.ts). 오래된 것부터, 끝난 것도 보고서 모음으로 남음 */
   outings?: Outing[];
+  /** 보호자가 "오늘 다시 풀게 열기"로 연 문제: 그날은 오늘의 미션 문제여도 탐험에서 다시 풀 수 있음 */
+  retryOpen?: { date: string; ids: number[] };
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -530,7 +532,28 @@ function allMastered(state: GameState, bank: ActiveBank) {
 
 /** 오늘의 미션에 들어 있는 문제 (탐험에서는 빼서 하루에 두 번 풀지 않게 합니다) */
 const inTodayDaily = (state: GameState, id: number, today: string) =>
-  state.daily?.date === today && state.daily.questionIds.includes(id);
+  state.daily?.date === today && state.daily.questionIds.includes(id)
+  && !(state.retryOpen?.date === today && state.retryOpen.ids.includes(id));
+
+/**
+ * 보호자 "오늘 다시 풀게 열기": 이 과목에서 오늘 틀려 잠긴 문제를 오늘 탐험에서 다시 풀 수 있게 엽니다.
+ * 틀린 날을 어제로 옮겨 "전에 틀린 문제(복습)"가 되게 할 뿐, 틀린 횟수·영역 기록은 그대로 둡니다. 연 문제 수를 돌려줌.
+ */
+export function openRetryToday(state: GameState, bank: ActiveBank, subject: Subject, today: string): number {
+  const prog = progress(state, bank.id);
+  const ids = subjectQuestions(bank, subject).filter(q => wrongToday(prog, q.id, today)).map(q => q.id);
+  for (const id of ids) prog.review[id] = shiftDate(today, -1);
+  if (ids.length) {
+    const prev = state.retryOpen?.date === today ? state.retryOpen.ids : [];
+    state.retryOpen = { date: today, ids: [...new Set([...prev, ...ids])] };
+  }
+  return ids.length;
+}
+/** 과목별로 오늘 틀려서 잠긴 문제 수 (보호자 화면 "오늘 다시 풀게 열기") */
+export function lockedToday(state: GameState, bank: ActiveBank, subject: Subject, today: string): number {
+  const prog = state.banks[bank.id];
+  return prog ? subjectQuestions(bank, subject).filter(q => wrongToday(prog, q.id, today)).length : 0;
+}
 
 /** 탐험에서 나올 문제: 아직 못 맞힌 문제. 오늘 틀린 문제와 오늘의 미션 문제는 빼 둡니다. */
 function newExplorePool(state: GameState, bank: ActiveBank, subject: Subject, today: string) {

@@ -5,7 +5,7 @@ import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, 
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, simSetStreak, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -101,7 +101,7 @@ async function overview(request: Request) {
       id: bank.id, title: bank.title,
       subjects: SUBJECTS.map(s => {
         const qs = bank.questions.filter(q => q.subject === s);
-        return { subject: s, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length, review: qs.filter(q => progress?.review?.[q.id]).length };
+        return { subject: s, total: qs.length, solved: qs.filter(q => solved.has(q.id)).length, review: qs.filter(q => progress?.review?.[q.id]).length, lockedToday: lockedToday(state, bank, s, today) };
       }),
       hardest: bank.questions.filter(q => wrong[q.id]).sort((a, b) => wrong[b.id] - wrong[a.id]).slice(0, 10)
         .map(q => ({ id: q.id, subject: q.subject, prompt: q.prompt, wrong: wrong[q.id], solved: solved.has(q.id) })),
@@ -506,6 +506,15 @@ export async function POST(request: Request) {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const { result } = await mutateState(state => { const n = simGiveShinies(state, new Date().toISOString()); return { result: n, changed: n > 0 }; }, SIM_PLAYER);
         return json({ message: result ? `시험용 기록의 포켓몬 ${result}마리에게 이로치를 하나씩 넣었어요. 포켓로그 팀 선택 화면에서 기본·이로치가 따로 보이는지 확인해 보세요.` : '이미 모든 포켓몬이 이로치도 갖고 있어요.' });
+      }
+      case 'retryOpen': {
+        // 이 과목에서 오늘 틀려 잠긴 문제를 오늘 다시 풀 수 있게 (시뮬레이션 중이면 시험용 기록에)
+        const subject = String(body.subject ?? '') as Subject;
+        if (!SUBJECTS.includes(subject)) throw new ParentError('과목을 다시 골라 주세요.');
+        const [player, bank] = await Promise.all([playerOf(request), activeBank()]);
+        if (!bank) throw new ParentError('공개 중인 문제은행이 없어요.');
+        const { result } = await mutateState(state => { const n = openRetryToday(state, bank, subject, player.today); return { result: n, changed: n > 0 }; }, player.id);
+        return json({ message: result ? `${subject} ${result}문제를 오늘 다시 풀 수 있게 열었어요. 아이 화면 탐험에서 바로 풀 수 있어요.` : `${subject}에는 오늘 잠긴 문제가 없어요.` });
       }
       case 'limitedResetIntro': {
         // 아이의 진짜 기록에만 (시뮬레이션 중이어도 시험용 기록은 건드리지 않음)

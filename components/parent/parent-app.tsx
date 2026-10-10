@@ -76,7 +76,7 @@ type Overview = {
   };
   active: null | {
     id: number; title: string;
-    subjects: { subject: Subject; total: number; solved: number; review: number }[];
+    subjects: { subject: Subject; total: number; solved: number; review: number; lockedToday: number }[];
     hardest: { id: number; subject: Subject; prompt: string; wrong: number; solved: boolean }[];
     areas: { subject: Subject; areas: AreaReport[] }[];
   };
@@ -268,7 +268,9 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
             <div className="progress-table">
               {active.subjects.map(s => (
                 <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘{s.review ? ` · 틀려서 다시 풀 문제 ${s.review}` : ''}</span>
-                  <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div></div>
+                  <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div>
+                  {s.lockedToday > 0 && <div className="retry-open">오늘 틀려서 내일로 미룬 문제 {s.lockedToday}개
+                    <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'retryOpen', subject: s.subject })) await reload(); }}>🔓 오늘 다시 풀게 열기</button></div>}</div>
               ))}
             </div>
             <AreaBoard report={active.areas} />
