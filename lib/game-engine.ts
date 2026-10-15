@@ -2230,9 +2230,9 @@ export function legendView(state: GameState, ov?: Partial<OfflineRules>) {
       stage: n, open, done: n < stage,
       need: lg?.stages?.[n]?.need ?? (n === stage && lg ? lg.need : stageNeed(rules, n)),
       salt: rules.gemSalt[String(n)] ?? 0,
-      /** 만난 전설(그림 공개)과 남은 후보(실루엣) */
+      /** 만난 전설(그림 공개)과 아직 못 만난 후보 수 (누가 있는지는 아이 화면에 보내지 않음: 기대감) */
       got: got.map(g => ({ species: g.species, shiny: g.shiny })),
-      left: open ? left : [],
+      left: open ? left.length : 0,
       /** 아직 열리지 않은 단계는 후보 수만 */
       count: open ? got.length + left.length : stageCandidates(rules, n).length,
     };

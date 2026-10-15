@@ -7,8 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { GIFT_SENDERS } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
 import { halfText, MARK_SCORE, MARK_SYMBOL, plusDays, weekDates, weekStartOf, type DayMark } from '@/lib/offline';
-import { species } from '@/lib/pokedex';
-import { PokemonImage } from './common';
 import { Gem, gemLeftText } from './legend';
 
 
@@ -215,11 +213,9 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
       <p className="intro-title">🗺️ 전설 지도</p>
       <p className="intro-text">전설은 갈수록 더 귀해.<br />다음 단계는 조각이 더 많이 필요해.</p>
       {s1 && <Gem stage={1} salt={s1.salt} need={s1.need} filled={0} size={90} />}
-      <p className="intro-text small">1단계 전설 친구들</p>
+      <p className="intro-text small">어떤 전설이 숨어 있을까?</p>
       <div className="legend-candidates center">
-        {[...(s1?.got ?? []).map(g => g.species), ...(s1?.left ?? [])].map(id => (
-          <span key={id} className={'legend-cand ' + ((s1?.got ?? []).some(g => g.species === id) ? 'got' : 'silhouette')} title={species(id).name}><PokemonImage id={id} /></span>
-        ))}
+        {Array.from({ length: (s1?.got.length ?? 0) + (s1?.left ?? 0) }, (_, i) => <span key={i} className="legend-cand unknown">?</span>)}
       </div>
     </>,
   ];

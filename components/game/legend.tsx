@@ -105,7 +105,7 @@ export function LegendMap({ open, view, onClose, onPick }: { open: boolean; view
                 <PokemonImage id={g.species} shiny={g.shiny} />
               </span>
             ))}
-            {cur.left.map(id => <span key={id} className="legend-cand silhouette"><PokemonImage id={id} /></span>)}
+            {Array.from({ length: cur.left }, (_, i) => <span key={'q' + i} className="legend-cand unknown">?</span>)}
           </div>
         </div>
         {lg.pending ? <button className="primary glow big-button" onClick={onPick}>✨ 마스터볼 열기!</button>
