@@ -37,6 +37,8 @@ export const LOG_KINDS = {
   outing: '나들이 체험보고서(단계·제출·확인·보상)',
   team: '모험 팀 바꾸기',
   star: '★ 배틀 힘 오름(먹이기·에너지 바꾸기·💗)',
+  offline: '트레이너 훈련 기록(부모님이 적은 ●■▲·응원)',
+  legend: '전설 조각·전설 지도(조각 얻음·단계·마스터볼)',
 } as const;
 
 export type Before = {
@@ -51,6 +53,7 @@ export type Before = {
   team: string;
   power: Record<string, number>;
   outings: string;
+  legend?: string;
 };
 
 /** 행동을 적용하기 직전에 부릅니다 */
@@ -68,11 +71,14 @@ export function beforeAction(state: GameState, action: Action, today: string): B
     team: JSON.stringify([state.partner, ...(state.team ?? [])]),
     power: { ...(state.battlePower ?? {}) },
     outings: outingSummary(state),
+    legend: legendSummary(state),
   };
 }
 
 const outingKey = (o: NonNullable<GameState['outings']>[number]) => `${o.id}|${o.status}|${o.stage}|${o.revisions.length}|${o.reward?.picked ?? ''}|${JSON.stringify(o.report).length}`;
 const outingSummary = (state: GameState) => JSON.stringify((state.outings ?? []).map(outingKey));
+
+const legendSummary = (state: GameState) => JSON.stringify(state.legend ? [state.legend.stage, state.legend.pieces, state.legend.log.length, state.legend.got.length, !!state.legend.pending] : null);
 
 const statLabel = (t: string) => TYPE_INFO[t as TypeKey]?.label ?? t;
 
@@ -86,6 +92,11 @@ export function eventsChange(before: Before, state: GameState): LogEntry[] {
   if ((before.outings ?? '') !== outingSummary(state)) {
     const was = JSON.parse(before.outings || '[]') as string[];
     for (const o of state.outings ?? []) if (!was.includes(outingKey(o))) out.push({ kind: 'outing', data: { id: o.id, place: o.place, status: o.status, stage: o.stage, report: o.report, revisions: o.revisions, approval: o.approval ?? null, reward: o.reward ?? null, late: o.late ?? null } });
+  }
+  // 전설 조각: 조각을 얻거나 단계·마스터볼이 바뀌면 그때의 모습 (주간 정산은 아이 화면을 열 때 일어남)
+  if (before.legend !== undefined && before.legend !== legendSummary(state) && state.legend) {
+    const lg = state.legend;
+    out.push({ kind: 'legend', data: { stage: lg.stage, need: lg.need, pieces: lg.pieces, lastPiece: lg.log[lg.log.length - 1] ?? null, got: lg.got, pending: !!lg.pending } });
   }
   return out;
 }
@@ -184,7 +195,7 @@ export function afterAction(before: Before, state: GameState, action: Action, re
 
   // 상자·선물 등 "여러 개 중 하나 고르기"
   const sources: Record<string, string> = {
-    dailyBox: '일일미션 랜덤상자', exploreReward: '탐험 과목 선물', masterReward: '탐험 마스터 보상', expGift: '경험치 선물', eventBox: '10일 연속 상자',
+    dailyBox: '일일미션 랜덤상자', offlineBox: '트레이너 훈련 하루 상자', exploreReward: '탐험 과목 선물', masterReward: '탐험 마스터 보상', expGift: '경험치 선물', eventBox: '10일 연속 상자',
   };
   if (action.type in sources) {
     let items: BoxItem[] | null = null, picked: number | null = null;

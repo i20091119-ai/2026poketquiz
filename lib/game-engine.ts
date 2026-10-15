@@ -9,6 +9,7 @@ import {
 } from './game-config.ts';
 import { CATCH_POOLS, evolutionRequirement, evolutionsOf, heartGoalOf, isFinalForm, isSpecies, rootOf, shinyName, species, typeLabel } from './pokedex.ts';
 import { RARE_POKEMON } from './rare-pokemon.ts';
+import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMessage, stageCandidates, stageNeed, weekDates, weekScore, weekStartOf, type DayBoxKind, type DayMark, type OfflineRules } from './offline.ts';
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
@@ -116,6 +117,10 @@ export type GameState = {
   expExchange?: { date: string; count: number };
   /** 나들이 체험보고서 이벤트 (lib/outing.ts). 오래된 것부터, 끝난 것도 보고서 모음으로 남음 */
   outings?: Outing[];
+  /** 집 공부 기록 (부모님이 적는 ●■▲, 하루 선물 상자, 주간 정산). lib/offline.ts */
+  offline?: OfflineState;
+  /** 전설 조각·전설 단계 (주간 집 공부·이벤트로만 모음, 배틀에서는 절대 없음) */
+  legend?: LegendState;
   /** 보호자가 "오늘 다시 풀게 열기"로 연 문제: 그날은 오늘의 미션 문제여도 탐험에서 다시 풀 수 있음 */
   retryOpen?: { date: string; ids: number[] };
 };
@@ -413,6 +418,45 @@ function grant(state: GameState, item: BoxItem): string | null {
 // ---------- 일일미션 ----------
 /** 'YYYY-MM-DD' → 1970-01-01부터 며칠째 */
 const dayNumber = (date: string) => Math.floor(Date.parse(date + 'T00:00:00Z') / 86400000);
+
+/** 집 공부 하루 선물 상자 (3개 중 count개를 고름) */
+export type OfflineBox = { id: string; date: string; mark: DayMark; kind: Exclude<DayBoxKind, 'off'>; count: number; items: BoxItem[]; picks: number[]; at: string };
+export type OfflineWeek = {
+  /** 이 주의 조각 기준 (그 주에 처음 기록할 때 고정) */
+  goal: number;
+  /** 정산 (주가 끝난 뒤 처음 앱을 열 때): 합계, 조각을 줬는지, 그때 보석 상태(주간 기록 팝업 연출용) */
+  settled?: { at: string; score: number; piece: boolean; stage: number; need: number; before: number; lateAt?: string };
+  /** 부모님 응원 한 줄 (그 주의 주간 기록 팝업에 보임) */
+  cheer?: { by: GiftSender; text: string; at: string };
+};
+export type OfflineState = {
+  /** 날짜 → 부모님이 적은 표시 */
+  marks: Record<string, DayMark>;
+  /** 날짜 → 하루 선물을 정한 때의 표시 (한 번 정하면 그대로, ▲였던 날을 나중에 ●·■로 고치면 그때 선물) */
+  given: Record<string, DayMark>;
+  boxes: OfflineBox[];
+  /** 주의 월요일 → 주간 기록 */
+  weeks: Record<string, OfflineWeek>;
+};
+export type LegendBall = { species: number; shiny: boolean };
+export type LegendState = {
+  /** 지금 단계 (1부터) */
+  stage: number;
+  /** 이 단계 한 마리에 필요한 조각 수 (단계가 열릴 때 고정) */
+  need: number;
+  /** 지금 보석에 모은 조각 */
+  pieces: number;
+  /** 보석을 완성해 고를 마스터볼 (고르기 전엔 화면에 숨김) */
+  pending?: { stage: number; balls: LegendBall[]; at: string };
+  /** 전설 지도에서 만난 전설 */
+  got: { stage: number; species: number; shiny: boolean; at: string; duplicate?: boolean }[];
+  /** 단계별로 열린 날·필요 조각 수 */
+  stages: Record<string, { need: number; openedAt: string }>;
+  /** 조각을 얻은 기록 */
+  log: { at: string; date: string; source: 'week' | 'outing' | 'event' | 'sim'; n: number; ref?: string }[];
+  /** 단계가 올라간 뒤 아이가 안내를 봤는지 */
+  stageSeen?: number;
+};
 
 /**
  * 영역별 성적은 문제를 풀 때마다 쌓이므로, 영역 기능이 생기기 전에 푼 문제는 영역표에 빠져 있었습니다.
@@ -854,13 +898,18 @@ export type Action =
   | { type: 'outingSave'; id: string; step: number; data: Record<string, unknown> }
   | { type: 'outingSubmit'; id: string }
   | { type: 'outingPick'; id: string; pick: number }
-  | { type: 'outingLateSeen'; id: string };
+  | { type: 'outingLateSeen'; id: string }
+  | { type: 'offlineBox'; id: string; pick: number }
+  | { type: 'legendPick'; pick: number }
+  | { type: 'legendStageSeen' };
 
 /** shinyChance: 볼을 열 때 이로치가 나올 확률(%)을 덮어씀 (보호자 개발자 메뉴·시뮬레이션). 없으면 기본값 */
 export type Context = {
   bank: ActiveBank | null; today: string; now: string; random: Random; shinyChance?: Partial<Record<ShinyBallKind, number>>;
   /** 나들이 체험보고서 규칙 (보호자가 바꾼 것 포함). 도전할래!를 누를 때 그 이벤트에 고정 */
   outingRules?: OutingRules;
+  /** 집 공부·전설 규칙 (보호자가 바꾼 것 포함) */
+  offlineRules?: OfflineRules;
 };
 
 function needPick(value: unknown) {
@@ -1337,7 +1386,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       o.acceptedAt = ctx.now;
       o.acceptedDate = ctx.today;
       o.deadline = addDays(ctx.today, o.rules.days - 1);
-      return { message: `좋아! ${o.place} 체험보고서를 써 보자. ${o.rules.days}일 안에 내면 마스터볼을 열 수 있어!` };
+      return { message: `좋아! ${o.place} 체험보고서를 써 보자. ${o.rules.days}일 안에 내면 ${o.pieces ? `전설 조각 ${o.pieces}개를 받을 수 있어!` : '마스터볼을 열 수 있어!'}` };
     }
     case 'outingSave': {
       const o = needOuting(state, action.id);
@@ -1375,7 +1424,16 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'outingPick': {
       const o = needOuting(state, action.id);
-      if (o.status !== 'approved' || !o.reward) fail('아직 마스터볼을 열 수 없어.');
+      if (o.status !== 'approved' || !o.reward) fail(o.pieces ? '아직 조각을 받을 수 없어.' : '아직 마스터볼을 열 수 없어.');
+      if (o.pieces) {
+        // 조각 보상: 전설 지도의 보석에 조각을 넣음 (보석이 완성되면 마스터볼 고르기가 이어짐)
+        const before = legendSnapshot(state, ctx);
+        addLegendPieces(state, o.pieces, 'outing', ctx, o.id);
+        o.reward.pieces = o.pieces;
+        o.reward.pickedAt = ctx.now;
+        o.status = 'rewarded';
+        return { pieces: o.pieces, before, legend: legendView(state, ctx.offlineRules), message: `💎 전설 조각 ${o.pieces}개를 받았어!` };
+      }
       const pick = needPick(action.pick);
       const ball = o.reward.balls[pick];
       const added = addPokemon(state, ball.species, ctx.now, ball.shiny);
@@ -1392,6 +1450,47 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'outingLateSeen': {
       const o = needOuting(state, action.id);
       if (o.late) o.late.seen = true;
+      return { ok: true };
+    }
+
+    case 'offlineBox': {
+      // 집 공부 하루 선물 상자: 3개 중 count개 고르기
+      const box = (state.offline?.boxes ?? []).find(b => b.id === action.id);
+      if (!box) fail('상자를 다시 불러와 줘.');
+      const choice = needPick(action.pick);
+      if (box.picks.length >= box.count) fail('이 상자는 이미 열었어.');
+      if (box.picks.includes(choice)) fail('이미 연 상자야. 다른 상자를 골라 줘.');
+      const ballId = grant(state, box.items[choice]);
+      box.picks.push(choice);
+      const left = box.count - box.picks.length;
+      return {
+        id: box.id, items: box.items, picks: box.picks, done: left === 0, ballIds: ballId ? [ballId] : [],
+        message: left ? '상자를 열었어! 하나 더 고를 수 있어.' : '상자를 열었어!',
+      };
+    }
+    case 'legendPick': {
+      const lg = state.legend;
+      if (!lg?.pending) fail('아직 마스터볼을 열 수 없어. 조각을 더 모아 보자!');
+      const balls = lg.pending.balls;
+      if (!Number.isInteger(action.pick) || action.pick < 0 || action.pick >= balls.length) fail('마스터볼을 하나 골라 줘.');
+      const ball = balls[action.pick];
+      const added = addPokemon(state, ball.species, ctx.now, ball.shiny);
+      const stage = lg.pending.stage;
+      lg.got.push({ stage, species: ball.species, shiny: ball.shiny, at: ctx.now, duplicate: added.duplicate || undefined });
+      lg.pending = undefined;
+      const stageBefore = lg.stage;
+      settleLegend(state, ctx);
+      const name = ball.shiny ? shinyName(ball.species) : species(ball.species).name;
+      return {
+        // 고르지 않은 볼의 내용은 아이 화면에 보내지 않음 (2026-10-15 부모님 요청: 다음 기대감)
+        balls: [ball], picked: 0, others: balls.length - 1, caught: ball.species, shiny: ball.shiny, duplicate: added.duplicate,
+        stageUp: lg.stage > stageBefore ? { stage: lg.stage, need: lg.need } : null,
+        legend: legendView(state, ctx.offlineRules),
+        message: added.duplicate ? `${eulReul(name)} 또 만났어! 우정 보너스를 받았어.` : `${ball.shiny ? '✨ 이로치다! ' : ''}전설의 포켓몬 ${eulReul(name)} 만났어!`,
+      };
+    }
+    case 'legendStageSeen': {
+      if (state.legend) state.legend.stageSeen = state.legend.stage;
       return { ok: true };
     }
 
@@ -1768,7 +1867,7 @@ export const battleLogList = (state: GameState) =>
   Object.entries(state.battleLog ?? {}).sort(([a], [b]) => (a < b ? 1 : -1)).map(([date, day]) => ({ date, ...day }));
 
 // ---------- 아이 화면에 보낼 정보 ----------
-export function childView(state: GameState, bank: ActiveBank | null, today: string, minutes = 0) {
+export function childView(state: GameState, bank: ActiveBank | null, today: string, minutes = 0, offlineRules?: Partial<OfflineRules>) {
   const prog = bank ? progress(state, bank.id) : null;
   const byId = new Map(bank?.questions.map(q => [q.id, q]) ?? []);
   const daily = state.daily && bank && state.daily.date === today
@@ -1850,12 +1949,17 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     limited: limitedView(state, today, minutes),
     /** 나들이 체험보고서 이벤트 */
     outings: outingView(state, today),
+    /** 집 공부 달력·하루 선물 상자·지난주 기록 */
+    offline: offlineView(state, today, offlineRulesOf(offlineRules).weekGoal),
+    /** 전설 지도 (조각·단계·후보) */
+    legend: legendView(state, offlineRules),
   };
 }
 export type ChildView = ReturnType<typeof childView>;
 
 // ---------- 나들이 체험보고서 (lib/outing.ts) ----------
-export type OutingInput = { from: GiftSender; place: string; date: string; letter: string; sights: string[]; photoIds: string[]; candidates: number[] };
+/** pieces: 보상 전설 조각 수 (2026-10-15부터 새로 여는 보고서는 조각, candidates는 쓰지 않음) */
+export type OutingInput = { from: GiftSender; place: string; date: string; letter: string; sights: string[]; photoIds: string[]; candidates?: number[]; pieces?: number };
 /** 보호자가 나들이 이벤트를 엶 (아이 화면에는 소개 팝업 → 도전할래!) */
 export function createOuting(state: GameState, input: OutingInput, now: string): Outing {
   const place = String(input.place ?? '').trim().slice(0, 30);
@@ -1864,13 +1968,16 @@ export function createOuting(state: GameState, input: OutingInput, now: string):
   if (!(input.from in GIFT_SENDERS)) fail('보내는 사람을 골라 주세요.');
   const sights = [...new Set((input.sights ?? []).map(s => String(s).trim().slice(0, 20)).filter(Boolean))].slice(0, 12);
   if (!sights.length) fail('본 것(동물 등)을 하나 이상 적어 주세요.');
-  const candidates = (input.candidates ?? []).map(Number);
-  if (candidates.length !== 3 || new Set(candidates).size !== 3 || candidates.some(id => !Number.isInteger(id) || !isSpecies(id))) fail('전설 후보 3마리를 서로 다르게 골라 주세요.');
+  const pieces = Number(input.pieces);
+  const pieceMode = input.pieces !== undefined;
+  if (pieceMode && !(Number.isInteger(pieces) && pieces >= 1 && pieces <= 5)) fail('전설 조각 수를 1~5개로 골라 주세요.');
+  const candidates = pieceMode ? [] : (input.candidates ?? []).map(Number);
+  if (!pieceMode && (candidates.length !== 3 || new Set(candidates).size !== 3 || candidates.some(id => !Number.isInteger(id) || !isSpecies(id)))) fail('전설 후보 3마리를 서로 다르게 골라 주세요.');
   const photoIds = (input.photoIds ?? []).filter(id => typeof id === 'string' && /^[a-z0-9-]{8,64}$/.test(id)).slice(0, 5);
   const o: Outing = {
     id: nextId(state, 'o'), createdAt: now, from: input.from, place, date: input.date,
     letter: String(input.letter ?? '').trim().slice(0, GIFT_LETTER_MAX), sights, photoIds, candidates,
-    status: 'open', report: {}, stage: 0, revisions: [],
+    status: 'open', report: {}, stage: 0, revisions: [], ...(pieceMode ? { pieces } : {}),
   };
   (state.outings ??= []).push(o);
   return o;
@@ -1896,7 +2003,8 @@ export function reviewOuting(state: GameState, id: string, review: { by: GiftSen
     o.approval = { by: review.by, at: now, praise: text, sticker };
     const useShiny = (o.rules ?? OUTING_DEFAULT).shiny;
     const chance = shinyChance ?? SHINY_CHANCE_DEFAULT.master;
-    o.reward = { balls: shuffle(o.candidates, random).map(sp => ({ species: sp, shiny: useShiny && random() * 100 < chance })) };
+    // 조각 보상 보고서는 아이가 받을 때 조각을 넣음 (마스터볼은 전설 지도에서)
+    o.reward = o.pieces ? { balls: [], pieces: o.pieces } : { balls: shuffle(o.candidates, random).map(sp => ({ species: sp, shiny: useShiny && random() * 100 < chance })) };
     o.status = 'approved';
   } else {
     const max = (o.rules ?? OUTING_DEFAULT).revisionMax;
@@ -1937,6 +2045,8 @@ export function outingView(state: GameState, today: string) {
       revision: o.status === 'revise' ? o.revisions[o.revisions.length - 1] ?? null : null,
       approval: o.approval ?? null,
       reward: o.reward ? { picked: o.reward.picked ?? null, balls: revealed ? o.reward.balls : null, duplicate: o.reward.duplicate ?? false } : null,
+      /** 보상 = 전설 조각 수 (없으면 예전 방식 마스터볼) */
+      pieces: o.pieces ?? null,
       late: o.late ?? null,
       page: outingPage(o),
     };
@@ -1970,3 +2080,268 @@ export function simOutingFill(state: GameState, id: string, upTo: number, now: s
   for (let step = 1; step <= Math.min(7, upTo); step++) for (const k of keys[step]) (o.report as Record<string, unknown>)[k] = sample[k];
   o.stage = Math.max(o.stage, Math.min(7, upTo));
 }
+
+// ---------- 집 공부 기록 · 전설 조각 (lib/offline.ts) ----------
+type LegendCtx = Pick<Context, 'today' | 'now' | 'random' | 'shinyChance' | 'offlineRules'>;
+const offlineOf = (state: GameState): OfflineState => {
+  const o = state.offline ??= { marks: {}, given: {}, boxes: [], weeks: {} };
+  o.marks ??= {}; o.given ??= {}; o.boxes ??= []; o.weeks ??= {};
+  return o;
+};
+function legendOf(state: GameState, rules: OfflineRules, now: string): LegendState {
+  const lg = state.legend ??= { stage: 1, need: stageNeed(rules, 1), pieces: 0, got: [], stages: { 1: { need: stageNeed(rules, 1), openedAt: now } }, log: [] };
+  lg.got ??= []; lg.log ??= []; lg.stages ??= {};
+  return lg;
+}
+/** 책 상자: 랜덤상자와 같은 확률에서 볼만 한 등급 위 (몬스터볼 → 슈퍼볼 → 하이퍼볼 → 마스터볼) */
+const BALL_UP: Partial<Record<BallKind, BallKind>> = { poke: 'great', great: 'ultra', ultra: 'master' };
+export const BOOK_BOX_TABLE: typeof DAILY_BOX_TABLE = DAILY_BOX_TABLE.map(row =>
+  row.item.kind === 'ball' && BALL_UP[row.item.ball] ? { ...row, item: { kind: 'ball', ball: BALL_UP[row.item.ball]! } } : row);
+function rollDayBox(kind: 'book' | 'normal', random: Random): BoxItem[] {
+  const table = kind === 'book' ? BOOK_BOX_TABLE : DAILY_BOX_TABLE;
+  return [0, 1, 2].map(() => {
+    const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(table, random);
+    return row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
+  });
+}
+const ownsSpecies = (state: GameState, id: number) => state.owned.some(p => p.species === id);
+/** 이 단계에서 아직 만날 수 있는 전설 (이미 가진 포켓몬은 빠짐) */
+export function legendRemaining(state: GameState, rules: OfflineRules, stage: number): number[] {
+  return stageCandidates(rules, stage).filter(id => !ownsSpecies(state, id));
+}
+const legendSnapshot = (state: GameState, ctx: LegendCtx) => {
+  const lg = legendOf(state, offlineRulesOf(ctx.offlineRules), ctx.now);
+  return { stage: lg.stage, need: lg.need, pieces: lg.pieces, pending: !!lg.pending };
+};
+/**
+ * 보석이 다 모였으면 마스터볼(남은 후보 중 최대 3개, 이로치 확률) 준비, 단계 후보를 다 만났으면 다음 단계로.
+ * 남은 조각은 다음 보석으로 이어짐. 후보가 정해지지 않은 단계면 조각만 모으며 기다림.
+ */
+function settleLegend(state: GameState, ctx: LegendCtx) {
+  const rules = offlineRulesOf(ctx.offlineRules);
+  const lg = legendOf(state, rules, ctx.now);
+  for (let guard = 0; guard < 50 && !lg.pending; guard++) {
+    const listed = stageCandidates(rules, lg.stage);
+    const left = legendRemaining(state, rules, lg.stage);
+    if (!left.length) {
+      if (!listed.length) return; // 부모님이 아직 이 단계 후보를 정하지 않음
+      lg.stage += 1;
+      lg.need = stageNeed(rules, lg.stage);
+      lg.stages[lg.stage] = { need: lg.need, openedAt: ctx.now };
+      continue;
+    }
+    if (lg.pieces < lg.need) return;
+    lg.pieces -= lg.need;
+    const chance = rules.legendShiny ? (ctx.shinyChance?.master ?? SHINY_CHANCE_DEFAULT.master) : 0;
+    lg.pending = { stage: lg.stage, at: ctx.now, balls: shuffle(left, ctx.random).slice(0, 3).map(id => ({ species: id, shiny: ctx.random() * 100 < chance })) };
+  }
+}
+/** 전설 조각을 더함 (주간 집 공부·이벤트에서만. 배틀에서는 절대 부르지 않음) */
+export function addLegendPieces(state: GameState, n: number, source: LegendState['log'][number]['source'], ctx: LegendCtx, ref?: string) {
+  if (!(n > 0)) return;
+  const lg = legendOf(state, offlineRulesOf(ctx.offlineRules), ctx.now);
+  lg.pieces += n;
+  lg.log.push({ at: ctx.now, date: ctx.today, source, n, ref });
+  settleLegend(state, ctx);
+}
+
+/**
+ * 보호자: 날짜에 ●■▲(또는 지우기 null)를 적음. 오늘까지만. 그 주의 조각 기준은 그 주에 처음 적을 때 고정.
+ * 이미 하루 선물이 나간 날·조각이 나간 주를 고치면 알림만 돌려줌 (선물·조각은 회수하지 않음).
+ */
+export function setOfflineMark(state: GameState, date: string, mark: DayMark | null, today: string, rules: OfflineRules): { warning: string | null } {
+  if (!isDate(date)) fail('날짜를 다시 골라 주세요.');
+  if (date > today) fail('앞으로 올 날짜는 아직 적을 수 없어요.');
+  if (mark !== null && !DAY_MARKS.includes(mark)) fail('표시를 다시 골라 주세요.');
+  const off = offlineOf(state);
+  const ws = weekStartOf(date);
+  if (mark) off.marks[date] = mark; else delete off.marks[date];
+  if (mark) off.weeks[ws] ??= { goal: rules.weekGoal };
+  const warnings: string[] = [];
+  const given = off.given[date];
+  if (given && given !== 'none' && given !== mark) warnings.push('이 날은 이미 하루 선물이 나갔어요. 선물은 그대로 두어요.');
+  if (off.weeks[ws]?.settled?.piece) warnings.push('이 주는 이미 전설 조각을 받았어요. 고쳐도 조각은 그대로예요.');
+  return { warning: warnings.join(' ') || null };
+}
+/** 보호자: 그 주의 응원 한 줄 (비우면 지움) */
+export function setOfflineCheer(state: GameState, weekStart: string, by: GiftSender, text: string, today: string, rules: OfflineRules, now: string) {
+  if (!isDate(weekStart) || weekStartOf(weekStart) !== weekStart) fail('주를 다시 골라 주세요.');
+  if (weekStart > today) fail('앞으로 올 주에는 아직 쓸 수 없어요.');
+  if (!(by in GIFT_SENDERS)) fail('누가 쓰는지 골라 주세요.');
+  const off = offlineOf(state);
+  const week = off.weeks[weekStart] ??= { goal: rules.weekGoal };
+  const clean = String(text ?? '').trim().slice(0, GIFT_LETTER_MAX);
+  if (clean) week.cheer = { by, text: clean, at: now }; else delete week.cheer;
+}
+/**
+ * 앱을 열 때마다: 지난 날의 하루 선물 상자 만들기, 끝난 주 정산(합계가 기준 이상이면 전설 조각 1개).
+ * 이미 정산한 주를 나중에 고쳐 기준을 넘기면 그때 조각을 줌 (줄어도 회수하지 않음). 바뀌었으면 true
+ */
+export function syncOffline(state: GameState, ctx: LegendCtx): boolean {
+  if (!state.offline) return false;
+  const rules = offlineRulesOf(ctx.offlineRules);
+  const off = offlineOf(state);
+  let changed = false;
+  for (const date of Object.keys(off.marks).sort()) {
+    if (date >= ctx.today) continue;
+    const mark = off.marks[date];
+    const given = off.given[date];
+    if (given && !(given === 'none' && mark !== 'none')) continue;
+    off.given[date] = mark;
+    changed = true;
+    const kind = rules[`${mark}Box`];
+    const count = rules[`${mark}Count`];
+    if (kind === 'off' || count < 1) continue;
+    off.boxes.push({ id: nextId(state, 'h'), date, mark, kind, count: Math.min(3, count), items: rollDayBox(kind, ctx.random), picks: [], at: ctx.now });
+  }
+  for (const ws of Object.keys(off.weeks).sort()) {
+    const week = off.weeks[ws];
+    if (plusDays(ws, 6) >= ctx.today) continue;
+    const hasMarks = weekDates(ws).some(d => off.marks[d]);
+    if (!hasMarks && !week.settled) continue;
+    const score = weekScore(off.marks, ws);
+    if (week.settled) {
+      if (week.settled.piece || score < week.goal) continue;
+      const lg = legendOf(state, rules, ctx.now);
+      week.settled = { ...week.settled, score, piece: true, stage: lg.stage, need: lg.need, before: lg.pieces, lateAt: ctx.now };
+      addLegendPieces(state, 1, 'week', ctx, ws);
+      changed = true;
+      continue;
+    }
+    const lg = legendOf(state, rules, ctx.now);
+    const piece = score >= week.goal;
+    week.settled = { at: ctx.now, score, piece, stage: lg.stage, need: lg.need, before: lg.pieces };
+    if (piece) addLegendPieces(state, 1, 'week', ctx, ws);
+    changed = true;
+  }
+  return changed;
+}
+
+/** 아이 화면: 전설 지도 (고르기 전 마스터볼 내용은 숨김) */
+export function legendView(state: GameState, ov?: Partial<OfflineRules>) {
+  const rules = offlineRulesOf(ov);
+  const lg = state.legend;
+  const stage = lg?.stage ?? 1;
+  const stages = Array.from({ length: stage + 2 }, (_, i) => i + 1).map(n => {
+    const got = (lg?.got ?? []).filter(g => g.stage === n);
+    const gotIds = new Set(got.map(g => g.species));
+    const open = n <= stage;
+    const left = open ? legendRemaining(state, rules, n).filter(id => !gotIds.has(id)) : [];
+    return {
+      stage: n, open, done: n < stage,
+      need: lg?.stages?.[n]?.need ?? (n === stage && lg ? lg.need : stageNeed(rules, n)),
+      salt: rules.gemSalt[String(n)] ?? 0,
+      /** 만난 전설(그림 공개)과 아직 못 만난 후보 수 (누가 있는지는 아이 화면에 보내지 않음: 기대감) */
+      got: got.map(g => ({ species: g.species, shiny: g.shiny })),
+      left: open ? left.length : 0,
+      /** 아직 열리지 않은 단계는 후보 수만 */
+      count: open ? got.length + left.length : stageCandidates(rules, n).length,
+    };
+  });
+  return {
+    stage, need: lg?.need ?? stageNeed(rules, 1), pieces: lg?.pieces ?? 0,
+    pending: lg?.pending ? { stage: lg.pending.stage, count: lg.pending.balls.length } : null,
+    /** 후보가 정해지지 않아 다음 전설을 기다리는 중 */
+    waiting: !lg?.pending && legendRemaining(state, rules, stage).length === 0,
+    stageSeen: lg?.stageSeen ?? 1,
+    stages,
+    log: (lg?.log ?? []).slice(-60),
+  };
+}
+export type LegendView = ReturnType<typeof legendView>;
+
+/** 아이 화면: 집 공부 달력·하루 선물 상자·지난주 기록 팝업 */
+export function offlineView(state: GameState, today: string, weekGoal = OFFLINE_DEFAULT.weekGoal) {
+  const off = state.offline;
+  const weeks: Record<string, { goal: number; score: number; piece: boolean }> = {};
+  for (const [ws, w] of Object.entries(off?.weeks ?? {})) weeks[ws] = { goal: w.goal, score: weekScore(off!.marks, ws), piece: !!w.settled?.piece };
+  const lastStart = plusDays(weekStartOf(today), -7);
+  const last = off?.weeks[lastStart];
+  const lastWeek = last?.settled && weekDates(lastStart).some(d => off!.marks[d])
+    ? {
+        start: lastStart, end: plusDays(lastStart, 6),
+        marks: weekDates(lastStart).map(d => off!.marks[d] ?? null),
+        score: weekScore(off!.marks, lastStart), goal: last.goal, piece: last.settled.piece,
+        stage: last.settled.stage, need: last.settled.need, before: last.settled.before,
+        short: last.settled.piece ? '' : shortMessage(off!.marks, lastStart, last.goal),
+        cheer: last.cheer ? { by: last.cheer.by, text: last.cheer.text } : null,
+      }
+    : null;
+  return {
+    today,
+    marks: off?.marks ?? {},
+    weeks,
+    /** 아직 다 안 연 하루 선물 상자 (오래된 것부터, 안 고른 칸은 숨김) */
+    boxes: (off?.boxes ?? []).filter(b => b.picks.length < b.count).map(b => ({
+      id: b.id, date: b.date, mark: b.mark, kind: b.kind, count: b.count, picks: b.picks,
+      items: b.items.map((it, i) => (b.picks.includes(i) ? it : null)),
+    })),
+    lastWeek,
+    /** 아직 기록이 없는 주의 조각 기준 (지금 규칙) */
+    weekGoal,
+    started: !!off && Object.keys(off.marks).length > 0,
+  };
+}
+export type OfflineView = ReturnType<typeof offlineView>;
+
+/** 보호자 화면: 집 공부 기록 전체 */
+export function offlineReport(state: GameState, today: string, ov?: Partial<OfflineRules>) {
+  const off = state.offline;
+  const weeks: Record<string, { goal: number; score: number; settled: boolean; piece: boolean; cheer: OfflineWeek['cheer'] | null }> = {};
+  for (const [ws, w] of Object.entries(off?.weeks ?? {})) weeks[ws] = { goal: w.goal, score: weekScore(off!.marks, ws), settled: !!w.settled, piece: !!w.settled?.piece, cheer: w.cheer ?? null };
+  return {
+    today, marks: off?.marks ?? {}, given: off?.given ?? {}, weeks,
+    unopenedBoxes: (off?.boxes ?? []).filter(b => b.picks.length < b.count).length,
+    legend: legendView(state, ov),
+    gotAll: state.legend?.got ?? [],
+  };
+}
+
+/** 시뮬레이션 도우미(시험용 기록에만) */
+export function simOffline(state: GameState, op: string, ctx: LegendCtx): string {
+  const rules = offlineRulesOf(ctx.offlineRules);
+  const off = offlineOf(state);
+  const lastStart = plusDays(weekStartOf(ctx.today), -7);
+  switch (op) {
+    case 'weekGood':
+    case 'weekShort': {
+      // 지난주를 채우고 정산 전으로 되돌림 → 다음에 아이 화면을 열면 주간 기록 팝업
+      const plan: (DayMark | null)[] = op === 'weekGood' ? ['full', 'full', 'some', 'full', 'some', 'full', 'none'] : ['full', 'some', 'some', 'none', 'full', null, 'some'];
+      weekDates(lastStart).forEach((d, i) => { if (plan[i]) { off.marks[d] = plan[i]!; } else delete off.marks[d]; off.given[d] ??= plan[i] ?? 'none'; });
+      off.weeks[lastStart] = { goal: rules.weekGoal, cheer: off.weeks[lastStart]?.cheer };
+      syncOffline(state, ctx);
+      return op === 'weekGood' ? `지난주를 합계 ${weekScore(off.marks, lastStart)}로 채웠어요(조각 받음).` : `지난주를 합계 ${weekScore(off.marks, lastStart)}로 채웠어요(조금 모자람).`;
+    }
+    case 'piece1': addLegendPieces(state, 1, 'sim', ctx); return '전설 조각 1개를 넣었어요.';
+    case 'pieceFull': {
+      const lg = legendOf(state, rules, ctx.now);
+      const n = Math.max(1, lg.need - lg.pieces);
+      addLegendPieces(state, n, 'sim', ctx);
+      return `전설 조각 ${n}개를 넣어 보석을 채웠어요.`;
+    }
+    case 'pieceNear': {
+      const lg = legendOf(state, rules, ctx.now);
+      if (lg.pieces < lg.need - 1) addLegendPieces(state, lg.need - 1 - lg.pieces, 'sim', ctx);
+      return '보석을 조각 1개 전으로 맞췄어요.';
+    }
+    case 'leaveOne': {
+      // 지금 단계 후보를 1마리만 남기고 시험용으로 넣음 (단계 넘어가기 시험)
+      const lg = legendOf(state, rules, ctx.now);
+      const left = legendRemaining(state, rules, lg.stage);
+      for (const id of left.slice(1)) { addPokemon(state, id, ctx.now); lg.got.push({ stage: lg.stage, species: id, shiny: false, at: ctx.now }); }
+      return `${lg.stage}단계 전설을 1마리만 남겼어요.`;
+    }
+    case 'stage4': {
+      const lg = legendOf(state, rules, ctx.now);
+      lg.stage = 4; lg.need = stageNeed(rules, 4); lg.pieces = 0; lg.pending = undefined;
+      for (let n = 1; n <= 4; n++) lg.stages[n] ??= { need: stageNeed(rules, n), openedAt: ctx.now };
+      return '전설 지도를 4단계로 옮겼어요(자동 보석 모양 확인용).';
+    }
+    case 'reset':
+      state.offline = undefined; state.legend = undefined;
+      return '시험용 훈련·전설 기록을 지웠어요.';
+    default:
+      fail('지원하지 않는 시험이에요.');
+  }
+}
+

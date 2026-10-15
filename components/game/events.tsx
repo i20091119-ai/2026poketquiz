@@ -89,7 +89,8 @@ export function pastEvents(view: ChildView, onWrite?: (id: string) => void): Pas
     out.push({ key: o.id, date: o.late?.date ?? o.deadline ?? o.date, node: (
       <section className="panel event-card past-card outing-past">
         <div className="event-head"><span className="event-emoji">🧺</span><div><span className="pill">지난 이벤트 · 나들이</span><h3>{o.place} 체험보고서</h3></div></div>
-        <MasterBallProgress stage={o.stage} />
+        <MasterBallProgress stage={o.stage} pieces={o.pieces} />
+        {o.pieces && o.status === 'rewarded' && <p className="event-done">🎉 전설 조각 💎 {o.pieces}개를 받았어!</p>}
         {ball && <div className="past-reward"><PokemonImage id={ball.species} shiny={ball.shiny} /><p className="event-done">🎉 마스터볼에서 {ball.shiny ? '✨ 이로치 ' : ''}<b>{eulReul(species(ball.species).name)}</b> 만났어!{o.reward?.duplicate ? ' (우정 보너스)' : ''}</p></div>}
         {o.status === 'late' && <p className="event-desc">마감이 지났어{o.late?.box ? ` (랜덤상자: ${o.late.box})` : ''}. 보고서는 마저 쓸 수 있어.</p>}
         {o.status === 'lateDone' && <p className="event-desc">마감 뒤에 끝까지 다 썼어! 멋져!</p>}

@@ -69,6 +69,11 @@ export type Outing = {
   id: string;
   createdAt: string; from: GiftSender; place: string; date: string; letter: string;
   sights: string[]; photoIds: string[]; candidates: number[];
+  /**
+   * 보상 = 전설 조각 수 (2026-10-15부터 새로 여는 보고서). 없으면 예전 방식(마스터볼 3개 중 1개, candidates 후보).
+   * 열 때 정해지고 바뀌지 않음.
+   */
+  pieces?: number;
   /** 도전할래!를 누를 때 고정되는 규칙 (그전에는 없음) */
   rules?: OutingRules;
   status: OutingStatus;
@@ -85,7 +90,7 @@ export type Outing = {
   revisions: { by: GiftSender; at: string; note: string; fixedAt?: string }[];
   approval?: { by: GiftSender; at: string; praise: string; sticker: string };
   /** 승인 때 정한 마스터볼 3개 내용 (아이가 고르기 전에는 화면에 숨김) */
-  reward?: { balls: { species: number; shiny: boolean }[]; picked?: number; pickedAt?: string; duplicate?: boolean };
+  reward?: { balls: { species: number; shiny: boolean }[]; picked?: number; pickedAt?: string; duplicate?: boolean; pieces?: number };
   /** 기한을 넘겼을 때: 그때 단계, 받은 상자 내용, 안내를 봤는지 */
   late?: { date: string; stage: number; box?: string | null; seen?: boolean };
   /** 보고서를 다 쓴 날 (모음에 완성으로) */

@@ -7,6 +7,7 @@ import type { QuestionInput } from '../question-import.ts';
 import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
 import type { LogEntry } from '../activity-log.ts';
 import { cleanOutingRules, OUTING_DEFAULT, type OutingRules } from '../outing.ts';
+import { cleanOfflineRules, offlineRulesOf, type OfflineRules } from '../offline.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
@@ -400,5 +401,17 @@ export async function saveOutingRules(rules: Partial<OutingRules> | null) {
   if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'outing_rules'").run(); return; }
   await db().prepare("INSERT INTO settings (key, value) VALUES ('outing_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
 }
+/** 보호자 설정: 집 공부·전설 규칙 (settings.offline_rules, 바꾼 것만) */
+export async function getOfflineRules(): Promise<Partial<OfflineRules>> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'offline_rules'").first<{ value: string }>();
+  try { return cleanOfflineRules(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveOfflineRules(rules: Partial<OfflineRules> | null) {
+  const clean = cleanOfflineRules(rules as Record<string, unknown>);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'offline_rules'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('offline_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 지금 쓰는 집 공부·전설 규칙 (처음 값 + 바꾼 것) */
+export const offlineRulesNow = async (): Promise<OfflineRules> => offlineRulesOf(await getOfflineRules());
 /** 지금 쓰는 나들이 규칙 (처음 값 + 바꾼 것) */
 export const outingRulesNow = async (): Promise<OutingRules> => ({ ...OUTING_DEFAULT, ...(await getOutingRules()) });

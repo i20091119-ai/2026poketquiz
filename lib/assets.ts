@@ -9,6 +9,8 @@ export const ASSETS = {
   homeBackground: '/assets/ui/home-background.svg',
   pokemonPlaceholder: '/assets/ui/pokemon-placeholder.svg',
   boxClosed: '/assets/boxes/box-closed.png',
+  /** 집 공부 ● 날 책 상자 (직접 그린 SVG) */
+  bookBox: '/assets/boxes/book-box.svg',
   potion: {
     apple: '/assets/items/apple-berry.png',
     blue: '/assets/items/ice-berry.png',

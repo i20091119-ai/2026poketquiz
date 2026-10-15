@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <!-- 책 상자 (집 공부 ● 날 선물): 두꺼운 책 모양 상자 -->
+  <ellipse cx="60" cy="106" rx="44" ry="7" fill="#000" opacity=".12"/>
+  <path d="M18 34 L60 22 L102 34 L102 94 L60 106 L18 94 Z" fill="#1d4ed8"/>
+  <path d="M60 22 L102 34 L102 94 L60 106 Z" fill="#2563eb"/>
+  <path d="M24 38 L60 28 L60 98 L24 89 Z" fill="#fff7ed"/>
+  <path d="M60 28 L96 38 L96 89 L60 98 Z" fill="#ffedd5"/>
+  <g stroke="#fdba74" stroke-width="2" stroke-linecap="round">
+    <path d="M30 48 L54 42 M30 58 L54 52 M30 68 L54 62 M30 78 L50 73"/>
+    <path d="M66 42 L90 48 M66 52 L90 58 M66 62 L90 68 M66 72 L86 77"/>
+  </g>
+  <path d="M60 22 L60 106" stroke="#1e3a8a" stroke-width="3"/>
+  <rect x="52" y="12" width="16" height="30" rx="3" fill="#f59e0b"/>
+  <path d="M52 42 L60 36 L68 42 Z" fill="#b45309"/>
+  <text x="60" y="64" font-size="22" text-anchor="middle" fill="#f59e0b">★</text>
+</svg>
