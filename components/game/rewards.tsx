@@ -7,7 +7,7 @@ import type { Ball, BoxItem } from '@/lib/game-engine';
 import { shinyName, species } from '@/lib/pokedex';
 import { PokemonImage, TypeBadge } from './common';
 
-export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event';
+export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event' | 'book' | 'home';
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
 export type CatchResult = { caught: number; tier: number; shiny?: boolean; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
 
@@ -16,6 +16,8 @@ const COPY: Record<RewardKind, { title: string; description: string; closed: str
   explore: { title: '아이템 3개 중 하나를 골라!', description: '열매나 상처약이 들어 있어. 가방에 넣었다가 포켓몬에게 먹여 줘.', closed: ASSETS.boxClosed, label: '선물' },
   exp: { title: '경험치 선물! 볼 3개 중 하나를 골라!', description: '볼 안에 어떤 포켓몬이 있을까?', closed: ASSETS.ball.poke, label: '볼' },
   master: { title: '탐험 마스터! 볼 3개 중 하나를 골라!', description: '절반의 확률로 전설이나 희귀한 포켓몬이 나와.', closed: ASSETS.ball.master, label: '볼' },
+  book: { title: '📘 책 상자 3개 중 하나를 골라!', description: '집 공부를 다 해서 받은 상자야. 볼이 한 등급 더 좋아!', closed: ASSETS.bookBox, label: '책 상자' },
+  home: { title: '🎁 랜덤상자 3개 중 하나를 골라!', description: '집 공부를 해서 받은 상자야. 열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
   event: { title: '10일 연속 성공! 랜덤박스 3개 중 하나를 골라!', description: '희귀 포켓몬 볼, 배틀 추가권, 이로치 볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
 };
 

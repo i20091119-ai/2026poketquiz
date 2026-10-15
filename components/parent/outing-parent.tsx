@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
 import { DiaryPage, mediaUrl } from '@/components/game/outing';
-import { PokemonImage, postJson } from '@/components/game/common';
+import { postJson } from '@/components/game/common';
 import { ASSETS } from '@/lib/assets';
 import { GIFT_SENDERS, REPLY_STICKERS, type GiftSender } from '@/lib/game-config';
 import { dateLabel, OUTING_PHOTO_MAX, STEP_TITLES, type Outing, type OutingRules } from '@/lib/outing';
@@ -23,7 +23,7 @@ const SENDER_KEY = 'pq-gift-sender';
 const loadSender = (): GiftSender => { try { return localStorage.getItem(SENDER_KEY) === 'dad' ? 'dad' : 'mom'; } catch { return 'mom'; } };
 const saveSender = (s: GiftSender) => { try { localStorage.setItem(SENDER_KEY, s); } catch { /* 저장 못 해도 진행 */ } };
 /** 전설·환상 포켓몬 (전설 후보로 고를 수 있는 것) */
-const LEGENDS = SPECIES.filter(s => s.tier >= 3).map(s => ({ id: s.id, name: s.name }));
+export const LEGENDS = SPECIES.filter(s => s.tier >= 3).map(s => ({ id: s.id, name: s.name }));
 
 const STATUS_LABEL: Record<Outing['status'], string> = {
   open: '아이가 아직 시작 전', writing: '쓰는 중', submitted: '📖 확인 대기', revise: '고치는 중', approved: '승인 · 마스터볼 고르기 전',
@@ -45,7 +45,7 @@ async function shrinkPhoto(file: File): Promise<string> {
 }
 
 /** 선물 탭: 나들이 이벤트 열기 */
-export function OutingCreate({ overview, busy, call, reload }: { overview: OutingOverview; busy: boolean; call: Call; reload: () => Promise<void> }) {
+export function OutingCreate({ overview, defaultPieces, busy, call, reload }: { overview: OutingOverview; defaultPieces: number; busy: boolean; call: Call; reload: () => Promise<void> }) {
   const [from, setFrom] = useState<GiftSender>(loadSender);
   const [place, setPlace] = useState('');
   const [date, setDate] = useState(overview.today);
@@ -53,7 +53,7 @@ export function OutingCreate({ overview, busy, call, reload }: { overview: Outin
   const [sightText, setSightText] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState('');
-  const [candidates, setCandidates] = useState<number[]>(overview.candidates);
+  const [pieces, setPieces] = useState(Math.max(1, defaultPieces));
   const sights = sightText.split(/[,，\n]/).map(s => s.trim()).filter(Boolean);
   const upload = async (files: FileList | null) => {
     if (!files) return;
@@ -68,13 +68,13 @@ export function OutingCreate({ overview, busy, call, reload }: { overview: Outin
     setUploading('');
   };
   const create = async () => {
-    const r = await call({ action: 'outingCreate', outing: { from, place, date, letter, sights, photoIds: photos, candidates } });
+    const r = await call({ action: 'outingCreate', outing: { from, place, date, letter, sights, photoIds: photos, pieces } });
     if (r) { setPlace(''); setLetter(''); setSightText(''); setPhotos([]); await reload(); }
   };
   return (
     <section className="panel parent-section outing-create">
       <h2>🧺 나들이 이벤트 열기</h2>
-      <p className="muted">나들이를 다녀온 뒤 열어 주세요. 아이 화면에 설명 팝업이 뜨고, &ldquo;도전할래!&rdquo;를 누르면 그날부터 7일 안에 체험보고서(7단계)를 써요. 다 쓰면 여기서 읽고 칭찬하거나 고쳐 볼 곳 1개를 돌려보내요. 승인하면 아이가 마스터볼 3개(전설 후보) 중 하나를 골라요.</p>
+      <p className="muted">나들이를 다녀온 뒤 열어 주세요. 아이 화면에 설명 팝업이 뜨고, &ldquo;도전할래!&rdquo;를 누르면 그날부터 7일 안에 체험보고서(7단계)를 써요. 다 쓰면 여기서 읽고 칭찬하거나 고쳐 볼 곳 1개를 돌려보내요. 승인하면 아이가 <b>전설 조각</b>을 받아 전설 지도의 보석에 넣어요(2026-10-15부터, 조각이 다 모이면 마스터볼에서 전설).</p>
       <div className="gift-form">
         <div className="gift-row"><span className="gift-label">보내는 사람</span>
           <div className="button-row">{(Object.keys(GIFT_SENDERS) as GiftSender[]).map(s => <button key={s} className={'chip' + (from === s ? ' on' : '')} onClick={() => { setFrom(s); saveSender(s); }}>{GIFT_SENDERS[s]}</button>)}</div></div>
@@ -92,23 +92,10 @@ export function OutingCreate({ overview, busy, call, reload }: { overview: Outin
             ))}</div>
             <p className="muted">사진은 아이 화면 6단계에서 그림 대신 고를 수 있어요. 아이 화면은 비밀번호 없이 열려서, 사진은 짐작할 수 없는 긴 주소로만 보여요. 얼굴보다 동물·장소 사진을 추천해요.</p>
           </div></div>
-        <div className="gift-row"><span className="gift-label">전설 후보 3마리</span>
-          <div className="outing-candidates">
-            {candidates.map((id, i) => {
-              const owned = overview.ownedSpecies.includes(id);
-              return (
-                <div key={i} className="outing-candidate">
-                  <PokemonImage id={id} />
-                  <select value={id} onChange={e => setCandidates(c => c.map((x, j) => (j === i ? Number(e.target.value) : x)))}>
-                    {LEGENDS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                  {owned && <small className="warn">⚠️ 이미 가진 전설이에요 (나오면 우정 보너스)</small>}
-                </div>
-              );
-            })}
-          </div></div>
+        <div className="gift-row"><span className="gift-label">보상 전설 조각</span>
+          <div className="button-row">{[1, 2, 3, 4, 5].map(n => <button key={n} className={'chip' + (pieces === n ? ' on' : '')} onClick={() => setPieces(n)}>💎 {n}개</button>)}</div></div>
       </div>
-      <button className="primary" disabled={busy || !place.trim() || !sights.length || new Set(candidates).size !== 3} onClick={() => void create()}>🧺 나들이 이벤트 열기</button>
+      <button className="primary" disabled={busy || !place.trim() || !sights.length} onClick={() => void create()}>🧺 나들이 이벤트 열기</button>
     </section>
   );
 }
@@ -146,13 +133,14 @@ function OutingRow({ o, sim, busy, call, reload }: { o: OutingOverview['list'][n
       </div>
       {open && <div className="outing-row-body">
         <p className="muted">
-          본 것: {o.sights.join(', ')} · 전설 후보: {o.candidates.map((id, i) => `${species(id).name}${o.owned[i] ? '(이미 있음)' : ''}`).join(', ')}
+          본 것: {o.sights.join(', ')} · {o.pieces ? `보상: 전설 조각 ${o.pieces}개` : `전설 후보: ${o.candidates.map((id, i) => `${species(id).name}${o.owned[i] ? '(이미 있음)' : ''}`).join(', ')}`}
           {rules ? ` · 규칙(시작 때 고정): 최소 ${rules.minChars}글자, 시도 인정 ${rules.attemptStage}단계, 고치기 ${rules.revisionMax}번, 이로치 ${rules.shiny ? '켜짐' : '꺼짐'}, 기한 ${rules.days}일` : ''}
         </p>
         <div className="outing-steps">{STEP_TITLES.map((t, i) => <span key={t} className={'step-pill' + (i < o.stage ? ' done' : '')}>{i + 1}. {t}</span>)}</div>
         <DiaryPage page={o.page} />
         {o.revisions.map((r, i) => <p key={i} className="outing-note">📝 고치기 요청 ({GIFT_SENDERS[r.by]}, {r.at.slice(0, 10)}): &ldquo;{r.note}&rdquo;{r.fixedAt ? ' → 고침' : ''}</p>)}
         {o.approval && <p className="outing-praise"><img src={ASSETS.sticker(o.approval.sticker)} alt="" /> 칭찬 ({GIFT_SENDERS[o.approval.by]}, {o.approval.at.slice(0, 10)}): &ldquo;{o.approval.praise}&rdquo;</p>}
+        {o.pieces && o.status === 'rewarded' && <p>🎁 아이가 전설 조각 💎 {o.pieces}개를 받았어요.</p>}
         {o.reward?.picked !== undefined && <p>🎁 고른 마스터볼: <b>{species(o.reward.balls[o.reward.picked].species).name}{o.reward.balls[o.reward.picked].shiny ? ' ✨이로치' : ''}</b>{o.reward.duplicate ? ' (이미 있어서 우정 보너스)' : ''} · 나머지: {o.reward.balls.filter((_, i) => i !== o.reward!.picked).map(b => species(b.species).name).join(', ')}</p>}
         {o.late && <p className="muted">⏰ {o.late.date}에 기한 넘김 ({o.late.stage}단계 저장) → {o.late.box ? `랜덤상자: ${o.late.box}` : '보상 없음'}</p>}
         {o.status === 'submitted' && (

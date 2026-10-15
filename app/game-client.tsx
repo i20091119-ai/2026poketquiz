@@ -17,7 +17,9 @@ import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type Rewar
 import { ASSETS } from '@/lib/assets';
 import { setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
-import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter } from '@/components/game/outing';
+import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
+import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
+import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter, type OutingPieceResult } from '@/components/game/outing';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import { versionLabel } from '@/lib/version';
@@ -68,6 +70,19 @@ export default function Game() {
   const [pastOpen, setPastOpen] = useState(false);
   const [nudgeDone, setNudgeDone] = useState(false);
   const autoReward = useRef(new Set<string>());
+  /** 집 공부·전설: 처음 안내(기기마다 한 번), 달력·지도 창, 지난주 기록(기기마다 한 번), 마스터볼 고르기, 하루 선물 상자 */
+  const offIntroStored = useSyncExternalStore(subscribeStorage, offlineIntroSeen, () => true);
+  const [offIntroDone, setOffIntroDone] = useState(false);
+  const offIntroSeen = offIntroStored || offIntroDone;
+  const [offIntroOpen, setOffIntroOpen] = useState(false);
+  const [studyOpen, setStudyOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [weekDone, setWeekDone] = useState<string | null>(null);
+  const [pickOpen, setPickOpen] = useState(false);
+  const [pickKey, setPickKey] = useState(0);
+  const [pickLater, setPickLater] = useState(false);
+  const [dayBox, setDayBox] = useState<ChildView['offline']['boxes'][number] | null>(null);
+  const [boxLater, setBoxLater] = useState<string[]>([]);
 
   const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setGrowthRules(data.growth); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
@@ -93,9 +108,12 @@ export default function Game() {
     if (!view?.partner || giftPopup || opening || replying || quiz || reward || ballQueue.length || changeId || introOpen || introSeen === false || writingId || rewardId) return;
     if (view.outings.some(o => (o.status === 'open' && !o.seenDevices.includes(deviceId())) || (o.status === 'late' && !o.late?.seen))) return;
     if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.phase === 'active' && e.gold && !e.gold.introSeen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
+    // 집 공부 안내·지난주 기록·마스터볼·하루 선물 상자가 먼저
+    if (!offIntroSeen || offIntroOpen || studyOpen || mapOpen || pickOpen || dayBox || view.legend.pending) return;
+    if (view.offline.lastWeek && !weekSeen(view.offline.lastWeek.start) && weekDone !== view.offline.lastWeek.start) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
-  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen, writingId, rewardId]);
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen, writingId, rewardId, offIntroSeen, offIntroOpen, studyOpen, mapOpen, pickOpen, dayBox, weekDone]);
 
   // 레인보우를 다 모았는데 아직 포켓몬을 안 골랐으면 (앱을 열 때 한 번) 고르기 창을 띄움
   useEffect(() => {
@@ -232,6 +250,15 @@ export default function Game() {
   const outingNudge = outingCalm && !outingIntro && !outingLate && !nudgeDone && !nudgeSeenThisRun() ? view.outings.find(o => o.status === 'writing' || o.status === 'revise') ?? null : null;
   const writingOuting = writingId ? view.outings.find(o => o.id === writingId) ?? null : null;
   const rewardOuting = rewardId ? view.outings.find(o => o.id === rewardId) ?? null : null;
+  // 집 공부·전설 팝업 (다른 팝업이 없을 때 하나씩): 처음 안내(기기마다 한 번) → 지난주 기록(기기마다 한 번) → 마스터볼 고르기 → 하루 선물 상자
+  const studyCalm = outingCalm && !outingIntro && !outingLate && !outingNudge && !pastOpen && !studyOpen && !mapOpen && !pickOpen && !dayBox && !giftPopup && !opening && !replying && !evolved;
+  const showOffIntro = offIntroOpen || (studyCalm && !offIntroSeen);
+  const closeOffIntro = () => { markOfflineIntroSeen(); setOffIntroDone(true); setOffIntroOpen(false); };
+  const lastWeek = view.offline.lastWeek;
+  const showWeek = !!lastWeek && studyCalm && offIntroSeen && !showOffIntro && weekDone !== lastWeek.start && !weekSeen(lastWeek.start);
+  const autoPick = studyCalm && offIntroSeen && !showWeek && !!view.legend.pending && !pickLater;
+  const boxAsk = studyCalm && offIntroSeen && !showWeek && !autoPick ? view.offline.boxes.find(b => !boxLater.includes(b.id)) ?? null : null;
+  const pickLegend = async (pick: number) => { setPickOpen(true); return act<LegendPickResult>({ type: 'legendPick', pick }); };
   const saveTeam = async (friends: string[]) => { const r = await act<{ message: string }>({ type: 'team', friends }); if (r) setNotice(r.message); return !!r; };
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
   async function reviveFromHistory(runId: string) {
@@ -266,6 +293,7 @@ export default function Game() {
             onExpGift={() => setReward({ kind: 'exp' })}
             onSaveTeam={saveTeam} onIntro={() => setIntroOpen(true)}
             onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
+          <StudyStrip view={view} onCalendar={() => setStudyOpen(true)} onMap={() => setMapOpen(true)} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
@@ -399,9 +427,40 @@ export default function Game() {
         onSave={async (step, data) => { const r = await act<{ message: string }>({ type: 'outingSave', id: writingOuting.id, step, data: data as Record<string, unknown> }); if (r) setNotice(r.message); return !!r; }}
         onSubmit={async () => { const r = await act<{ message: string }>({ type: 'outingSubmit', id: writingOuting.id }); if (r) setNotice(r.message); return !!r; }} />}
       {rewardOuting && <OutingReward key={rewardOuting.id} o={rewardOuting} view={view} busy={busy} onClose={() => setRewardId(null)}
-        onPick={pick => act<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string }>({ type: 'outingPick', id: rewardOuting.id, pick })} />}
+        onPick={pick => act<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string }>({ type: 'outingPick', id: rewardOuting.id, pick })}
+        onClaim={() => act<OutingPieceResult>({ type: 'outingPick', id: rewardOuting.id, pick: 0 })}
+        onLegend={() => { setRewardId(null); setPickOpen(true); }} />}
       <PastEventsDialog open={pastOpen} view={view} onClose={() => setPastOpen(false)} onWrite={id => { setPastOpen(false); setWritingId(id); }} />
       <OutingGallery open={galleryOpen} outings={view.outings} onClose={() => setGalleryOpen(false)} onWrite={id => { setGalleryOpen(false); setWritingId(id); }} />
+
+      {view.partner && <OfflineIntro key={showOffIntro ? 'oi-on' : 'oi-off'} open={showOffIntro} view={view} onClose={closeOffIntro} />}
+      {view.partner && lastWeek && <WeekRecordDialog key={'w' + lastWeek.start} view={view} open={showWeek}
+        onDone={openPick => { markWeekSeen(lastWeek.start); setWeekDone(lastWeek.start); if (openPick) setPickOpen(true); }} />}
+      <StudyCalendarDialog open={studyOpen} view={view} onClose={() => setStudyOpen(false)}
+        onOpenBox={() => { setStudyOpen(false); setDayBox(view.offline.boxes[0] ?? null); }} />
+      <LegendMap open={mapOpen} view={view} onClose={() => setMapOpen(false)} onPick={() => { setMapOpen(false); setPickOpen(true); }} />
+      <LegendPickDialog key={'pick' + pickKey} open={pickOpen || autoPick} view={view} busy={busy} onPick={pickLegend}
+        onClose={() => { setPickOpen(false); setPickLater(true); setPickKey(k => k + 1); }} />
+      <Dialog open={!!boxAsk} onOpenChange={o => { if (!o && boxAsk) setBoxLater(l => [...l, boxAsk.id]); }}>
+        <DialogContent className="reward-dialog">
+          <DialogTitle className="intro-title">{boxAsk?.kind === 'book' ? '📘 책 상자가 왔어!' : '🎁 선물 상자가 왔어!'}</DialogTitle>
+          <DialogDescription className="intro-text">{boxAsk && `${Number(boxAsk.date.slice(5, 7))}월 ${Number(boxAsk.date.slice(8))}일 집 공부 ${boxAsk.mark === 'full' ? '●' : boxAsk.mark === 'some' ? '■' : '▲'} 선물이야!`}</DialogDescription>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="day-box-img" src={boxAsk?.kind === 'book' ? ASSETS.bookBox : ASSETS.boxClosed} alt="" />
+          <button className="primary big-button" onClick={() => { if (boxAsk) setDayBox(boxAsk); }}>열어 보기!</button>
+          <button className="secondary" onClick={() => { if (boxAsk) setBoxLater(l => [...l, boxAsk.id]); }}>나중에 (달력에서 열 수 있어)</button>
+        </DialogContent>
+      </Dialog>
+      <RewardPicker
+        key={dayBox ? 'day' + dayBox.id : 'day-none'}
+        kind={dayBox ? (dayBox.kind === 'book' ? 'book' : 'home') : null}
+        picks={dayBox?.count ?? 1}
+        initial={dayBox ? { items: dayBox.items, picks: dayBox.picks } : null}
+        busy={busy}
+        onPick={pick => (dayBox ? act<RewardResult>({ type: 'offlineBox', id: dayBox.id, pick }) : Promise.resolve(null))}
+        onClose={() => setDayBox(null)}
+        onOpenBalls={ids => { setDayBox(null); setBallQueue(ids.map(id => view.balls.find(b => b.id === id)).filter((b): b is Ball => !!b)); }}
+      />
 
       <GiftPopup gift={giftPopup} onLater={() => setGiftPopup(null)} onOpen={g => { setGiftPopup(null); setOpening(g); }} />
       {opening && (

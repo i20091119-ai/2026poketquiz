@@ -5,7 +5,8 @@ import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, 
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { LEGEND_PER_STAGE, OFFLINE_DEFAULT, OFFLINE_FIELDS, offlineRulesOf, STAGE_NEED_MAX, stageNeed, type DayBoxKind, type DayMark } from '@/lib/offline';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -16,7 +17,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -47,8 +48,8 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules] = await Promise.all([
-    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(),
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(),
   ]);
   const today = player.today;
   const gate = await battleGate(player, state);
@@ -76,6 +77,11 @@ async function overview(request: Request) {
       ...outingReport(state, today),
       rules: { now: { ...OUTING_DEFAULT, ...outingRules } as OutingRules, defaults: OUTING_DEFAULT, overrides: outingRules, fields: OUTING_FIELDS },
       candidates: OUTING_CANDIDATES, ownedSpecies: [...new Set(state.owned.map(p => p.species))], today,
+    },
+    /** 집 공부 기록·전설 조각: 달력 기록, 주간 합계·응원, 전설 지도, 규칙(지금 값·처음 값·바꾼 것) */
+    offline: {
+      ...offlineReport(state, today, offlineOverrides),
+      rules: { now: offlineRulesOf(offlineOverrides), defaults: OFFLINE_DEFAULT, overrides: offlineOverrides, fields: OFFLINE_FIELDS },
     },
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
     shiny: {
@@ -273,6 +279,8 @@ export async function POST(request: Request) {
           from: String(input?.from) as GiftInput['from'], place: String(input?.place ?? ''), date: String(input?.date ?? ''), letter: String(input?.letter ?? ''),
           sights: Array.isArray(input?.sights) ? input.sights.map(String) : [], photoIds: Array.isArray(input?.photoIds) ? input.photoIds.map(String) : [],
           candidates: Array.isArray(input?.candidates) ? input.candidates.map(Number) : [],
+          // 2026-10-15부터: 보상은 전설 조각 (보호자가 이벤트마다 정함)
+          ...(input?.pieces !== undefined ? { pieces: Number(input.pieces) } : {}),
         }, new Date().toISOString()), changed: true }), player.id);
         await appendActivity(player.id, player.today, [{ kind: 'outing', data: { id: result.id, opened: true, place: result.place, date: result.date, from: result.from, sights: result.sights, candidates: result.candidates } }]);
         return json({ message: `🧺 ${result.place} 나들이 이벤트를 열었어요. 아이가 앱을 열면 설명 팝업이 떠요(기기마다 한 번).` });
@@ -291,7 +299,7 @@ export async function POST(request: Request) {
           by: String(body.by) as GiftInput['from'], approve, text: String(body.text ?? ''), sticker: typeof body.sticker === 'string' ? body.sticker : undefined,
         }, new Date().toISOString(), Math.random, shinyChance), changed: true }), player.id);
         await appendActivity(player.id, player.today, [{ kind: 'outing', data: { id: result.id, reviewed: approve ? 'approve' : 'revise', by: body.by, text: body.text } }]);
-        return json({ message: approve ? '칭찬을 보냈어요! 아이 화면에서 마스터볼 3개 중 하나를 고를 수 있어요.' : '고쳐 볼 곳을 보냈어요. 아이가 고쳐서 다시 내면 여기에 다시 떠요.' });
+        return json({ message: approve ? (result.pieces ? `칭찬을 보냈어요! 아이 화면에서 전설 조각 ${result.pieces}개를 받을 수 있어요.` : '칭찬을 보냈어요! 아이 화면에서 마스터볼 3개 중 하나를 고를 수 있어요.') : '고쳐 볼 곳을 보냈어요. 아이가 고쳐서 다시 내면 여기에 다시 떠요.' });
       }
       case 'setOutingRule': {
         const key = String(body.key);
@@ -318,6 +326,82 @@ export async function POST(request: Request) {
         const { today } = await simClock();
         await mutateState(state => { simOutingFill(state, String(body.id ?? ''), upTo, today + 'T01:00:00.000Z'); return { result: null, changed: true }; }, SIM_PLAYER);
         return json({ message: `시험용 보고서를 ${upTo}단계까지 예시 글로 채웠어요. 아이 화면을 새로고침해 주세요.` });
+      }
+
+      // ---- 집 공부 기록 · 전설 조각 (지금 보고 있는 기록에: 시뮬레이션 중이면 시험용 기록) ----
+      case 'offlineMark': {
+        const player = await playerOf(request);
+        const rules = await offlineRulesNow();
+        const raw = body.mark;
+        const mark = raw === null || raw === '' ? null : (String(raw) as DayMark);
+        const { result } = await mutateState(state => { const r = setOfflineMark(state, String(body.date ?? ''), mark, player.today, rules); return { result: r, changed: true }; }, player.id);
+        await appendActivity(player.id, player.today, [{ kind: 'offline', data: { date: body.date, mark, warning: result.warning } }]);
+        return json({ warning: result.warning });
+      }
+      case 'offlineCheer': {
+        const player = await playerOf(request);
+        const rules = await offlineRulesNow();
+        await mutateState(state => { setOfflineCheer(state, String(body.weekStart ?? ''), String(body.by) as GiftInput['from'], String(body.text ?? ''), player.today, rules, new Date().toISOString()); return { result: null, changed: true }; }, player.id);
+        await appendActivity(player.id, player.today, [{ kind: 'offline', data: { cheer: { weekStart: body.weekStart, by: body.by, text: body.text } } }]);
+        return json({ message: String(body.text ?? '').trim() ? '응원 한 줄을 저장했어요. 다음 월요일 "지난주 탐험 기록"에 보여요.' : '응원 한 줄을 지웠어요.' });
+      }
+      case 'setOfflineRule': {
+        const key = String(body.key);
+        const rules = await getOfflineRules();
+        if (key === 'legendShiny') rules.legendShiny = body.value === true;
+        else if (key === 'fullBox' || key === 'someBox' || key === 'noneBox') {
+          if (!['book', 'normal', 'off'].includes(String(body.value))) throw new ParentError('상자 종류를 다시 골라 주세요.');
+          rules[key] = String(body.value) as DayBoxKind;
+        } else {
+          const field = OFFLINE_FIELDS.find(f => f.key === key);
+          if (!field) throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+          const value = Number(body.value);
+          const step = field.step ?? 1;
+          if (!(value >= field.min && value <= field.max && Number.isInteger(value / step))) throw new ParentError(`${field.label}: ${field.min}~${field.max} 사이로 넣어 주세요.`);
+          rules[field.key] = value;
+        }
+        await saveOfflineRules(rules);
+        return json({ message: key === 'weekGoal' ? '한 주 조각 기준을 저장했어요. 아직 기록하지 않은 주부터 적용돼요(이미 기록을 시작한 주는 그대로).' : '집 공부 규칙을 저장했어요.' });
+      }
+      case 'setLegendStage': {
+        // 단계별 조각 수·후보. 조각 수는 아직 열리지 않은 단계부터 적용, 후보는 언제든
+        const stage = Number(body.stage);
+        if (!Number.isInteger(stage) || stage < 1 || stage > 30) throw new ParentError('단계를 다시 골라 주세요.');
+        const rules = await getOfflineRules();
+        const now = offlineRulesOf(rules);
+        if (body.need !== undefined) {
+          const need = Number(body.need);
+          if (!Number.isInteger(need) || need < 1 || need > STAGE_NEED_MAX) throw new ParentError(`조각 수는 1~${STAGE_NEED_MAX} 사이로 넣어 주세요.`);
+          const needs = Array.from({ length: Math.max(stage, now.stageNeeds.length) }, (_, i) => stageNeed(now, i + 1));
+          needs[stage - 1] = need;
+          rules.stageNeeds = needs;
+        }
+        if (Array.isArray(body.candidates)) {
+          const ids = [...new Set((body.candidates as unknown[]).map(Number).filter(id => Number.isInteger(id) && id >= 1 && id <= 1025))];
+          if (ids.length > LEGEND_PER_STAGE) throw new ParentError(`한 단계 후보는 ${LEGEND_PER_STAGE}마리까지예요.`);
+          rules.candidates = { ...now.candidates, [stage]: ids };
+        }
+        await saveOfflineRules(rules);
+        return json({ message: body.need !== undefined ? `${stage}단계 조각 수를 저장했어요. 이미 열린 단계는 그대로예요.` : `${stage}단계 전설 후보를 저장했어요.` });
+      }
+      case 'regenGem': {
+        const stage = Number(body.stage);
+        if (!Number.isInteger(stage) || stage < 4 || stage > 30) throw new ParentError('4단계부터 다시 만들 수 있어요.');
+        const rules = await getOfflineRules();
+        const salt = (rules.gemSalt?.[stage] ?? 0) + 1;
+        rules.gemSalt = { ...(rules.gemSalt ?? {}), [stage]: salt };
+        await saveOfflineRules(rules);
+        return json({ message: `${stage}단계 보석을 새 모양으로 바꿨어요.` });
+      }
+      case 'resetOfflineRules':
+        await saveOfflineRules(null);
+        return json({ message: '집 공부·전설 규칙을 처음 값으로 되돌렸어요.' });
+      case 'simOffline': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const { today } = await simClock();
+        const [offlineRules, shinyChance] = await Promise.all([offlineRulesNow(), shinyChanceFor(SIM_PLAYER)]);
+        const { result } = await mutateState(state => ({ result: simOffline(state, String(body.op ?? ''), { today, now: new Date().toISOString(), random: Math.random, shinyChance, offlineRules }), changed: true }), SIM_PLAYER);
+        return json({ message: result + ' 아이 화면을 새로고침해 주세요.' });
       }
 
       case 'resetStrong': {

@@ -14,6 +14,7 @@ import { PokemonImage } from '@/components/game/common';
 import { aiRequestText } from '@/lib/question-import';
 import { UPDATES, versionLabel } from '@/lib/version';
 import { OutingCreate, OutingReports, OutingRulesEditor, type OutingOverview } from './outing-parent';
+import { OfflineRulesEditor, OfflineSimTools, StudyRecord, type OfflineOverview } from './offline-parent';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
@@ -24,6 +25,8 @@ type Overview = {
   growth: { now: GrowthRules; defaults: GrowthRules; overrides: Partial<GrowthRules>; fields: { key: GrowthKey; label: string; min: number; max: number }[] };
   /** 나들이 체험보고서 (목록·확인 대기·규칙) */
   outing: OutingOverview;
+  /** 집 공부 기록·전설 조각 (달력·주간·전설 지도·규칙) */
+  offline: OfflineOverview;
   /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
@@ -178,6 +181,7 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 /** 보호자 공간 탭: 아이 화면처럼 위 묶음(자주 보는 것)과 아래 묶음(설정·개발) */
 const MAIN_TABS = [
   { key: 'report', label: '📊 학습 현황' },
+  { key: 'study', label: '📅 집 공부' },
   { key: 'gift', label: '🎁 선물' },
   { key: 'events', label: '🏆 이벤트 기록' },
   { key: 'battlelog', label: '⚔️ 포켓로그 기록' },
@@ -330,7 +334,8 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
       </>}
 
       {tab === 'gift' && <GiftSection gifts={overview.gifts} busy={busy} call={call} reload={reload} />}
-      {tab === 'gift' && <OutingCreate overview={overview.outing} busy={busy} call={call} reload={reload} />}
+      {tab === 'gift' && <OutingCreate overview={overview.outing} defaultPieces={overview.offline.rules.now.eventPieces} busy={busy} call={call} reload={reload} />}
+      {tab === 'study' && <StudyRecord overview={overview.offline} sim={overview.sim.active} busy={busy} call={call} reload={reload} />}
 
       {/* 아래 탭 묶음 (항상 보임, 처음엔 배틀 설정): 아이 화면의 [배틀 | 이벤트 | 선물] 처럼 */}
       <div className="parent-lower">
@@ -390,6 +395,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         </section>
         <GrowthEditor overview={overview} busy={busy} call={call} reload={reload} />
         <OutingRulesEditor overview={overview.outing} busy={busy} call={call} reload={reload} />
+        <OfflineRulesEditor overview={overview.offline} busy={busy} call={call} reload={reload} />
         <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
@@ -807,6 +813,7 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
           </div>
           <p className="muted">순서 예: ‘업데이트 안내 다시 보기’(6장째에서 친구 2마리 고르기) → 일일미션·탐험 정답에서 ‘💗 +2! 파트너랑 친해지고 있어!’ 확인 → ‘에너지 +50’ + ‘💗 가득 차기 1개 전’ → 문제 하나 맞히면 ‘친해졌어!’ → 도감에서 진화. 다 진화한 포켓몬이 팀에 있으면 💗가 차면서 ★+1. 도감 카드의 ‘⚡ 에너지 10 → ★+1’, 가방에서 열매 먹이기, ‘배틀 힘 최고로’ 뒤 포켓로그 팀 선택 화면의 별·‘배틀 힘 최고!’, 첫 화면의 ‘다 컸어!’ 안내도 확인해 보세요.</p>
         </div>
+        <div className="sim-limited"><OfflineSimTools busy={busy} call={call} reload={reload} /></div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
         {limitedEvents.map(l => (
           <div key={l.id} className="sim-limited">

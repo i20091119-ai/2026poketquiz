@@ -12,6 +12,7 @@ import {
 import { shinyName, species } from '@/lib/pokedex';
 import { PokemonImage, postJson } from './common';
 import { ShinyBurst } from './rewards';
+import { Gem, gemLeftText } from './legend';
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -38,15 +39,19 @@ const partnerName = (view: ChildView) => {
   return p ? (p.shiny ? shinyName(p.species) : species(p.species).name) : '파트너';
 };
 
-/** 마스터볼 3개 실루엣: 7단계 중 마친 만큼 차례로 채워짐 */
-export function MasterBallProgress({ stage, big }: { stage: number; big?: boolean }) {
-  const fill = (i: number) => Math.max(0, Math.min(1, (stage / 7) * 3 - i));
+/** 전설 조각 하나 (보석 조각 모양) */
+const SHARD = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="50,6 90,38 62,94 38,94 10,38" fill="#3b82f6" stroke="#1e40af" stroke-width="5" stroke-linejoin="round"/><polygon points="50,6 62,38 50,94 38,38" fill="#bfdbfe" opacity=".55"/><ellipse cx="34" cy="34" rx="8" ry="4" fill="#fff" opacity=".8" transform="rotate(-35 34 34)"/></svg>')}`;
+/** 마스터볼 3개(예전 보고서) 또는 전설 조각 N개 실루엣: 7단계 중 마친 만큼 차례로 채워짐 */
+export function MasterBallProgress({ stage, big, pieces }: { stage: number; big?: boolean; pieces?: number | null }) {
+  const n = pieces ?? 3;
+  const img = pieces ? SHARD : ASSETS.ball.master;
+  const fill = (i: number) => Math.max(0, Math.min(1, (stage / 7) * n - i));
   return (
-    <div className={'mb-progress' + (big ? ' big' : '')} role="img" aria-label={`보고서 ${stage}단계 / 7단계`}>
-      {[0, 1, 2].map(i => (
+    <div className={'mb-progress' + (big ? ' big' : '') + (pieces ? ' shards' : '')} role="img" aria-label={`보고서 ${stage}단계 / 7단계`}>
+      {Array.from({ length: n }, (_, i) => (
         <span key={i} className="mb-slot">
-          <img className="mb-shadow" src={ASSETS.ball.master} alt="" />
-          <span className="mb-fill" style={{ height: `${fill(i) * 100}%` }}><img src={ASSETS.ball.master} alt="" /></span>
+          <img className="mb-shadow" src={img} alt="" />
+          <span className="mb-fill" style={{ height: `${fill(i) * 100}%` }}><img src={img} alt="" /></span>
         </span>
       ))}
     </div>
@@ -69,9 +74,14 @@ export function OutingIntro({ o, view, busy, onAccept, onLater }: { o: OutingVie
     </>,
     <>
       <p className="intro-title">🎁 다 쓰면?</p>
-      <MasterBallProgress stage={7} big />
-      <p className="intro-text">7일 안에 다 쓰고<br />부모님이 읽어 주시면<br /><b>마스터볼 3개 중 1개</b>를 열 수 있어!</p>
-      <p className="intro-text">안에는 <b>전설의 포켓몬</b>이 들어 있어!</p>
+      <MasterBallProgress stage={7} big pieces={o.pieces} />
+      {o.pieces ? <>
+        <p className="intro-text">7일 안에 다 쓰고<br />부모님이 읽어 주시면<br /><b>전설 조각 {o.pieces}개</b>를 받아!</p>
+        <p className="intro-text">조각을 모으면 마스터볼에서<br /><b>전설의 포켓몬</b>을 만날 수 있어!</p>
+      </> : <>
+        <p className="intro-text">7일 안에 다 쓰고<br />부모님이 읽어 주시면<br /><b>마스터볼 3개 중 1개</b>를 열 수 있어!</p>
+        <p className="intro-text">안에는 <b>전설의 포켓몬</b>이 들어 있어!</p>
+      </>}
     </>,
   ];
   const last = page === pages.length - 1;
@@ -104,7 +114,7 @@ export function OutingCard({ o, view, busy, onAccept, onWrite, onReward, onGalle
         <span className="event-emoji">🧺</span>
         <div><span className="pill">나들이 이벤트</span><h3>{o.place} 체험보고서</h3></div>
       </div>
-      <MasterBallProgress stage={o.stage} big />
+      <MasterBallProgress stage={o.stage} big pieces={o.pieces} />
       {o.status === 'open' && <>
         <p className="event-desc">{dateLabel(o.date)}에 간 {o.place} 이야기를<br />7단계로 써 보자!</p>
         <button className="primary glow big-button" disabled={busy} onClick={onAccept}>도전할래!</button>
@@ -122,9 +132,9 @@ export function OutingCard({ o, view, busy, onAccept, onWrite, onReward, onGalle
       {o.status === 'submitted' && <p className="outing-wait">📖 부모님이 읽는 중이야. 조금만 기다려 줘!</p>}
       {o.status === 'approved' && <>
         <p className="event-big">🎉 부모님이 칭찬해 주셨어!</p>
-        <button className="primary glow big-button" disabled={busy} onClick={onReward}>마스터볼 고르러 가기</button>
+        <button className="primary glow big-button" disabled={busy} onClick={onReward}>{o.pieces ? '💎 전설 조각 받으러 가기' : '마스터볼 고르러 가기'}</button>
       </>}
-      {o.status === 'rewarded' && <p className="event-done">🎉 보고서 완성! 전설의 포켓몬을 만났어.</p>}
+      {o.status === 'rewarded' && <p className="event-done">{o.pieces ? `🎉 보고서 완성! 전설 조각 ${o.pieces}개를 받았어.` : '🎉 보고서 완성! 전설의 포켓몬을 만났어.'}</p>}
       {o.status === 'late' && <>
         <p className="outing-note">마감이 지났어. 보고서는 마저 쓸 수 있어 (보상은 없어).</p>
         <button className="secondary big-button" disabled={busy} onClick={onWrite}>마저 쓰기 ✏️</button>
@@ -454,13 +464,21 @@ function DrawingPad({ saved, onSaved }: { saved: string | null; onSaved: (id: st
 }
 
 // ---------- 보상: 마스터볼 3개 중 1개 ----------
-export function OutingReward({ o, view, busy, onPick, onClose }: {
+export type OutingPieceResult = { pieces: number; before: { stage: number; need: number; pieces: number; pending: boolean }; legend: ChildView['legend']; message: string };
+export function OutingReward({ o, view, busy, onPick, onClaim, onLegend, onClose }: {
   o: OutingView | null; view: ChildView; busy: boolean;
   onPick: (pick: number) => Promise<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string } | null>;
+  /** 조각 보상 보고서: 조각 받기 */
+  onClaim: () => Promise<OutingPieceResult | null>;
+  /** 조각으로 보석이 완성되면 마스터볼 고르기로 */
+  onLegend: () => void;
   onClose: () => void;
 }) {
   const [result, setResult] = useState<{ balls: { species: number; shiny: boolean }[]; picked: number; message: string } | null>(null);
+  const [pieceResult, setPieceResult] = useState<OutingPieceResult | null>(null);
   if (!o) return null;
+  if (o.pieces) return <OutingPieceReward o={o} view={view} busy={busy} result={pieceResult} onClose={onClose} onLegend={onLegend}
+    onClaim={async () => { const r = await onClaim(); if (r) setPieceResult(r); }} />;
   const nameOf = (b: { species: number; shiny: boolean }) => (b.shiny ? shinyName(b.species) : species(b.species).name);
   return (
     <Dialog open onOpenChange={v => { if (!v && !busy) onClose(); }}>
@@ -512,11 +530,50 @@ export function OutingNudge({ o, view, kind, onGo, onClose }: { o: OutingView | 
           <PartnerTalk view={view}>
             마감이 지났어.<br />
             {o.late?.box ? <>그래도 {o.late.stage}단계까지 열심히 써서 <b>랜덤상자</b>를 받았어! 가방에 {eulReul(o.late.box)} 넣었어.<br /></> : null}
-            다음엔 끝까지 해서 마스터볼 열어 보자!
+            다음엔 끝까지 해서 {o.pieces ? '전설 조각 받아 보자!' : '마스터볼 열어 보자!'}
           </PartnerTalk>
           <p className="muted">보고서는 마저 쓸 수 있어 (보상은 없어).</p>
           <button className="primary big-button" onClick={onClose}>좋아!</button>
         </>}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** 조각 보상: 칭찬·스티커 → "조각 받기" → 조각이 날아와 보석에 맞춰짐 → 보석이 완성되면 마스터볼 고르기로 */
+function OutingPieceReward({ o, view, busy, result, onClaim, onLegend, onClose }: {
+  o: OutingView; view: ChildView; busy: boolean; result: OutingPieceResult | null;
+  onClaim: () => void; onLegend: () => void; onClose: () => void;
+}) {
+  const before = result?.before;
+  const stageInfo = result ? result.legend.stages.find(s => s.stage === before!.stage) : null;
+  const filled = before ? Math.min(before.need, before.pieces + result!.pieces) : 0;
+  const completes = !!before && before.pieces + result!.pieces >= before.need;
+  return (
+    <Dialog open onOpenChange={v => { if (!v && !busy) onClose(); }}>
+      <DialogContent className="reward-dialog outing-reward">
+        <DialogTitle className="intro-title">{result ? '💎 전설 조각을 받았어!' : '💌 부모님이 칭찬해 주셨어!'}</DialogTitle>
+        <DialogDescription className="sr-only">전설 조각 받기</DialogDescription>
+        {!result && o.approval && (
+          <div className="praise">
+            <img src={ASSETS.sticker(o.approval.sticker)} alt="" />
+            <p>{fromLabel2(o.approval.by)}: &ldquo;{o.approval.praise}&rdquo;</p>
+          </div>
+        )}
+        {!result && <>
+          <MasterBallProgress stage={7} big pieces={o.pieces} />
+          <button className="primary glow big-button" disabled={busy} onClick={onClaim}>💎 전설 조각 {o.pieces}개 받기</button>
+        </>}
+        {result && stageInfo && <>
+          <div className="week-gem">
+            <Gem stage={stageInfo.stage} salt={stageInfo.salt} need={before!.need} filled={filled} fly={filled - 1} glow={completes} size={130} /></div>
+          <p className="intro-text">{gemLeftText(filled, before!.need)}</p>
+          <PartnerTalk view={view}>{waGwa(partnerName(view))} 같이 끝까지 쓴 덕분이야! 보고서 모음에도 들어갔어.</PartnerTalk>
+          {result.legend.pending
+            ? <button className="primary glow big-button" onClick={onLegend}>✨ 마스터볼 열러 가기</button>
+            : <button className="primary big-button" onClick={onClose}>최고야!</button>}
+        </>}
+        {!result && <button className="secondary" disabled={busy} onClick={onClose}>나중에 받을래</button>}
       </DialogContent>
     </Dialog>
   );
