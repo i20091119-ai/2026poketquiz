@@ -214,14 +214,7 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
     <>
       <p className="intro-title">🗺️ 전설 지도</p>
       <p className="intro-text">전설은 갈수록 더 귀해.<br />다음 단계는 조각이 더 많이 필요해.</p>
-      <div className="intro-map">
-        {view.legend.stages.slice(0, 3).map(s => (
-          <div key={s.stage} className="intro-map-step" style={{ marginLeft: (s.stage - 1) * 16 }}>
-            <Gem stage={s.stage} salt={s.salt} need={s.need} filled={0} unknown={!s.open} size={44} />
-            <small>{s.stage}단계 · 조각 {s.need}개</small>
-          </div>
-        ))}
-      </div>
+      {s1 && <Gem stage={1} salt={s1.salt} need={s1.need} filled={0} size={90} />}
       <p className="intro-text small">1단계 전설 친구들</p>
       <div className="legend-candidates center">
         {[...(s1?.got ?? []).map(g => g.species), ...(s1?.left ?? [])].map(id => (

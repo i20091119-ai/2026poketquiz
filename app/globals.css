@@ -1105,3 +1105,8 @@ button.study-day:active { transform: scale(.94); }
 .legend-admin-stage { display: grid; gap: 6px; padding: 10px; border: 1px solid #e2e8f0; border-radius: 12px; }
 .legend-admin-stage .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .study-week.future { background: #f7f8f6; }
+.legend-done-gems { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.legend-now { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; border-radius: 18px; background: #eff6ff; border: 2px solid #93c5fd; }
+.legend-now-title { font-size: 20px; }
+.legend-now-gem { position: relative; }
+.legend-now-partner { position: absolute; right: -46px; bottom: -6px; width: 60px; height: 60px; object-fit: contain; animation: hop 1.6s ease-in-out infinite; }

@@ -81,40 +81,32 @@ export function gemLeftText(filled: number, need: number) {
 export function LegendMap({ open, view, onClose, onPick }: { open: boolean; view: ChildView; onClose: () => void; onPick: () => void }) {
   const lg = view.legend;
   const partner = view.owned.find(p => p.uid === view.partner);
-  const rows = [...lg.stages].reverse();
+  // 지금 단계만 자세히 보여 주고, 완성한 단계는 보석 그림만 (다음 단계는 보여 주지 않음)
+  const cur = lg.stages.find(s => s.stage === lg.stage)!;
+  const done = lg.stages.filter(s => s.done);
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="reward-dialog legend-map-dialog">
         <DialogTitle>💎 전설 지도</DialogTitle>
         <DialogDescription>수련으로 전설 조각을 모으면 마스터볼 안의 전설 포켓몬을 만날 수 있어!</DialogDescription>
-        <div className="legend-stairs">
-          {rows.map(s => {
-            const current = s.stage === lg.stage;
-            const filled = current ? Math.min(lg.pieces, s.need) : s.done ? s.need : 0;
-            return (
-              <div key={s.stage} className={'legend-step' + (current ? ' current' : '') + (s.open ? '' : ' locked') + (s.done ? ' done' : '')}
-                style={{ marginLeft: `${(s.stage - 1) * 14}px` }}>
-                {current && partner && <PokemonImage id={partner.species} shiny={partner.shiny} className="legend-partner" />}
-                <div className="legend-step-gem">
-                  <Gem stage={s.stage} salt={s.salt} need={s.need} filled={filled} complete={s.done} unknown={!s.open} size={current ? 76 : 58} />
-                </div>
-                <div className="legend-step-info">
-                  <b>{s.stage}단계 {s.open ? '' : '🔒'}</b>
-                  <span className="muted-line">조각 {s.need}개에 전설 1마리</span>
-                  {current && <span className="legend-count">지금 조각 {Math.min(lg.pieces, s.need)}/{s.need}</span>}
-                  <div className="legend-candidates">
-                    {s.got.map(g => (
-                      <span key={'g' + g.species} className="legend-cand got" title={species(g.species).name}>
-                        <PokemonImage id={g.species} shiny={g.shiny} />
-                      </span>
-                    ))}
-                    {s.left.map(id => <span key={id} className="legend-cand silhouette"><PokemonImage id={id} /></span>)}
-                    {!s.open && Array.from({ length: s.count || 5 }, (_, i) => <span key={'q' + i} className="legend-cand unknown">?</span>)}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        {done.length > 0 && <div className="legend-done-gems" aria-label="완성한 보석">
+          {done.map(s => <Gem key={s.stage} stage={s.stage} salt={s.salt} need={s.need} filled={s.need} complete size={44} />)}
+        </div>}
+        <div className="legend-now">
+          <b className="legend-now-title">{cur.stage}단계</b>
+          <div className="legend-now-gem">
+            <Gem stage={cur.stage} salt={cur.salt} need={cur.need} filled={Math.min(lg.pieces, cur.need)} size={130} />
+            {partner && <PokemonImage id={partner.species} shiny={partner.shiny} className="legend-now-partner" />}
+          </div>
+          <span className="legend-count">조각 {Math.min(lg.pieces, cur.need)}/{cur.need}</span>
+          <div className="legend-candidates center">
+            {cur.got.map(g => (
+              <span key={'g' + g.species} className="legend-cand got" title={species(g.species).name}>
+                <PokemonImage id={g.species} shiny={g.shiny} />
+              </span>
+            ))}
+            {cur.left.map(id => <span key={id} className="legend-cand silhouette"><PokemonImage id={id} /></span>)}
+          </div>
         </div>
         {lg.pending ? <button className="primary glow big-button" onClick={onPick}>✨ 마스터볼 열기!</button>
           : lg.waiting ? <p className="legend-note">부모님이 다음 전설을 준비하고 있어. 조각은 계속 모여!</p>
