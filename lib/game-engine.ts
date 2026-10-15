@@ -1482,7 +1482,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       settleLegend(state, ctx);
       const name = ball.shiny ? shinyName(ball.species) : species(ball.species).name;
       return {
-        balls, picked: action.pick, caught: ball.species, shiny: ball.shiny, duplicate: added.duplicate,
+        // 고르지 않은 볼의 내용은 아이 화면에 보내지 않음 (2026-10-15 부모님 요청: 다음 기대감)
+        balls: [ball], picked: 0, others: balls.length - 1, caught: ball.species, shiny: ball.shiny, duplicate: added.duplicate,
         stageUp: lg.stage > stageBefore ? { stage: lg.stage, need: lg.need } : null,
         legend: legendView(state, ctx.offlineRules),
         message: added.duplicate ? `${eulReul(name)} 또 만났어! 우정 보너스를 받았어.` : `${ball.shiny ? '✨ 이로치다! ' : ''}전설의 포켓몬 ${eulReul(name)} 만났어!`,

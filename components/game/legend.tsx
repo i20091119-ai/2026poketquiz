@@ -118,7 +118,7 @@ export function LegendMap({ open, view, onClose, onPick }: { open: boolean; view
 }
 
 export type LegendPickResult = {
-  balls: { species: number; shiny: boolean }[]; picked: number; caught: number; shiny: boolean; duplicate: boolean;
+  balls: { species: number; shiny: boolean }[]; picked: number; others: number; caught: number; shiny: boolean; duplicate: boolean;
   stageUp: { stage: number; need: number } | null; legend: LegendView; message: string;
 };
 
@@ -170,19 +170,7 @@ export function LegendPickDialog({ open, view, busy, onPick, onClose }: {
             <PokemonImage id={result.caught} shiny={result.shiny} className="celebration-img" />
           </div>
           <h3 className={'caught-name' + (result.shiny ? ' shiny-name' : '')}>{name(result.balls[result.picked])}</h3>
-          {result.balls.length > 1 && <>
-            <p className="intro-text small">다른 볼에는 누가 있었을까?</p>
-            <div className="choice-row">
-              {result.balls.map((b, i) => (
-                <div key={i} className={'reward-card revealed' + (i === result.picked ? ' picked' : '')}>
-                  {i === result.picked && <span className="picked-tag">내 것!</span>}
-                  <PokemonImage id={b.species} shiny={b.shiny} />
-                  <b>{name(b)}</b>
-                </div>
-              ))}
-            </div>
-            <p className="intro-text small">다른 친구는 다음 보석에서 만날 수 있어!</p>
-          </>}
+          {result.others > 0 && <p className="intro-text small">다른 마스터볼에는 누가 있었을까? 다음 보석을 모으면 또 열 수 있어!</p>}
           {result.stageUp && next && <div className="legend-stage-up">
             <Gem stage={next.stage} salt={next.salt} need={next.need} filled={0} size={90} className="gem-appear" />
             <p><b>🎉 {result.stageUp.stage - 1}단계 전설을 모두 만났어!</b><br />다음 단계 전설은 더 귀해서 조각이 더 필요해. 이제 조각 <b>{result.stageUp.need}개</b>에 1마리야!</p>

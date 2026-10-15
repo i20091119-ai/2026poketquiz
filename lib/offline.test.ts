@@ -130,7 +130,7 @@ test('달이 바뀌는 주도 한 주 (10/26~11/1)', () => {
   assert.equal(state.offline!.weeks['2026-10-26'].settled!.score, 4.5);
 });
 
-test('전설: 조각 3개 → 마스터볼 3개(남은 후보, 가진 포켓몬 제외) → 고르기 → 나머지도 공개', () => {
+test('전설: 조각 3개 → 마스터볼 3개(남은 후보, 가진 포켓몬 제외) → 고르기 (나머지는 숨김)', () => {
   const state = started();
   const c = ctx('2026-10-20');
   state.owned.push({ uid: 'x1', species: 243, obtainedAt: c.now }); // 이미 가진 라이코는 빠짐
@@ -143,8 +143,10 @@ test('전설: 조각 3개 → 마스터볼 3개(남은 후보, 가진 포켓몬 
   assert.equal(pending.balls.length, 3);
   assert.ok(pending.balls.every(b => [145, 144, 244, 245].includes(b.species)));
   assert.equal(legendView(state).pending!.count, 3); // 아이 화면에는 수만
-  const r = applyAction(state, { type: 'legendPick', pick: 0 }, c) as { balls: { species: number }[]; caught: number };
-  assert.equal(r.balls.length, 3);
+  const r = applyAction(state, { type: 'legendPick', pick: 0 }, c) as { balls: { species: number }[]; caught: number; others: number };
+  assert.equal(r.balls.length, 1); // 고르지 않은 볼 내용은 보내지 않음
+  assert.equal(r.others, 2);
+  assert.equal(r.balls[0].species, r.caught);
   assert.ok(state.owned.some(p => p.species === r.caught));
   assert.equal(state.legend!.got.length, 1);
   assert.equal(state.legend!.pending, undefined);
