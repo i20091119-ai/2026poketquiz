@@ -343,7 +343,7 @@ export async function POST(request: Request) {
         const rules = await offlineRulesNow();
         await mutateState(state => { setOfflineCheer(state, String(body.weekStart ?? ''), String(body.by) as GiftInput['from'], String(body.text ?? ''), player.today, rules, new Date().toISOString()); return { result: null, changed: true }; }, player.id);
         await appendActivity(player.id, player.today, [{ kind: 'offline', data: { cheer: { weekStart: body.weekStart, by: body.by, text: body.text } } }]);
-        return json({ message: String(body.text ?? '').trim() ? '응원 한 줄을 저장했어요. 다음 월요일 "지난주 탐험 기록"에 보여요.' : '응원 한 줄을 지웠어요.' });
+        return json({ message: String(body.text ?? '').trim() ? '응원 한 줄을 저장했어요. 다음 월요일 "지난주 수련 기록"에 보여요.' : '응원 한 줄을 지웠어요.' });
       }
       case 'setOfflineRule': {
         const key = String(body.key);
@@ -361,7 +361,7 @@ export async function POST(request: Request) {
           rules[field.key] = value;
         }
         await saveOfflineRules(rules);
-        return json({ message: key === 'weekGoal' ? '한 주 조각 기준을 저장했어요. 아직 기록하지 않은 주부터 적용돼요(이미 기록을 시작한 주는 그대로).' : '집 공부 규칙을 저장했어요.' });
+        return json({ message: key === 'weekGoal' ? '한 주 조각 기준을 저장했어요. 아직 기록하지 않은 주부터 적용돼요(이미 기록을 시작한 주는 그대로).' : '트레이너 수련 규칙을 저장했어요.' });
       }
       case 'setLegendStage': {
         // 단계별 조각 수·후보. 조각 수는 아직 열리지 않은 단계부터 적용, 후보는 언제든
@@ -395,7 +395,7 @@ export async function POST(request: Request) {
       }
       case 'resetOfflineRules':
         await saveOfflineRules(null);
-        return json({ message: '집 공부·전설 규칙을 처음 값으로 되돌렸어요.' });
+        return json({ message: '트레이너 수련·전설 규칙을 처음 값으로 되돌렸어요.' });
       case 'simOffline': {
         if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
         const { today } = await simClock();

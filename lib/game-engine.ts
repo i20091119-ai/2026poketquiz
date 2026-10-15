@@ -2338,7 +2338,7 @@ export function simOffline(state: GameState, op: string, ctx: LegendCtx): string
     }
     case 'reset':
       state.offline = undefined; state.legend = undefined;
-      return '시험용 집 공부·전설 기록을 지웠어요.';
+      return '시험용 수련·전설 기록을 지웠어요.';
     default:
       fail('지원하지 않는 시험이에요.');
   }

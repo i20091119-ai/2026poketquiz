@@ -86,7 +86,7 @@ export function LegendMap({ open, view, onClose, onPick }: { open: boolean; view
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="reward-dialog legend-map-dialog">
         <DialogTitle>💎 전설 지도</DialogTitle>
-        <DialogDescription>집 공부로 전설 조각을 모으면 마스터볼 안의 전설 포켓몬을 만날 수 있어!</DialogDescription>
+        <DialogDescription>수련으로 전설 조각을 모으면 마스터볼 안의 전설 포켓몬을 만날 수 있어!</DialogDescription>
         <div className="legend-stairs">
           {rows.map(s => {
             const current = s.stage === lg.stage;

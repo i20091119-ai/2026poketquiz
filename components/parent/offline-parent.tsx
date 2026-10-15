@@ -47,8 +47,8 @@ export function StudyRecord({ overview, sim, busy, call, reload }: { overview: O
   const stats = monthStats(month, overview.marks, weeksForCal, lg.log);
   return (
     <section className="panel parent-section study-panel">
-      <h2>📅 집 공부 기록{sim ? ' (시험용 기록)' : ''}</h2>
-      <p className="muted">종이 계획표를 보고 저녁에 적어 주세요. 아이는 다음 날 앱을 열면 선물 상자를 받아요. 한 주(월~일) 합계가 {halfText(overview.rules.now.weekGoal)} 이상이면 전설 조각 1개 (● 1, ■ 0.5).</p>
+      <h2>📅 트레이너 수련 기록{sim ? ' (시험용 기록)' : ''}</h2>
+      <p className="muted">트레이너 수련(집에서 하는 공부)을 종이 계획표를 보고 저녁에 적어 주세요. 아이는 다음 날 앱을 열면 선물 상자를 받아요. 한 주(월~일) 합계가 {halfText(overview.rules.now.weekGoal)} 이상이면 전설 조각 1개 (● 1, ■ 0.5).</p>
       <div className="study-today">
         <b>오늘 {dateText(today)}</b>
         {(['full', 'some', 'none'] as DayMark[]).map(m => (
@@ -77,7 +77,7 @@ export function StudyRecord({ overview, sim, busy, call, reload }: { overview: O
           {(() => { const s = lg.stages.find(x => x.stage === lg.stage)!; return <Gem stage={s.stage} salt={s.salt} need={s.need} filled={Math.min(lg.pieces, s.need)} size={56} />; })()}
           <span><b>{lg.stage}단계</b> · 조각 {Math.min(lg.pieces, lg.need)}/{lg.need}{lg.pieces > lg.need ? ` (+${lg.pieces - lg.need} 남음)` : ''}{lg.pending ? ' · ✨ 마스터볼 고르기 대기' : ''}</span>
         </div>
-        {lg.waiting && <p className="study-warning">⚠️ {lg.stage}단계 전설 후보가 없어요. 전체 설정 탭 &ldquo;집 공부 · 전설 규칙&rdquo;에서 후보를 정해 주세요. 그동안 조각은 계속 모여요.</p>}
+        {lg.waiting && <p className="study-warning">⚠️ {lg.stage}단계 전설 후보가 없어요. 전체 설정 탭 &ldquo;트레이너 수련 · 전설 규칙&rdquo;에서 후보를 정해 주세요. 그동안 조각은 계속 모여요.</p>}
         <div className="legend-candidates">
           {overview.gotAll.map((g, i) => <span key={i} className="legend-cand got" title={`${g.stage}단계 ${species(g.species).name}`}><PokemonImage id={g.species} shiny={g.shiny} /></span>)}
         </div>
@@ -97,7 +97,7 @@ function CheerEditor({ weekStart, cheer, busy, call, reload }: { weekStart: stri
       <input value={text} maxLength={GIFT_LETTER_MAX} placeholder="예: 이번 주 매일 책 읽은 거 정말 멋졌어!" onChange={e => setText(e.target.value)} />
       <div className="button-row">
         <button className="primary small" disabled={busy || text.trim() === (cheer?.text ?? '')} onClick={async () => { if (await call({ action: 'offlineCheer', weekStart, by, text })) await reload(); }}>응원 저장</button>
-        <small className="muted">{plusDays(weekStart, 7).slice(5).replace('-', '/')}(다음 월요일) &ldquo;지난주 탐험 기록&rdquo;에 보여요. 비우면 안 보여요.</small>
+        <small className="muted">{plusDays(weekStart, 7).slice(5).replace('-', '/')}(다음 월요일) &ldquo;지난주 수련 기록&rdquo;에 보여요. 비우면 안 보여요.</small>
       </div>
     </div>
   );
@@ -123,8 +123,8 @@ export function OfflineRulesEditor({ overview, busy, call, reload }: { overview:
   };
   return (
     <section className="panel parent-section shiny-chance">
-      <h2>📅 집 공부 · 전설 규칙</h2>
-      <p className="muted">한 주 기준은 그 주에 처음 기록할 때 그 주에 고정돼요(진행 중 규칙 변경 금지). 단계 조각 수는 아직 열리지 않은 단계부터 적용돼요. 책 상자는 랜덤상자와 같은데 볼이 한 등급 위예요(몬스터볼 대신 슈퍼볼…).</p>
+      <h2>📅 트레이너 수련 · 전설 규칙</h2>
+      <p className="muted">한 주 기준은 그 주에 처음 기록할 때 그 주에 고정돼요(진행 중 규칙 변경 금지). 단계 조각 수는 아직 열리지 않은 단계부터 적용돼요. 수련 상자는 랜덤상자와 같은데 볼이 한 등급 위예요(몬스터볼 대신 슈퍼볼…).</p>
       <div className="chance-grid">
         {fields.map(f => (
           <label key={f.key}>
@@ -205,13 +205,13 @@ export function OfflineSimTools({ busy, call, reload }: { busy: boolean; call: C
   const clearDevice = (what: 'week' | 'intro') => {
     try {
       for (const k of Object.keys(localStorage)) if (what === 'week' ? k.startsWith('pq-week-seen-') : k === 'pq-offline-intro-v1') localStorage.removeItem(k);
-      setNote(what === 'week' ? '이 기기에서 "지난주 탐험 기록"을 다시 볼 수 있어요.' : '이 기기에서 집 공부 처음 안내를 다시 볼 수 있어요.');
+      setNote(what === 'week' ? '이 기기에서 "지난주 수련 기록"을 다시 볼 수 있어요.' : '이 기기에서 수련 처음 안내를 다시 볼 수 있어요.');
     } catch { setNote('이 기기 저장을 지우지 못했어요.'); }
   };
   return (
     <div className="sim-group">
-      <b>📅 집 공부 · 💎 전설 시험</b>
-      <p className="muted">달력 기록은 &ldquo;📅 집 공부&rdquo; 탭에서 그대로 적어 보면 돼요(시뮬레이션 중엔 시험용 기록에). &ldquo;다음 날로&rdquo;를 누르면 하루 선물 상자가 와요.</p>
+      <b>📅 트레이너 수련 · 💎 전설 시험</b>
+      <p className="muted">달력 기록은 &ldquo;📅 트레이너 수련 기록&rdquo; 탭에서 그대로 적어 보면 돼요(시뮬레이션 중엔 시험용 기록에). &ldquo;다음 날로&rdquo;를 누르면 하루 상자(● 수련 상자)가 와요.</p>
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('weekGood')}>지난주 채우기: 조각 받는 주(●●■●■●▲ = 5)</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('weekShort')}>지난주 채우기: 아쉬운 주(3½)</button>
@@ -224,7 +224,7 @@ export function OfflineSimTools({ busy, call, reload }: { busy: boolean; call: C
         <button className="secondary small" disabled={busy} onClick={() => void run('pieceFull')}>보석 완성(마스터볼)</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('leaveOne')}>이 단계 전설 1마리만 남기기</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('stage4')}>4단계로(자동 보석)</button>
-        <button className="secondary small danger" disabled={busy} onClick={() => void run('reset')}>집 공부·전설 시험 기록 지우기</button>
+        <button className="secondary small danger" disabled={busy} onClick={() => void run('reset')}>수련·전설 시험 기록 지우기</button>
       </div>
       {note && <p className="muted">{note}</p>}
     </div>

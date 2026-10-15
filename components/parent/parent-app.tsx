@@ -181,7 +181,7 @@ function Login({ configured, busy, error, onLogin }: { configured: boolean; busy
 /** 보호자 공간 탭: 아이 화면처럼 위 묶음(자주 보는 것)과 아래 묶음(설정·개발) */
 const MAIN_TABS = [
   { key: 'report', label: '📊 학습 현황' },
-  { key: 'study', label: '📅 집 공부' },
+  { key: 'study', label: '📅 트레이너 수련 기록' },
   { key: 'gift', label: '🎁 선물' },
   { key: 'events', label: '🏆 이벤트 기록' },
   { key: 'battlelog', label: '⚔️ 포켓로그 기록' },
