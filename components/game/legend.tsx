@@ -88,7 +88,7 @@ export function LegendMap({ open, view, onClose, onPick }: { open: boolean; view
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="reward-dialog legend-map-dialog">
         <DialogTitle>💎 전설 지도</DialogTitle>
-        <DialogDescription>수련으로 전설 조각을 모으면 마스터볼 안의 전설 포켓몬을 만날 수 있어!</DialogDescription>
+        <DialogDescription>훈련으로 전설 조각을 모으면 마스터볼 안의 전설 포켓몬을 만날 수 있어!</DialogDescription>
         {done.length > 0 && <div className="legend-done-gems" aria-label="완성한 보석">
           {done.map(s => <Gem key={s.stage} stage={s.stage} salt={s.salt} need={s.need} filled={s.need} complete size={44} />)}
         </div>}

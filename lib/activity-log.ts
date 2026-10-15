@@ -37,7 +37,7 @@ export const LOG_KINDS = {
   outing: '나들이 체험보고서(단계·제출·확인·보상)',
   team: '모험 팀 바꾸기',
   star: '★ 배틀 힘 오름(먹이기·에너지 바꾸기·💗)',
-  offline: '트레이너 수련 기록(부모님이 적은 ●■▲·응원)',
+  offline: '트레이너 훈련 기록(부모님이 적은 ●■▲·응원)',
   legend: '전설 조각·전설 지도(조각 얻음·단계·마스터볼)',
 } as const;
 
@@ -195,7 +195,7 @@ export function afterAction(before: Before, state: GameState, action: Action, re
 
   // 상자·선물 등 "여러 개 중 하나 고르기"
   const sources: Record<string, string> = {
-    dailyBox: '일일미션 랜덤상자', offlineBox: '트레이너 수련 하루 상자', exploreReward: '탐험 과목 선물', masterReward: '탐험 마스터 보상', expGift: '경험치 선물', eventBox: '10일 연속 상자',
+    dailyBox: '일일미션 랜덤상자', offlineBox: '트레이너 훈련 하루 상자', exploreReward: '탐험 과목 선물', masterReward: '탐험 마스터 보상', expGift: '경험치 선물', eventBox: '10일 연속 상자',
   };
   if (action.type in sources) {
     let items: BoxItem[] | null = null, picked: number | null = null;

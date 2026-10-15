@@ -443,8 +443,8 @@ export default function Game() {
         onClose={() => { setPickOpen(false); setPickLater(true); setPickKey(k => k + 1); }} />
       <Dialog open={!!boxAsk} onOpenChange={o => { if (!o && boxAsk) setBoxLater(l => [...l, boxAsk.id]); }}>
         <DialogContent className="reward-dialog">
-          <DialogTitle className="intro-title">{boxAsk?.kind === 'book' ? '📘 수련 상자가 왔어!' : '🎁 선물 상자가 왔어!'}</DialogTitle>
-          <DialogDescription className="intro-text">{boxAsk && `${Number(boxAsk.date.slice(5, 7))}월 ${Number(boxAsk.date.slice(8))}일 수련 ${boxAsk.mark === 'full' ? '●' : boxAsk.mark === 'some' ? '■' : '▲'} 선물이야!`}</DialogDescription>
+          <DialogTitle className="intro-title">{boxAsk?.kind === 'book' ? '📘 훈련 상자가 왔어!' : '🎁 선물 상자가 왔어!'}</DialogTitle>
+          <DialogDescription className="intro-text">{boxAsk && `${Number(boxAsk.date.slice(5, 7))}월 ${Number(boxAsk.date.slice(8))}일 훈련 ${boxAsk.mark === 'full' ? '●' : boxAsk.mark === 'some' ? '■' : '▲'} 선물이야!`}</DialogDescription>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="day-box-img" src={boxAsk?.kind === 'book' ? ASSETS.bookBox : ASSETS.boxClosed} alt="" />
           <button className="primary big-button" onClick={() => { if (boxAsk) setDayBox(boxAsk); }}>열어 보기!</button>

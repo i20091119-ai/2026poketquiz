@@ -44,7 +44,7 @@ export function MonthCalendar({ month, today, marks, weeks, defaultGoal, onDay, 
   onDay?: (date: string) => void; busy?: boolean;
 }) {
   return (
-    <div className="study-cal" role="grid" aria-label={`${month} 수련 달력`}>
+    <div className="study-cal" role="grid" aria-label={`${month} 훈련 달력`}>
       {[...DOW, '주'].map(d => <div key={d} className={'study-cal-head' + (d === '주' ? ' week' : '')}>{d}</div>)}
       {monthWeeks(month).map(ws => {
         const score = weekDates(ws).reduce((s, d) => s + (marks[d] ? MARK_SCORE[marks[d]] : 0), 0);
@@ -81,8 +81,8 @@ export function StudyCalendarDialog({ open, view, onClose, onOpenBox }: { open: 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="reward-dialog study-dialog">
-        <DialogTitle>📅 수련 달력</DialogTitle>
-        <DialogDescription>부모님이 적어 주신 수련 기록이야.</DialogDescription>
+        <DialogTitle>📅 훈련 달력</DialogTitle>
+        <DialogDescription>부모님이 적어 주신 훈련 기록이야.</DialogDescription>
         <div className="month-nav">
           <button className="icon-button" aria-label="이전 달" onClick={() => setMonth(m => shiftMonth(m, -1))}><ChevronLeft /></button>
           <b>{Number(month.slice(0, 4))}년 {Number(month.slice(5))}월</b>
@@ -91,7 +91,7 @@ export function StudyCalendarDialog({ open, view, onClose, onOpenBox }: { open: 
         <MonthCalendar month={month} today={off.today} marks={off.marks} weeks={off.weeks} defaultGoal={off.weekGoal} />
         <MarkLegend />
         <p className="study-month-stats">이번 달 <b className="mark-full">●</b> {stats.full}개 · 얻은 전설 조각 💎 {stats.pieces}개</p>
-        {off.boxes.length > 0 && <button className="primary glow" onClick={onOpenBox}>🎁 수련 선물 상자 열기 ({off.boxes.length})</button>}
+        {off.boxes.length > 0 && <button className="primary glow" onClick={onOpenBox}>🎁 훈련 선물 상자 열기 ({off.boxes.length})</button>}
         <button className="secondary" onClick={onClose}>닫기</button>
       </DialogContent>
     </Dialog>
@@ -105,7 +105,7 @@ export function StudyStrip({ view, onCalendar, onMap }: { view: ChildView; onCal
   return (
     <div className="study-strip">
       <button className="study-strip-btn" onClick={onCalendar}>
-        <span className="study-strip-icon">📅</span><span>수련 달력</span>
+        <span className="study-strip-icon">📅</span><span>훈련 달력</span>
         {view.offline.boxes.length > 0 && <span className="tab-count">{view.offline.boxes.length}</span>}
       </button>
       <button className={'study-strip-btn' + (lg.pending ? ' glow' : '')} onClick={onMap}>
@@ -147,7 +147,7 @@ export function WeekRecordDialog({ view, open, onDone }: { view: ChildView; open
   return (
     <Dialog open={open} onOpenChange={o => { if (!o && stage === 'result') onDone(completes && !!view.legend.pending); }}>
       <DialogContent className="reward-dialog week-record">
-        <DialogTitle className="intro-title">지난주 수련 기록</DialogTitle>
+        <DialogTitle className="intro-title">지난주 훈련 기록</DialogTitle>
         <DialogDescription>{shortDate(w.start)} ~ {shortDate(w.end)}</DialogDescription>
         <div className="week-days">
           {w.marks.map((m, i) => (
@@ -169,7 +169,7 @@ export function WeekRecordDialog({ view, open, onDone }: { view: ChildView; open
           </> : <p className="intro-text">{w.short}</p>}
           {w.cheer && <p className="week-cheer">💌 {GIFT_SENDERS[w.cheer.by]}: {w.cheer.text}</p>}
           <button className="primary big-button" onClick={() => onDone(completes && !!view.legend.pending)}>
-            {completes && view.legend.pending ? '✨ 마스터볼 열러 가기' : '이번 주도 수련하자'}
+            {completes && view.legend.pending ? '✨ 마스터볼 열러 가기' : '이번 주도 훈련하자'}
           </button>
         </div>}
       </DialogContent>
@@ -189,14 +189,14 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
   const s1 = view.legend.stages.find(s => s.stage === 1);
   const slides: React.ReactNode[] = [
     <>
-      <p className="intro-title">📅 트레이너 수련이 생겼어!</p>
-      <p className="intro-text">집에서 하는 공부는 <b>트레이너 수련</b>이야!</p>
-      <p className="intro-text">수련을 <b>다 하면 <span className="mark-full">●</span></b>,<br />조금이라도 하면 <b><span className="mark-some">■</span></b>를<br />부모님이 기록해 줘.</p>
+      <p className="intro-title">📅 트레이너 훈련이 생겼어!</p>
+      <p className="intro-text">집에서 하는 공부는 <b>트레이너 훈련</b>이야!</p>
+      <p className="intro-text">훈련을 <b>다 하면 <span className="mark-full">●</span></b>,<br />조금이라도 하면 <b><span className="mark-some">■</span></b>를<br />부모님이 기록해 줘.</p>
     </>,
     <>
       <p className="intro-title">🎁 다음 날엔 선물!</p>
       <p className="intro-text">다음 날 앱을 열면<br /><b>선물 상자</b>가 와 있어.</p>
-      <p className="intro-text"><span className="mark-full">●</span> 날엔 더 좋은 <b>📘 수련 상자</b>!</p>
+      <p className="intro-text"><span className="mark-full">●</span> 날엔 더 좋은 <b>📘 훈련 상자</b>!</p>
     </>,
     <>
       <p className="intro-title">💎 전설 조각</p>
@@ -227,7 +227,7 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="reward-dialog offline-intro">
-        <DialogTitle className="sr-only">트레이너 수련 안내</DialogTitle>
+        <DialogTitle className="sr-only">트레이너 훈련 안내</DialogTitle>
         <DialogDescription className="sr-only">{page + 1} / {slides.length}</DialogDescription>
         <div className="intro-page" key={page}>{slides[page]}</div>
         <div className="intro-dots">{slides.map((_, i) => <i key={i} className={i === page ? 'on' : ''} />)}</div>

@@ -13,7 +13,7 @@ export const MARK_SCORE: Record<DayMark, number> = { full: 1, some: 0.5, none: 0
 
 /** 하루 선물 상자 종류: 책 상자(볼 한 등급 위) / 랜덤상자 / 없음 */
 export type DayBoxKind = 'book' | 'normal' | 'off';
-export const DAY_BOX_LABEL: Record<DayBoxKind, string> = { book: '📘 수련 상자', normal: '🎁 랜덤상자', off: '없음' };
+export const DAY_BOX_LABEL: Record<DayBoxKind, string> = { book: '📘 훈련 상자', normal: '🎁 랜덤상자', off: '없음' };
 
 /** 처음 값 (보호자 공간 전체 설정 "집 공부 · 전설 규칙"에서 바꾸면 settings.offline_rules에 바꾼 것만) */
 export const OFFLINE_DEFAULT = {
@@ -141,6 +141,6 @@ export function shortMessage(marks: Record<string, DayMark | undefined>, start: 
   const full = toFull + extraFull;
   const parts = [full ? `●가 ${countWord(full)} 더` : '', swap ? `■ 대신 ●가 ${countWord(swap)}` : ''].filter(Boolean);
   const how = parts.length === 2 ? `${parts[0]}, ${parts[1]}만 더` : full ? `●가 ${countWord(full)}만 더` : `■ 대신 ●가 ${countWord(swap)}만 더`;
-  return `이번엔 ${halfText(short)}개가 모자랐어. ${how} 있었으면 됐어. 이번 주 수련 다시 도전!`;
+  return `이번엔 ${halfText(short)}개가 모자랐어. ${how} 있었으면 됐어. 이번 주 훈련 다시 도전!`;
 }
 const countWord = (n: number) => (['', '한 번', '두 번', '세 번', '네 번', '다섯 번', '여섯 번', '일곱 번'][n] ?? `${n}번`);
