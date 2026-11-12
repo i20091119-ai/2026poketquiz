@@ -824,6 +824,7 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
           <b>🎒 모험 팀 · 💗 · ★ 시험</b>
           <div className="button-row">
             <button className="secondary small" disabled={busy} onClick={() => { try { localStorage.removeItem('pq-adventure-intro-v1'); } catch { /* 저장이 막혀 있으면 그냥 */ } goTo(childScreen)({ preventDefault() {} }); }}>이 기기에서 업데이트 안내 6장 다시 보기</button>
+            <button className="secondary small" disabled={busy} onClick={() => { try { localStorage.removeItem('pq-feed-intro-v1'); } catch { /* 저장이 막혀 있으면 그냥 */ } goTo(childScreen)({ preventDefault() {} }); }}>이 기기에서 먹이기 💗 안내 다시 보기</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simEnergy' })) await reload(); }}>에너지 +50 (모든 속성) · 경험치 +300</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'near' })) await reload(); }}>모험 팀 💗 가득 차기 1개 전으로</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'plus10' })) await reload(); }}>모험 팀 💗 +10</button>

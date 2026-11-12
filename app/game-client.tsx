@@ -17,6 +17,7 @@ import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type Rewar
 import { ASSETS } from '@/lib/assets';
 import { QUIZ_ATTEMPTS, setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
+import { FeedIntro, feedIntroSeen, markFeedIntroSeen } from '@/components/game/feed-intro';
 import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
 import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
 import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter, type OutingPieceResult } from '@/components/game/outing';
@@ -74,6 +75,9 @@ export default function Game() {
   const offIntroStored = useSyncExternalStore(subscribeStorage, offlineIntroSeen, () => true);
   const [offIntroDone, setOffIntroDone] = useState(false);
   const offIntroSeen = offIntroStored || offIntroDone;
+  /** 먹이기 → 💗 안내 (2026-11-12, 기기마다 한 번) */
+  const feedIntroStored = useSyncExternalStore(subscribeStorage, feedIntroSeen, () => true);
+  const [feedIntroDone, setFeedIntroDone] = useState(false);
   const [offIntroOpen, setOffIntroOpen] = useState(false);
   const [studyOpen, setStudyOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
@@ -109,11 +113,11 @@ export default function Game() {
     if (view.outings.some(o => (o.status === 'open' && !o.seenDevices.includes(deviceId())) || (o.status === 'late' && !o.late?.seen))) return;
     if (view.limited.some(e => (e.phase === 'active' && !e.accepted && !e.seenDevices.includes(deviceId())) || (e.phase === 'active' && e.gold && !e.gold.introSeen) || (e.remind && !e.remindSeen) || (e.phase === 'ended' && e.accepted && !e.endSeen))) return;
     // 집 공부 안내·지난주 기록·마스터볼·하루 선물 상자가 먼저
-    if (!offIntroSeen || offIntroOpen || studyOpen || mapOpen || pickOpen || dayBox || view.legend.pending) return;
+    if (!offIntroSeen || offIntroOpen || studyOpen || mapOpen || pickOpen || dayBox || view.legend.pending || (!feedIntroStored && !feedIntroDone)) return;
     if (view.offline.lastWeek && !weekSeen(view.offline.lastWeek.start) && weekDone !== view.offline.lastWeek.start) return;
     const next = view.gifts.find(g => !g.opened && !shownGifts.current.has(g.id));
     if (next) { shownGifts.current.add(next.id); setGiftPopup(next); }
-  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen, writingId, rewardId, offIntroSeen, offIntroOpen, studyOpen, mapOpen, pickOpen, dayBox, weekDone]);
+  }, [view, giftPopup, opening, replying, quiz, reward, ballQueue.length, changeId, introOpen, introSeen, writingId, rewardId, offIntroSeen, offIntroOpen, studyOpen, mapOpen, pickOpen, dayBox, weekDone, feedIntroStored, feedIntroDone]);
 
   // 레인보우를 다 모았는데 아직 포켓몬을 안 골랐으면 (앱을 열 때 한 번) 고르기 창을 띄움
   useEffect(() => {
@@ -258,6 +262,9 @@ export default function Game() {
   const showWeek = !!lastWeek && studyCalm && offIntroSeen && !showOffIntro && weekDone !== lastWeek.start && !weekSeen(lastWeek.start);
   const autoPick = studyCalm && offIntroSeen && !showWeek && !!view.legend.pending && !pickLater;
   const boxAsk = studyCalm && offIntroSeen && !showWeek && !autoPick ? view.offline.boxes.find(b => !boxLater.includes(b.id)) ?? null : null;
+  // 먹이기 → 💗 안내: 다른 안내 팝업이 다 끝난 뒤 한 번
+  const showFeedIntro = studyCalm && offIntroSeen && !showOffIntro && !showWeek && !autoPick && !boxAsk && !feedIntroStored && !feedIntroDone;
+  const closeFeedIntro = () => { markFeedIntroSeen(); setFeedIntroDone(true); };
   const pickLegend = async (pick: number) => { setPickOpen(true); return act<LegendPickResult>({ type: 'legendPick', pick }); };
   const saveTeam = async (friends: string[]) => { const r = await act<{ message: string }>({ type: 'team', friends }); if (r) setNotice(r.message); return !!r; };
   /** 배틀 탭: 서버에 올려 둔 게임 오버 판을 부활권으로 되살려 첫 슬롯에 넣고 포켓로그로 */
@@ -433,6 +440,8 @@ export default function Game() {
       <PastEventsDialog open={pastOpen} view={view} onClose={() => setPastOpen(false)} onWrite={id => { setPastOpen(false); setWritingId(id); }} />
       <OutingGallery open={galleryOpen} outings={view.outings} onClose={() => setGalleryOpen(false)} onWrite={id => { setGalleryOpen(false); setWritingId(id); }} />
 
+      {view.partner && <FeedIntro key={showFeedIntro ? 'fi-on' : 'fi-off'} open={showFeedIntro} view={view} onClose={closeFeedIntro}
+        onGoBag={() => { closeFeedIntro(); setTab('bag'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
       {view.partner && <OfflineIntro key={showOffIntro ? 'oi-on' : 'oi-off'} open={showOffIntro} view={view} onClose={closeOffIntro} />}
       {view.partner && lastWeek && <WeekRecordDialog key={'w' + lastWeek.start} view={view} open={showWeek}
         onDone={openPick => { markWeekSeen(lastWeek.start); setWeekDone(lastWeek.start); if (openPick) setPickOpen(true); }} />}
