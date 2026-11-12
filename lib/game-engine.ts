@@ -1,7 +1,7 @@
 // 게임 규칙. 서버에서만 실행되며, 정답·보상·확률은 모두 여기서 결정합니다.
 import {
   ACTIVITY_LOG_DAYS, BALLS, BATTLE_LOG_DAYS, BATTLE_REPORT_MAX_SECONDS, BATTLE_STARTS_PER_DAY, DAILY_ATTEMPTS, DAILY_CANDY, QUIZ_REPORT_MAX_SECONDS, WEAK_AREA, DAILY_BOX_RULES, DAILY_BOX_TABLE, DAILY_PER_SUBJECT, DUPLICATE_BONUS, EXP_EXCHANGE, EXP_GIFT, EXPLORE_ITEM_WEIGHTS,
-  eunNeun, eulReul, iGa, SUBJECT_INFO, POTIONS, battleIvFromFeeds, battlePowerMaxFeeds, evolveHearts, growth, potionTargets, REWARD_PER_ANSWER, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
+  eunNeun, eulReul, iGa, waGwa, SUBJECT_INFO, POTIONS, battleIvFromFeeds, battlePowerMaxFeeds, evolveHearts, growth, potionTargets, REWARD_PER_ANSWER, REVIEW_RULES, RETRY_WAIT_SECONDS, STARTERS, statReward, SUBJECT_BERRY, SUBJECTS, SUBJECT_TYPES, TYPE_KEYS,
   EVENT_INFO, STREAK_DAYS, type EventId,
   GIFT_BALL, GIFT_CANDY, GIFT_CHOICE_INFO, GIFT_EXP, GIFT_HISTORY, GIFT_LETTER_MAX, GIFT_LIMIT_DEFAULT, GIFT_REASON_MAX, GIFT_SENDERS, GIFT_SIZES, REPLY_STICKERS, REPLY_TEXT_MAX,
   SHINY_CHANCE_DEFAULT, type ShinyBallKind,
@@ -41,8 +41,10 @@ export type OwnedPokemon = { uid: string; species: number; obtainedAt: string; s
 export type BankProgress = {
   solved: number[];
   wrong: Record<string, number>;
-  /** 틀린 문제 → 마지막으로 틀린 날짜. 그날은 다시 나오지 않고, 다른 날 맞히면 빠집니다. */
+  /** 틀린 문제 → 마지막으로 틀린 날짜. REVIEW_RULES.delayDays일 뒤부터 다시 나오고, 그때 첫 시도에 맞히면 빠집니다. */
   review: Record<string, string>;
+  /** 복습에서 첫 시도에 연속으로 틀린 횟수와 고른 답 (REVIEW_RULES.hardStreak번이면 보호자 "어려운 문제"). 없으면 빈 값 */
+  reviewMiss?: Record<string, { streak: number; picks: number[]; at: string }>;
   subjectRewards: Subject[];
   masterClaimed: boolean;
   /** 영역별 성적: '과목|영역' → 최근 결과(o/x 최대 8개), 맞힌 수, 틀린 수 */
@@ -121,6 +123,8 @@ export type GameState = {
   offline?: OfflineState;
   /** 전설 조각·전설 단계 (주간 집 공부·이벤트로만 모음, 배틀에서는 절대 없음) */
   legend?: LegendState;
+  /** 탐험 문제마다 오늘 틀린 횟수 (탐험도 기회 2번, 2026-11-12). 날짜가 바뀌면 새로 */
+  exploreTries?: { date: string; tries: Record<string, number> };
   /** 보호자가 "오늘 다시 풀게 열기"로 연 문제: 그날은 오늘의 미션 문제여도 탐험에서 다시 풀 수 있음 */
   retryOpen?: { date: string; ids: number[] };
 };
@@ -243,10 +247,17 @@ export function isWeakArea(stat?: AreaStat): boolean {
 }
 const isWeakQuestion = (prog: BankProgress, q: Question) => isWeakArea(prog.areas?.[areaKey(q)]);
 
-/** 전날 이전에 틀려서 오늘 다시 나와야 하는 문제 */
-const isDue = (prog: BankProgress, id: number, today: string) => !!prog.review[id] && prog.review[id] < today;
-/** 오늘 이미 틀린 문제 (오늘은 다시 풀 수 없음) */
+/** 틀린 날에서 REVIEW_RULES.delayDays일이 지나 오늘 다시 나와야 하는 문제 (2026-11-12부터 이틀 뒤, 원래 다음 날) */
+const isDue = (prog: BankProgress, id: number, today: string) => !!prog.review[id] && plusDays(prog.review[id], REVIEW_RULES.delayDays) <= today;
+/** 오늘 이미 틀린 문제 */
 const wrongToday = (prog: BankProgress, id: number, today: string) => prog.review[id] === today;
+/** 틀려서 다시 나올 날을 기다리는 문제 (오늘 틀린 문제 포함): 일일미션·탐험에 나오지 않음 */
+const waiting = (prog: BankProgress, id: number, today: string) => !!prog.review[id] && !isDue(prog, id, today);
+/** 오늘 탐험에서 문제마다 틀린 횟수 (날짜가 바뀌면 새로) */
+function exploreTriesOf(state: GameState, today: string): Record<string, number> {
+  if (state.exploreTries?.date !== today) state.exploreTries = { date: today, tries: {} };
+  return state.exploreTries.tries;
+}
 export const publicQuestion = ({ id, subject, type, prompt, choices, area }: Question): PublicQuestion =>
   ({ id, subject, type, prompt, choices, area });
 
@@ -287,6 +298,8 @@ function raiseBattlePower(state: GameState, speciesId: number): boolean {
   return true;
 }
 const isMaxPower = (state: GameState, speciesId: number) => (state.battlePower?.[String(rootOf(speciesId))] ?? 0) >= battlePowerMaxFeeds();
+/** 먹여도 오를 게 없는 포켓몬: 다 진화했고 ★이 최고 (가방 먹이기 창에서 막음) */
+export const feedMaxed = (state: GameState, speciesId: number) => isFinalForm(speciesId) && isMaxPower(state, speciesId);
 /** 시뮬레이션 도우미(시험용 기록에만): 열매·상처약을 종류마다 1개씩 가방에 */
 export function simGivePotions(state: GameState): number {
   const kinds = Object.keys(POTIONS) as PotionKind[];
@@ -317,7 +330,7 @@ export const TEAM_FRIENDS = 2;
 export const heartsOf = (state: GameState, speciesId: number) => state.hearts?.[String(rootOf(speciesId))] ?? 0;
 /** 💗 하나를 받은 결과 (정답 화면 안내에 씀) */
 export type HeartGain = {
-  uid: string; species: number; shiny: boolean; name: string; role: 'partner' | 'friend';
+  uid: string; species: number; shiny: boolean; name: string; role: 'partner' | 'friend' | 'feed';
   amount: number; hearts: number; goal: number;
   /** 다 진화한 포켓몬인지 (💗가 차면 ★+1) */
   final: boolean;
@@ -405,6 +418,21 @@ function pickShinyBallSpecies(state: GameState, random: Random): number {
 
 function rollPotion(potion: PotionKind): BoxItem {
   return { kind: 'potion', potion, amount: POTIONS[potion].amount };
+}
+/** 가진 열매 수 (상처약 제외) */
+export const berryCount = (state: GameState) => (state.potions ?? []).filter(p => p.kind !== 'potion').length;
+/** 열매가 growth().berryCap개 이상이면 상자에서 열매 대신 볼 (2026-11-12: 열매가 쌓이기만 하는 문제) */
+const berryCapped = (state: GameState) => berryCount(state) >= growth().berryCap;
+/** 열매 대신 나오는 볼: 랜덤상자 표의 몬스터볼·슈퍼볼 비율 그대로 */
+const CAP_BALL_TABLE = DAILY_BOX_TABLE.filter(r => r.item.kind === 'ball' && (r.item.ball === 'poke' || r.item.ball === 'great'));
+/** 상자 표에서 하나 뽑기 (열매가 많으면 열매 칸은 몬스터볼·슈퍼볼로) */
+function rollBoxItem(state: GameState, table: readonly (typeof DAILY_BOX_TABLE)[number][], random: Random): BoxItem {
+  const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(table, random);
+  if (row.item.kind === 'potion' && row.item.potion !== 'potion' && berryCapped(state)) {
+    const ball = weighted<(typeof DAILY_BOX_TABLE)[number]>(CAP_BALL_TABLE, random).item as { kind: 'ball'; ball: BallKind };
+    return { kind: 'ball', ball: ball.ball };
+  }
+  return row.item.kind === 'potion' ? rollPotion(row.item.potion) : { kind: 'ball', ball: row.item.ball };
 }
 /** 보상을 주고, 볼이면 새 볼 id를 돌려줍니다. */
 function grant(state: GameState, item: BoxItem): string | null {
@@ -509,19 +537,21 @@ function ensureDailyCore(state: GameState, bank: ActiveBank | null, today: strin
     const pool = bank.questions.filter(q => q.subject === subject);
     // 전에 틀린 문제 → 안 푼 문제 → 이미 맞힌 문제 순서
     // 오늘 탐험에서 틀린 문제는 오늘 다시 풀지 않도록 빼 둡니다.
-    const due = pool.filter(q => isDue(prog, q.id, today));
-    const rest = pool.filter(q => !isDue(prog, q.id, today) && !wrongToday(prog, q.id, today));
+    // 틀려서 기다리는 문제(이틀이 안 지난 문제)는 빼 둡니다.
+    const due = shuffle(pool.filter(q => isDue(prog, q.id, today)), random);
+    const rest = pool.filter(q => !prog.review[q.id]);
     // 약점 영역(최근에 자주 틀린 영역)의 다른 문제를 먼저 놓아 "변형 문제"가 더 자주 나오게 합니다.
     const weak = (q: Question) => isWeakQuestion(prog, q);
     const unsolved = rest.filter(q => !solved.has(q.id)), done = rest.filter(q => solved.has(q.id));
+    // 복습 문제는 과목당 REVIEW_RULES.perSubjectDaily칸까지 먼저, 남은 복습 문제는 다른 문제가 모자랄 때만 (2026-11-12)
     const ordered = [
-      ...shuffle(due, random),
       ...shuffle(unsolved.filter(weak), random), ...shuffle(unsolved.filter(q => !weak(q)), random),
       ...shuffle(done.filter(weak), random), ...shuffle(done.filter(q => !weak(q)), random),
+      ...due.slice(REVIEW_RULES.perSubjectDaily),
     ];
-    // 전에 틀린 문제는 먼저 넣고, 남은 자리는 속성이 고르게 돌아가도록 날짜마다 속성 순서를 바꿔 채웁니다.
+    // 남은 자리는 속성이 고르게 돌아가도록 날짜마다 속성 순서를 바꿔 채웁니다.
     // (예: 과목마다 속성 3개, 하루 3문제씩이면 매일 속성마다 1문제)
-    const picked = ordered.filter(q => isDue(prog, q.id, today)).slice(0, DAILY_PER_SUBJECT);
+    const picked = due.slice(0, Math.min(REVIEW_RULES.perSubjectDaily, DAILY_PER_SUBJECT));
     const types = SUBJECT_TYPES[subject];
     const offset = (dayNumber(today) * DAILY_PER_SUBJECT) % types.length;
     const rotation = types.map((_, i) => types[(offset + i) % types.length]);
@@ -531,7 +561,7 @@ function ensureDailyCore(state: GameState, bank: ActiveBank | null, today: strin
       const byNeed = [...rotation].sort((a, b) => count(a) - count(b));
       // 약점 영역 문제는 과목당 WEAK_AREA.maxPerSubjectDaily 개까지만 (한 영역이 미션을 독차지하지 않게)
       const weakFull = picked.filter(q => !isDue(prog, q.id, today) && weak(q)).length >= WEAK_AREA.maxPerSubjectDaily;
-      const candidates = weakFull && ordered.some(q => !picked.includes(q) && !weak(q)) ? ordered.filter(q => !weak(q) || isDue(prog, q.id, today)) : ordered;
+      const candidates = weakFull && ordered.some(q => !picked.includes(q) && !weak(q)) ? ordered.filter(q => !weak(q)) : ordered;
       const next = byNeed.map(t => candidates.find(q => !picked.includes(q) && q.type === t)).find(Boolean)
         ?? candidates.find(q => !picked.includes(q)) ?? ordered.find(q => !picked.includes(q));
       if (!next) break;
@@ -585,8 +615,11 @@ const inTodayDaily = (state: GameState, id: number, today: string) =>
  */
 export function openRetryToday(state: GameState, bank: ActiveBank, subject: Subject, today: string): number {
   const prog = progress(state, bank.id);
-  const ids = subjectQuestions(bank, subject).filter(q => wrongToday(prog, q.id, today)).map(q => q.id);
-  for (const id of ids) prog.review[id] = shiftDate(today, -1);
+  const ids = subjectQuestions(bank, subject).filter(q => waiting(prog, q.id, today)).map(q => q.id);
+  for (const id of ids) {
+    prog.review[id] = shiftDate(today, -REVIEW_RULES.delayDays);
+    if (state.exploreTries?.date === today) delete state.exploreTries.tries[id]; // 열어 준 문제는 기회 2번부터 새로
+  }
   if (ids.length) {
     const prev = state.retryOpen?.date === today ? state.retryOpen.ids : [];
     state.retryOpen = { date: today, ids: [...new Set([...prev, ...ids])] };
@@ -596,7 +629,7 @@ export function openRetryToday(state: GameState, bank: ActiveBank, subject: Subj
 /** 과목별로 오늘 틀려서 잠긴 문제 수 (보호자 화면 "오늘 다시 풀게 열기") */
 export function lockedToday(state: GameState, bank: ActiveBank, subject: Subject, today: string): number {
   const prog = state.banks[bank.id];
-  return prog ? subjectQuestions(bank, subject).filter(q => wrongToday(prog, q.id, today)).length : 0;
+  return prog ? subjectQuestions(bank, subject).filter(q => waiting(prog, q.id, today)).length : 0;
 }
 
 /** 탐험에서 나올 문제: 아직 못 맞힌 문제. 오늘 틀린 문제와 오늘의 미션 문제는 빼 둡니다. */
@@ -604,7 +637,7 @@ function newExplorePool(state: GameState, bank: ActiveBank, subject: Subject, to
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
   return subjectQuestions(bank, subject).filter(q =>
-    !solved.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
+    !solved.has(q.id) && !waiting(prog, q.id, today) && !inTodayDaily(state, q.id, today));
 }
 /**
  * 탐험 문제. 아직 못 맞힌 문제가 없는데 레인보우 이벤트로 그 과목 조각을 모으는 중이면,
@@ -620,7 +653,7 @@ function rainbowReplayPool(state: GameState, bank: ActiveBank, subject: Subject,
   const solved = new Set(prog.solved);
   const missed = new Set(st.missed?.date === today ? st.missed.ids : []);
   const base = subjectQuestions(bank, subject).filter(q =>
-    solved.has(q.id) && !missed.has(q.id) && !wrongToday(prog, q.id, today) && !inTodayDaily(state, q.id, today));
+    solved.has(q.id) && !missed.has(q.id) && !waiting(prog, q.id, today) && !inTodayDaily(state, q.id, today));
   const used = new Set(st.used[subject] ?? []);
   const notYet = base.filter(q => !used.has(q.id));
   return notYet.length ? notYet : base;
@@ -997,13 +1030,26 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         if (d.box) fail('오늘의 미션은 끝났어요.');
       } else if (action.mode === 'explore') {
         if (prog.solved.includes(q.id) && !replay) fail('이미 맞힌 문제예요.');
-        if (wrongToday(prog, q.id, ctx.today)) fail('이 문제는 다른 날 다시 도전해 보자!');
+        // 첫 시도에 틀린 문제는 오늘 한 번 더 풀 수 있음 (기회 2번)
+        const tried = exploreTriesOf(state, ctx.today)[q.id] ?? 0;
+        if (waiting(prog, q.id, ctx.today) && !(tried > 0 && tried < DAILY_ATTEMPTS && wrongToday(prog, q.id, ctx.today))) fail('이 문제는 다른 날 다시 도전해 보자!');
         if (replay && (() => { const st = rainbowStage(state, ctx.today)!.st; return st.missed?.date === ctx.today && st.missed.ids.includes(q.id); })()) fail('이 문제는 다른 날 다시 도전해 보자!');
         if (inTodayDaily(state, q.id, ctx.today)) fail('이 문제는 오늘의 미션에서 풀어 줘.');
       } else fail('지원하지 않는 요청이에요.');
 
-      // 틀리면: '안 푼 문제'로 돌려놓고, 다른 날 일일미션·탐험에 다시 나오게 합니다.
-      // 일일미션은 기회가 남아 있으면 다시 풀 수 있고, 탐험은 기회가 한 번입니다.
+      // 틀리면: '안 푼 문제'로 돌려놓고, 이틀 뒤 일일미션·탐험에 다시 나오게 합니다.
+      // 일일미션·탐험 모두 기회 2번: 첫 시도에 틀리면 해설을 보여 주고(아이 화면이 10초 기다린 뒤) 한 번 더, 또 틀리면 정답과 해설.
+      const tries = action.mode === 'daily' ? state.daily!.tries : exploreTriesOf(state, ctx.today);
+      const firstTry = !tries[q.id];
+      // 복습 문제(이틀이 지나 다시 나온 문제)의 첫 시도 결과: 연속으로 틀리면 보호자 "어려운 문제"
+      const dueReview = isDue(prog, q.id, ctx.today);
+      if (firstTry && dueReview && !replay) {
+        const miss = prog.reviewMiss ??= {};
+        if (action.choice !== q.answer) {
+          const m = miss[q.id] ?? { streak: 0, picks: [], at: '' };
+          miss[q.id] = { streak: m.streak + 1, picks: [...m.picks, action.choice].slice(-REVIEW_RULES.hardStreak * 2), at: ctx.today };
+        } else delete miss[q.id];
+      }
       if (action.choice !== q.answer) {
         if (replay) {
           quizDay(state, ctx.today).answered += 1;
@@ -1016,19 +1062,22 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         prog.wrong[q.id] = (prog.wrong[q.id] ?? 0) + 1;
         prog.review[q.id] = ctx.today;
         prog.solved = prog.solved.filter(id => id !== q.id);
-        if (action.mode === 'daily') {
-          const d = state.daily!;
-          d.tries[q.id] = (d.tries[q.id] ?? 0) + 1;
-          if (d.tries[q.id] === 1) { noteArea(prog, q, false); quizDay(state, ctx.today).answered += 1; } // 첫 시도에 틀리면 그 영역의 오답으로 기록
-          const left = DAILY_ATTEMPTS - d.tries[q.id];
-          if (left > 0) return { correct: false, final: false, triesLeft: left, message: `괜찮아! 다시 생각해 보자. 기회가 ${left}번 남았어.` };
-          d.wrong.push(q.id);
-        } else { noteArea(prog, q, false); quizDay(state, ctx.today).answered += 1; }
+        tries[q.id] = (tries[q.id] ?? 0) + 1;
+        if (tries[q.id] === 1) { noteArea(prog, q, false); quizDay(state, ctx.today).answered += 1; } // 첫 시도에 틀리면 그 영역의 오답으로 기록
+        const left = DAILY_ATTEMPTS - tries[q.id];
+        if (left > 0) {
+          return {
+            correct: false, final: false, triesLeft: left, explanation: q.explanation, waitSeconds: RETRY_WAIT_SECONDS,
+            message: '괜찮아! 아래 해설을 읽으면 한 번 더 풀 수 있어.',
+            // 레인보우(동결된 이벤트) 연속은 첫 시도에 틀리면 0부터
+            rainbow: action.mode === 'explore' ? rainbowAnswer(state, ctx.today, q, false, false) : null,
+          };
+        }
+        if (action.mode === 'daily') state.daily!.wrong.push(q.id);
         return {
           correct: false, final: true, answer: q.answer, explanation: q.explanation,
-          message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 다른 날 다시 나올 거야.`,
+          message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 이틀 뒤에 다시 나올 거야.`,
           candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
-          rainbow: action.mode === 'explore' ? rainbowAnswer(state, ctx.today, q, false, false) : null,
         };
       }
       if (replay) {
@@ -1036,13 +1085,13 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         return { correct: true, explanation: q.explanation, reviewed: false, message: '정답이야!', rainbow: rainbowAnswer(state, ctx.today, q, true, true) };
       }
 
-      // 전날 이전에 틀린 문제를 맞히면 다시 풀기 완료. 오늘 틀렸다가 다시 맞힌 문제는 다른 날 한 번 더 나옵니다.
-      const reviewed = isDue(prog, q.id, ctx.today);
+      // 이틀 지나 다시 나온 문제를 첫 시도에 맞히면 복습 끝. 다시 풀기로 맞힌 문제(오늘 틀림)는 이틀 뒤 한 번 더 나옵니다.
+      const reviewed = dueReview && firstTry;
       if (reviewed) delete prog.review[q.id];
       const newlySolved = !prog.solved.includes(q.id);
       if (newlySolved) prog.solved.push(q.id);
       // 첫 시도에 맞혔을 때만 그 영역의 정답으로 기록 (다시 풀어서 맞힌 것은 이미 오답으로 기록됨)
-      if (action.mode !== 'daily' || !state.daily!.tries[q.id]) { noteArea(prog, q, true); const day = quizDay(state, ctx.today); day.answered += 1; day.correct += 1; }
+      if (firstTry) { noteArea(prog, q, true); const day = quizDay(state, ctx.today); day.answered += 1; day.correct += 1; }
       // 일일미션은 이미 맞힌 적 있는 문제가 나와도 보상을 줍니다 (하루 한 번만 풀 수 있으므로).
       const rewarded = action.mode === 'daily' || newlySolved;
       if (action.mode === 'daily') state.daily!.correct.push(q.id);
@@ -1080,10 +1129,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const allowed = dailyBoxPicks(state);
       if (!allowed) fail(dailyFinished(state) ? '아쉽게도 오늘은 상자를 받을 만큼 맞히지 못했어요.' : '오늘의 미션을 먼저 끝내 주세요.');
       d.box ??= {
-        items: [0, 1, 2].map(() => {
-          const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
-          return row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
-        }),
+        items: [0, 1, 2].map(() => rollBoxItem(state, DAILY_BOX_TABLE, random)),
         picks: [],
       };
       if (d.box.picks.length >= allowed) fail('오늘의 상자는 이미 열었어요. 내일 또 만나요!');
@@ -1113,10 +1159,19 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         ...others.map(kind => ({ kind, weight: EXPLORE_ITEM_WEIGHTS.otherBerry / others.length })),
         { kind: 'potion' as PotionKind, weight: EXPLORE_ITEM_WEIGHTS.potion },
       ];
-      const items = [0, 1, 2].map(() => rollPotion(weighted<(typeof table)[number]>(table, random).kind));
-      grant(state, items[choice]);
+      // 열매가 많으면 열매 칸은 몬스터볼·슈퍼볼로 (상처약은 그대로)
+      const capped = berryCapped(state);
+      const items: BoxItem[] = [0, 1, 2].map(() => {
+        const kind = weighted<(typeof table)[number]>(table, random).kind;
+        if (capped && kind !== 'potion') {
+          const ball = weighted<(typeof DAILY_BOX_TABLE)[number]>(CAP_BALL_TABLE, random).item as { kind: 'ball'; ball: BallKind };
+          return { kind: 'ball', ball: ball.ball };
+        }
+        return rollPotion(kind);
+      });
+      const ballId = grant(state, items[choice]);
       prog.subjectRewards.push(action.subject);
-      return { items, picks: [choice], done: true, ballIds: [], message: `${action.subject} 탐험 완료!` };
+      return { items, picks: [choice], done: true, ballIds: ballId ? [ballId] : [], message: `${action.subject} 탐험 완료!` };
     }
 
     case 'masterReward': {
@@ -1170,17 +1225,23 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (index < 0) fail('아이템을 찾을 수 없어요.');
       const p = state.owned.find(p => p.uid === action.uid);
       if (!p) fail('포켓몬을 골라 주세요.');
+      // 다 진화했고 ★도 최고인 포켓몬은 더 먹일 수 없음 (먹여도 오를 게 없어서)
+      if (feedMaxed(state, p.species)) fail('이미 최고예요! 다른 포켓몬에게 먹여 줘.');
       const [item] = state.potions.splice(index, 1);
       const { amount } = POTIONS[item.kind];
       const types = potionTargets(item.kind);
       for (const t of types) state.stats[t] += amount;
       // 배틀 힘: 먹인 포켓몬의 진화 계열(기본·이로치 같이) ★+1 (포켓로그 개체값 +1, 최대 growth().ivMax)
       const up = raiseBattlePower(state, p.species);
+      // 💗 친해짐: 그 포켓몬 계열에 growth().feedHearts (팀에 없어도, 2026-11-12). 다 진화했으면 💗가 차면서 ★로
+      const heart = addHearts(state, p, growth().feedHearts, 'feed');
       const iv = battleIvOf(state, p.species);
       const name = pokemonName(p);
+      const heartText = heart.amount > 0 ? `, 💗 +${heart.amount}` : '';
       return {
-        types, amount, battleIv: iv, battleIvUp: up,
-        message: up ? `${name}에게 먹였어! 에너지 +${amount}, 배틀 힘도 쑥!` : `${name}에게 먹였어! 에너지 +${amount}, 배틀 힘은 이미 최고야!`,
+        types, amount, battleIv: iv, battleIvUp: up, hearts: heart,
+        message: (up ? `${name}에게 먹였어! 에너지 +${amount}${heartText}, 배틀 힘도 쑥!` : `${name}에게 먹였어! 에너지 +${amount}${heartText}, 배틀 힘은 이미 최고야!`)
+          + (heart.filled ? ` ${waGwa(name)} 친해졌어! 이제 진화할 수 있어!` : ''),
       };
     }
 
@@ -1252,8 +1313,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           break;
         }
         case 'box': {
-          const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
-          item = row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
+          item = rollBoxItem(state, DAILY_BOX_TABLE, random);
           const ballId = grant(state, item);
           opened.got = `랜덤상자 → ${boxItemLabel(item)}`;
           if (ballId) opened.ballId = ballId;
@@ -1897,9 +1957,9 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
       /** 전에 틀려서 오늘 다시 나온 문제 수 */
       review: qs.filter(q => isDue(prog!, q.id, today)).length,
       /** 오늘 틀려서 다른 날 다시 나올 문제 수 */
-      reviewLater: qs.filter(q => wrongToday(prog!, q.id, today)).length,
+      reviewLater: qs.filter(q => waiting(prog!, q.id, today)).length,
       /** 오늘의 미션에 들어 있어 탐험에서 빠진 (아직 못 맞힌) 문제 수 */
-      inDaily: qs.filter(q => !solved.has(q.id) && !wrongToday(prog!, q.id, today) && inTodayDaily(state, q.id, today)).length,
+      inDaily: qs.filter(q => !solved.has(q.id) && !waiting(prog!, q.id, today) && inTodayDaily(state, q.id, today)).length,
       rewardClaimed: prog!.subjectRewards.includes(subject),
       /** 레인보우 이벤트로 이미 맞힌 문제를 다시 푸는 중 (새 문제가 없을 때) */
       rainbowReplay: newExplorePool(state, bank, subject, today).length === 0 && rainbowOpenFor(state, today, subject),
@@ -2022,8 +2082,7 @@ export function syncOutings(state: GameState, today: string, random: Random): bo
     const rules = o.rules ?? OUTING_DEFAULT;
     let box: string | null = null;
     if (o.stage >= rules.attemptStage) {
-      const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(DAILY_BOX_TABLE, random);
-      const item: BoxItem = row.item.kind === 'potion' ? rollPotion(row.item.potion) : { kind: 'ball', ball: row.item.ball };
+      const item = rollBoxItem(state, DAILY_BOX_TABLE, random);
       grant(state, item);
       box = boxItemLabel(item);
     }
@@ -2097,12 +2156,9 @@ function legendOf(state: GameState, rules: OfflineRules, now: string): LegendSta
 const BALL_UP: Partial<Record<BallKind, BallKind>> = { poke: 'great', great: 'ultra', ultra: 'master' };
 export const BOOK_BOX_TABLE: typeof DAILY_BOX_TABLE = DAILY_BOX_TABLE.map(row =>
   row.item.kind === 'ball' && BALL_UP[row.item.ball] ? { ...row, item: { kind: 'ball', ball: BALL_UP[row.item.ball]! } } : row);
-function rollDayBox(kind: 'book' | 'normal', random: Random): BoxItem[] {
+function rollDayBox(state: GameState, kind: 'book' | 'normal', random: Random): BoxItem[] {
   const table = kind === 'book' ? BOOK_BOX_TABLE : DAILY_BOX_TABLE;
-  return [0, 1, 2].map(() => {
-    const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(table, random);
-    return row.item.kind === 'potion' ? rollPotion(row.item.potion) : ({ kind: 'ball', ball: row.item.ball } as BoxItem);
-  });
+  return [0, 1, 2].map(() => rollBoxItem(state, table, random));
 }
 const ownsSpecies = (state: GameState, id: number) => state.owned.some(p => p.species === id);
 /** 이 단계에서 아직 만날 수 있는 전설 (이미 가진 포켓몬은 빠짐) */
@@ -2192,7 +2248,7 @@ export function syncOffline(state: GameState, ctx: LegendCtx): boolean {
     const kind = rules[`${mark}Box`];
     const count = rules[`${mark}Count`];
     if (kind === 'off' || count < 1) continue;
-    off.boxes.push({ id: nextId(state, 'h'), date, mark, kind, count: Math.min(3, count), items: rollDayBox(kind, ctx.random), picks: [], at: ctx.now });
+    off.boxes.push({ id: nextId(state, 'h'), date, mark, kind, count: Math.min(3, count), items: rollDayBox(state, kind, ctx.random), picks: [], at: ctx.now });
   }
   for (const ws of Object.keys(off.weeks).sort()) {
     const week = off.weeks[ws];

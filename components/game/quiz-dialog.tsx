@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, Volume2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { PublicQuestion } from '@/lib/game-engine';
@@ -15,6 +15,8 @@ export type AnswerResult = {
   /** 기회를 다 쓰고 틀렸을 때 알려주는 정답 번호 (0부터) */
   answer?: number;
   explanation?: string;
+  /** 첫 시도에 틀렸을 때: 이 초만큼 다시 풀기 버튼을 막음 (해설을 소리 내어 읽는 시간) */
+  waitSeconds?: number;
   already?: boolean;
   reviewed?: boolean;
   gained?: { type: PublicQuestion['type']; amount: number; exp: number };
@@ -65,6 +67,24 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
   const [choice, setChoice] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<AnswerResult | null>(null);
   const [missed, setMissed] = useState<number[]>([]); // 이번에 틀린 보기
+  // 이 문제를 열었을 때 남은 기회 (답할 때마다 화면 정보가 새로 와도 처음 값으로 셈)
+  const [startChances] = useState(chances);
+  // 첫 시도에 틀리면: 해설을 보여 주고 남은 초 동안 다시 풀기를 막음 (0이면 다시 풀 수 있음), retrying = 다시 풀기를 눌러 답을 고르는 중
+  const [wait, setWait] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const t = window.setTimeout(() => setWait(w => w - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [wait]);
+  function readExplanation(text: string) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR';
+    u.rate = 0.85;
+    window.speechSynthesis.speak(u);
+  }
 
   function readAloud() {
     if (!('speechSynthesis' in window)) return;
@@ -79,11 +99,14 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
     const result = await onAnswer(choice);
     if (!result) return;
     setFeedback(result);
-    if (!result.correct && result.final === false) { setMissed(m => [...m, choice]); setChoice(null); }
+    if (!result.correct && result.final === false) { setMissed(m => [...m, choice]); setChoice(null); setRetrying(false); setWait(result.waitSeconds ?? 0); }
   }
   // 맞혔거나, 기회를 다 써서 틀렸으면 끝
   const answered = !!feedback && (feedback.correct || feedback.final !== false);
   const finalWrong = !!feedback && !feedback.correct && feedback.final !== false;
+  // 첫 시도에 틀려서 해설을 읽는 중 (다시 풀기를 누르기 전에는 보기를 고를 수 없음)
+  const reading = !!feedback && !feedback.correct && feedback.final === false && !retrying;
+  const left = Math.max(1, startChances - missed.length);
 
   return (
     <>
@@ -92,7 +115,7 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
           <TypeBadge type={question.type} small />
           {progress && <span className="quiz-count">{progress}</span>}
         </DialogTitle>
-        <DialogDescription>천천히 읽고 답을 하나 골라 줘. {maxChances === 1 ? '기회는 한 번이야!' : chances === maxChances ? `기회는 ${maxChances}번이야!` : chances === 1 ? '마지막 기회야!' : `남은 기회 ${chances}번`}</DialogDescription>
+        <DialogDescription>천천히 읽고 답을 하나 골라 줘. {maxChances === 1 ? '기회는 한 번이야!' : left === maxChances ? `기회는 ${maxChances}번이야!` : left === 1 ? '마지막 기회야!' : `남은 기회 ${left}번`}</DialogDescription>
         <>
           <div className="quiz-heading">
             <h2>{question.prompt}</h2>
@@ -106,8 +129,8 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
                   (missed.includes(i) || (finalWrong && choice === i) ? ' wrong' : '') +
                   (feedback?.correct && choice === i ? ' right' : '') +
                   (finalWrong && feedback!.answer === i ? ' right' : '')}
-                disabled={busy || answered || missed.includes(i)}
-                onClick={() => { setChoice(i); if (feedback && !answered) setFeedback(null); }}
+                disabled={busy || answered || reading || missed.includes(i)}
+                onClick={() => setChoice(i)}
               >
                 <span className="choice-no">{i + 1}</span><span>{c}</span>
               </button>
@@ -119,13 +142,21 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
               {feedback.gained && <p className="gain-line"><TypeBadge type={feedback.gained.type} amount={'⚡+' + feedback.gained.amount} small /> 경험치 +{feedback.gained.exp}</p>}
               {/* 풀이를 먼저 (정답이든 오답이든 아이가 설명을 한 번 더 보도록), 💗 소식은 그 아래 */}
               {feedback.explanation && <p className="feedback-explain">📖 {feedback.explanation}</p>}
+              {reading && feedback.explanation && <>
+                <p className="read-aloud-tip">📢 해설을 소리 내어 읽어 보자!</p>
+                <button type="button" className="secondary small" onClick={() => readExplanation(feedback.explanation!)}><Volume2 size={16} /> 해설 들어 보기</button>
+              </>}
               {feedback.correct && feedback.hearts && <HeartLines hearts={feedback.hearts} />}
             </div>
           )}
           {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}
           {answered
             ? <button className="primary" onClick={onNext}>{nextLabel} <ArrowRight size={20} /></button>
-            : <button className="primary" disabled={busy || choice === null} onClick={() => void submit()}>정답 확인</button>}
+            : reading
+              ? <button className="primary" disabled={wait > 0} onClick={() => { setRetrying(true); setFeedback(null); window.speechSynthesis?.cancel(); }}>
+                  {wait > 0 ? `다시 풀기 (${wait}초)` : '다시 풀기'}
+                </button>
+              : <button className="primary" disabled={busy || choice === null} onClick={() => void submit()}>정답 확인</button>}
         </>
     </>
   );

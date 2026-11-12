@@ -29,8 +29,8 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
       <div className="section-heading"><span className="pill">TODAY&apos;S MISSION</span><span>{d.date}</span></div>
       <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : canOpen ? '랜덤상자를 열 시간이야!' : missed ? '오늘의 미션 끝! 수고했어' : '오늘의 미션을 풀어 보자!'}</h2>
       <p>{missed
-        ? <>상자는 {oneBoxAt}문제 이상 맞히면 받을 수 있어. 틀린 {d.wrong.length}문제는 다른 날 미션에 다시 나와. 내일 또 도전하자!</>
-        : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 {d.attempts}번! <b>모두 맞히면 랜덤상자 2개</b>, <b>{oneBoxAt}문제 이상 맞히면 1개</b>를 고를 수 있어. 틀린 문제는 다른 날 다시 나와.</>}</p>
+        ? <>상자는 {oneBoxAt}문제 이상 맞히면 받을 수 있어. 틀린 {d.wrong.length}문제는 이틀 뒤에 다시 나와. 내일 또 도전하자!</>
+        : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 {d.attempts}번! 틀리면 해설을 소리 내어 읽고 한 번 더 풀어. <b>모두 맞히면 랜덤상자 2개</b>, <b>{oneBoxAt}문제 이상 맞히면 1개</b>를 고를 수 있어. 틀린 문제는 이틀 뒤에 다시 나와.</>}</p>
       <div className="daily-subjects">
         {SUBJECTS.map(s => {
           const qs = d.questions.filter(q => q.subject === s);
@@ -73,7 +73,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
       <section className="panel">
         <div className="section-heading"><span className="pill">EXPLORE</span><span>{view.bank.title}</span></div>
         <h2>과목을 골라 탐험을 떠나자!</h2>
-        <p>문제마다 기회는 한 번! 맞힌 문제는 다시 나오지 않고, 틀린 문제는 다른 날 다시 나와. 과목을 모두 맞히면 <b>선물(열매·상처약) 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
+        <p>문제마다 기회는 두 번! 틀리면 해설을 소리 내어 읽고 한 번 더 풀어. 맞힌 문제는 다시 나오지 않고, 틀린 문제는 이틀 뒤에 다시 나와. 과목을 모두 맞히면 <b>선물(열매·상처약) 3개 중 하나</b>, 모든 과목을 마스터하면 <b>특별한 볼</b>을 받을 수 있어!</p>
       </section>
       <div className="explore-grid">
         {view.explore.map(e => {
@@ -95,7 +95,7 @@ export function ExploreTab({ view, busy, onExplore, onSubjectReward, onMasterRew
               </div>
               <Progress value={e.total ? (e.solved / e.total) * 100 : 0} />
               {e.review > 0 && <p className="review-note"><RotateCcw size={14} /> 전에 틀린 문제 {e.review}개가 다시 나왔어!</p>}
-              {e.reviewLater > 0 && <p className="review-note later">오늘 틀린 {e.reviewLater}문제는 다른 날 다시 나와요.</p>}
+              {e.reviewLater > 0 && <p className="review-note later">틀린 {e.reviewLater}문제는 이틀 뒤에 다시 나와요.</p>}
               {e.inDaily > 0 && <p className="review-note later">{e.inDaily}문제는 오늘의 미션에서 풀어요.</p>}
               {rb && (!rbEv!.completed || goldOn) && <p className="review-note rainbow-note">{rb.piece ? <>{goldOn ? '👑' : '🌈'} {e.subject} {goldOn ? '황금 ' : ''}조각을 모았어!</> : <>{goldOn ? '👑 황금' : '🌈 레인보우'} {rb.streak}/{rbGoal}{e.rainbowReplay ? ' · 맞힌 문제로 다시 도전!' : ''}</>}</p>}
               {e.total === 0

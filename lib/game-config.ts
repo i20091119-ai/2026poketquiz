@@ -58,6 +58,10 @@ export const GROWTH_DEFAULT = {
   energyPerStar: 10,
   ivMax: 31,
   expExchangePerDay: 5,
+  /** 열매·상처약을 먹이면 그 포켓몬 계열 💗 (2026-11-12 부모님 결정, 팀에 없어도) */
+  feedHearts: 5,
+  /** 가진 열매(상처약 제외)가 이 수 이상이면 일일미션·훈련 상자·탐험 선물에서 열매 대신 볼 */
+  berryCap: 10,
 };
 export type GrowthRules = typeof GROWTH_DEFAULT;
 export type GrowthKey = keyof GrowthRules;
@@ -73,6 +77,8 @@ export const GROWTH_FIELDS: { key: GrowthKey; label: string; min: number; max: n
   { key: 'energyPerStar', label: '에너지 몇 개로 ★+1', min: 1, max: 200 },
   { key: 'ivMax', label: '★ 최대 (포켓로그 개체값, 16~31)', min: 16, max: 31 },
   { key: 'expExchangePerDay', label: '경험치 바꾸기 하루 한도', min: 1, max: 50 },
+  { key: 'feedHearts', label: '열매·상처약 먹이면 그 포켓몬 💗', min: 0, max: 50 },
+  { key: 'berryCap', label: '열매가 이 수 이상이면 상자에서 열매 대신 볼', min: 1, max: 100 },
 ];
 let growthOverrides: Partial<GrowthRules> = {};
 /** 보호자가 바꾼 성장 규칙을 맞춥니다 (서버는 요청마다, 아이·보호자 화면은 응답을 받을 때마다). 범위를 벗어난 값은 버림 */
@@ -186,8 +192,20 @@ export const statReward = (subject: Subject, mode: 'daily' | 'explore') =>
   Math.round(REWARD_PER_ANSWER[mode] * SUBJECT_TYPES[subject].length / 3);
 
 export const DAILY_PER_SUBJECT = 3;
-/** 일일미션 문제 하나에 주는 기회 (처음 1번 + 다시 풀기 2번). 탐험은 1번입니다. */
-export const DAILY_ATTEMPTS = 3;
+/**
+ * 문제 하나에 주는 기회 (처음 1번 + 다시 풀기 1번). 일일미션·탐험 같음 (2026-11-12 부모님 결정, 원래 일일미션 3번·탐험 1번).
+ * 첫 시도에서 틀리면 해설을 보여 주고 "소리 내어 읽어 보자" 안내, RETRY_WAIT_SECONDS 동안 다시 풀기 버튼을 막음.
+ */
+export const DAILY_ATTEMPTS = 2;
+export const QUIZ_ATTEMPTS = DAILY_ATTEMPTS;
+export const RETRY_WAIT_SECONDS = 10;
+/**
+ * 복습(틀린 문제 다시 내기, 2026-11-12 부모님 결정):
+ * - 틀린 날 기준 delayDays일 뒤부터 다시 나옴 (원래 다음 날)
+ * - 일일미션에서 복습 문제는 과목당 perSubjectDaily칸까지 (나머지 칸은 원래 규칙)
+ * - 복습에서 첫 시도에 hardStreak번 연속 틀리면 보호자 공간 "어려운 문제"로 표시
+ */
+export const REVIEW_RULES = { delayDays: 2, perSubjectDaily: 1, hardStreak: 3 } as const;
 /**
  * 일일미션 랜덤상자: 맞힌 개수에 따라 3개 중 몇 개를 고를 수 있는지. 위에서부터 먼저 맞는 규칙을 씁니다.
  * minCorrect: 'all'이면 오늘의 문제를 모두 맞혔을 때.

@@ -81,6 +81,7 @@ type Overview = {
     id: number; title: string;
     subjects: { subject: Subject; total: number; solved: number; review: number; lockedToday: number }[];
     hardest: { id: number; subject: Subject; prompt: string; wrong: number; solved: boolean }[];
+    hard: { id: number; subject: Subject; prompt: string; answer: string; picks: string[]; streak: number; wrong: number; at: string }[];
     areas: { subject: Subject; areas: AreaReport[] }[];
   };
 };
@@ -273,11 +274,12 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
               {active.subjects.map(s => (
                 <div key={s.subject}><b>{s.subject}</b><span>{s.solved} / {s.total} 맞힘{s.review ? ` · 틀려서 다시 풀 문제 ${s.review}` : ''}</span>
                   <div className="bar"><i style={{ width: `${s.total ? (s.solved / s.total) * 100 : 0}%` }} /></div>
-                  {s.lockedToday > 0 && <div className="retry-open">오늘 틀려서 내일로 미룬 문제 {s.lockedToday}개
+                  {s.lockedToday > 0 && <div className="retry-open">틀려서 이틀 뒤로 미룬 문제 {s.lockedToday}개
                     <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'retryOpen', subject: s.subject })) await reload(); }}>🔓 오늘 다시 풀게 열기</button></div>}</div>
               ))}
             </div>
             <AreaBoard report={active.areas} />
+            <HardQuestions list={active.hard} />
           </section>
         ) : <section className="panel parent-section"><p className="muted">아직 공개 중인 문제은행이 없어요. &lsquo;문제은행&rsquo; 탭에서 만들어 공개해 주세요.</p></section>}
       </>}
@@ -732,6 +734,25 @@ function AreaBoard({ report }: { report: { subject: Subject; areas: AreaReport[]
           ))))}
         </ul>
       </>}
+    </div>
+  );
+}
+
+/** 어려운 문제: 복습(틀린 날에서 이틀 뒤 다시 나온 문제)에서 첫 시도에 3번 연속 틀린 문제 */
+function HardQuestions({ list }: { list: Overview['active'] extends infer A ? A extends { hard: infer H } ? H : never : never }) {
+  return (
+    <div className="hard-questions">
+      <h3>🧩 어려운 문제 ({list.length})</h3>
+      <p className="muted">틀린 문제는 이틀 뒤에 다시 나와요(일일미션에서는 과목마다 1문제까지). 그렇게 다시 나왔을 때 처음 고른 답이 3번 연속 틀린 문제예요. 한 번 맞히면 목록에서 빠져요.</p>
+      {list.length === 0 ? <p className="muted">아직 없어요.</p> : (
+        <ul className="hardest">
+          {list.map(q => (
+            <li key={q.id}>[{q.subject}] {q.prompt}
+              <span> 정답: <b>{q.answer}</b> · 아이가 고른 답: {q.picks.join(' → ')} · 연속 {q.streak}번 · 모두 {q.wrong}번 틀림</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
