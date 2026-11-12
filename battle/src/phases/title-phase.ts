@@ -8,7 +8,7 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
-import { canStartNewBattle } from "#app/quiz-link";
+import { askContinueRun, canStartNewBattle, findInProgressRun } from "#app/quiz-link";
 import { QUIZ_RULES } from "#app/quiz-rules";
 import { bypassLogin } from "#constants/app-constants";
 import { getDailyRunStarters, startDailyEventChallenges } from "#data/daily-run";
@@ -122,23 +122,37 @@ export class TitlePhase extends Phase {
               );
               return true;
             }
-            void canStartNewBattle().then(result => {
-              if (result.ok) {
-                setModeAndEnd(GameModes.CLASSIC);
-                return;
-              }
-              ui.setMode(UiMode.MESSAGE);
-              ui.showText(
-                result.message ?? "",
-                null,
-                () => {
-                  globalScene.phaseManager.toTitleScreen();
-                  super.end();
-                },
-                null,
-                true,
-              );
-            });
+            const startNew = () =>
+              void canStartNewBattle().then(result => {
+                if (result.ok) {
+                  setModeAndEnd(GameModes.CLASSIC);
+                  return;
+                }
+                ui.setMode(UiMode.MESSAGE);
+                ui.showText(
+                  result.message ?? "",
+                  null,
+                  () => {
+                    globalScene.phaseManager.toTitleScreen();
+                    super.end();
+                  },
+                  null,
+                  true,
+                );
+              });
+            // 진행 중인 판이 있으면 먼저 "이어할래요?" (2026-11-12). 이어하면 그 판을 불러오고, 아니면 새 게임
+            const running = findInProgressRun();
+            if (running) {
+              void askContinueRun(running.wave).then(cont => {
+                if (cont) {
+                  void this.loadSaveSlot(running.slotId);
+                } else {
+                  startNew();
+                }
+              });
+              return true;
+            }
+            startNew();
             return true;
           }
           const newGameOptions: OptionSelectItem[] = [];

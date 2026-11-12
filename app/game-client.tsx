@@ -136,15 +136,23 @@ export default function Game() {
     if (o) { autoReward.current.add(o.id); setRewardId(o.id); }
   }, [view, quiz, reward, ballQueue.length, giftPopup, opening, replying, changeId, writingId, rewardId]);
 
-  // 보호자 화면의 "하루 퀴즈 시간": 화면이 보이는 동안만 세어 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
+  // 보호자 화면의 "앱 사용 시간"(화면이 보이는 동안)과 "문제 푸는 시간"(문제 창이 열려 있는 동안, 2026-11-12)을 세어
+  // 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
+  const quizOpenRef = useRef(false);
+  const solveRef = useRef(0);
+  useEffect(() => { quizOpenRef.current = !!quiz; }, [quiz]);
   useEffect(() => {
     let lastTick = Date.now();
+    // 문제 창이 열려 있고 화면이 보이는 동안 1초씩
+    const solveTimer = window.setInterval(() => { if (quizOpenRef.current && document.visibilityState === 'visible') solveRef.current += 1; }, 1000);
     const send = (useBeacon = false) => {
       if (document.visibilityState !== 'visible' && !useBeacon) { lastTick = Date.now(); return; }
       const seconds = Math.round((Date.now() - lastTick) / 1000);
       lastTick = Date.now();
-      if (seconds <= 0) return;
-      const body = JSON.stringify({ type: 'quizTime', seconds });
+      const solveSeconds = solveRef.current;
+      solveRef.current = 0;
+      if (seconds <= 0 && solveSeconds <= 0) return;
+      const body = JSON.stringify({ type: 'quizTime', seconds, solveSeconds });
       if (useBeacon && navigator.sendBeacon) { navigator.sendBeacon('/api/game', new Blob([body], { type: 'application/json' })); return; }
       fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
     };
@@ -152,7 +160,7 @@ export default function Game() {
     const onVisibility = () => { if (document.visibilityState === 'hidden') send(true); else lastTick = Date.now(); };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', () => send(true));
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
+    return () => { window.clearInterval(timer); window.clearInterval(solveTimer); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
 
   async function act<T>(action: Action): Promise<T | null> {

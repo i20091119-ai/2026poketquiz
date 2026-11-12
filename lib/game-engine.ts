@@ -181,7 +181,8 @@ export type Gift = {
   };
   reply?: { sticker: ReplySticker; text: string; at: string; /** 보호자가 확인했는지 */ seen?: boolean };
 };
-export type QuizDay = { seconds: number; answered: number; correct: number };
+/** seconds = 앱 사용 시간(퀴즈 앱 화면이 보이는 동안), solveSeconds = 문제 푸는 시간(문제 창이 열려 있는 동안, 2026-11-12부터; 없으면 0) */
+export type QuizDay = { seconds: number; answered: number; correct: number; solveSeconds?: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
 /** 포켓로그에 보낼 사탕 한 묶음. species = 퀴즈 도감 번호(게임이 진화 전 첫 모습으로 바꿈) */
 export type CandyGift = { id: string; date: string; species: number; amount: number };
@@ -901,7 +902,7 @@ export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, s
 
 // ---------- 행동 ----------
 export type Action =
-  | { type: 'quizTime'; seconds: number }
+  | { type: 'quizTime'; seconds: number; solveSeconds?: number }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1115,9 +1116,12 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
 
     case 'quizTime': {
-      // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 퀴즈 시간)
+      // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 앱 사용 시간)
       const seconds = Number(action.seconds);
       if (Number.isFinite(seconds) && seconds > 0) quizDay(state, ctx.today).seconds += Math.min(Math.round(seconds), QUIZ_REPORT_MAX_SECONDS);
+      // 문제 푸는 시간: 그동안 문제 창이 열려 있던 초 (앱 사용 시간과 따로)
+      const solve = Number(action.solveSeconds);
+      if (Number.isFinite(solve) && solve > 0) { const day = quizDay(state, ctx.today); day.solveSeconds = (day.solveSeconds ?? 0) + Math.min(Math.round(solve), QUIZ_REPORT_MAX_SECONDS); }
       return { ok: true };
     }
 
@@ -1850,14 +1854,15 @@ function quizDay(state: GameState, today: string): QuizDay {
   for (const date of Object.keys(state.quizLog).sort().slice(0, -ACTIVITY_LOG_DAYS)) delete state.quizLog[date];
   return state.quizLog[today];
 }
-export type ActivityDay = { date: string; quizSeconds: number; answered: number; correct: number; battleSeconds: number; battleWave: number; battleStarts: number };
+/** quizSeconds = 앱 사용 시간, solveSeconds = 문제 푸는 시간 */
+export type ActivityDay = { date: string; quizSeconds: number; solveSeconds: number; answered: number; correct: number; battleSeconds: number; battleWave: number; battleStarts: number };
 /** 보호자 화면 그래프용: 오늘까지 days 일치 (없는 날은 0) */
 export function activityList(state: GameState, today: string, days: number): ActivityDay[] {
   const out: ActivityDay[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const date = shiftDate(today, -i);
     const q = state.quizLog?.[date], b = state.battleLog?.[date];
-    out.push({ date, quizSeconds: q?.seconds ?? 0, answered: q?.answered ?? 0, correct: q?.correct ?? 0, battleSeconds: b?.seconds ?? 0, battleWave: b?.maxWave ?? 0, battleStarts: b?.starts ?? 0 });
+    out.push({ date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, answered: q?.answered ?? 0, correct: q?.correct ?? 0, battleSeconds: b?.seconds ?? 0, battleWave: b?.maxWave ?? 0, battleStarts: b?.starts ?? 0 });
   }
   return out;
 }

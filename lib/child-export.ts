@@ -26,13 +26,19 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
   const plain = (r: Row) => ({ time: kst(r.at), date: r.date, ...r.data });
 
   // ---- 하루 활동: 퀴즈 기록에 남은 것(35일·14일) + 활동 기록의 하루 요약(더 오래) ----
-  type Day = { date: string; quizSeconds: number; answered: number; correctFirstTry: number; battleSeconds: number; maxWave: number; newGames: number };
+  type Day = { date: string; quizSeconds: number; solveSeconds?: number; answered: number; correctFirstTry: number; battleSeconds: number; maxWave: number; newGames: number };
   const days = new Map<string, Day>();
-  for (const [date, d] of Object.entries(state.quizLog ?? {})) days.set(date, { date, quizSeconds: d.seconds, answered: d.answered, correctFirstTry: d.correct, battleSeconds: 0, maxWave: 0, newGames: 0 });
+  for (const [date, d] of Object.entries(state.quizLog ?? {})) days.set(date, { date, quizSeconds: d.seconds, solveSeconds: d.solveSeconds ?? 0, answered: d.answered, correctFirstTry: d.correct, battleSeconds: 0, maxWave: 0, newGames: 0 });
   for (const [date, d] of Object.entries(state.battleLog ?? {})) days.set(date, { date, quizSeconds: 0, answered: 0, correctFirstTry: 0, ...days.get(date), battleSeconds: d.seconds, maxWave: d.maxWave, newGames: d.starts });
   for (const r of of('day')) days.set(String(r.data.date), r.data as Day);
   const dailyActivity = [...days.values()].sort((a, b) => a.date.localeCompare(b.date))
-    .map(d => ({ ...d, quizMinutes: Math.round(d.quizSeconds / 6) / 10, battleMinutes: Math.round(d.battleSeconds / 6) / 10 }));
+    .map(d => ({
+      ...d,
+      // quizMinutes = 앱 사용 시간(퀴즈 앱 화면이 보이는 동안), solveMinutes = 문제 푸는 시간(문제 창이 열려 있는 동안, 2026-11-12부터)
+      quizMinutes: Math.round(d.quizSeconds / 6) / 10, 앱사용분: Math.round(d.quizSeconds / 6) / 10,
+      solveMinutes: Math.round((d.solveSeconds ?? 0) / 6) / 10, 문제푸는분: Math.round((d.solveSeconds ?? 0) / 6) / 10,
+      battleMinutes: Math.round(d.battleSeconds / 6) / 10,
+    }));
 
   // ---- 포켓로그: 새 판 시작과 판 결과를 짝지음 ----
   const starts = of('battleStart');
@@ -44,12 +50,17 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
     const end = Date.parse(String(r.data.endedAt));
     const prevEnd = i > 0 ? Date.parse(String(runRows[i - 1].data.endedAt)) : -Infinity;
     // 이 판이 끝나기 전에 가장 최근에 시작된 새 판 (아직 다른 판에 짝지어지지 않은 것)
-    const start = [...starts].reverse().find(s => !usedStart.has(s.seq) && Date.parse(s.at) <= end);
+    // 중단한 판은 게임이 기억한 시작 시각을 먼저 씀
+    const own = typeof r.data.startedAt === 'string' ? Date.parse(r.data.startedAt) : NaN;
+    const start = Number.isNaN(own)
+      ? [...starts].reverse().find(s => !usedStart.has(s.seq) && Date.parse(s.at) <= end)
+      : [...starts].reverse().find(s => !usedStart.has(s.seq) && Math.abs(Date.parse(s.at) - own) < 6 * 3600_000);
     if (start) usedStart.add(start.seq);
     return {
-      startDate: start ? start.date : null, startTime: start ? kst(start.at) : null,
+      startDate: start ? start.date : !Number.isNaN(own) ? kst(String(r.data.startedAt)).slice(0, 10) : null,
+      startTime: start ? kst(start.at) : !Number.isNaN(own) ? kst(String(r.data.startedAt)) : null,
       endDate: kst(String(r.data.endedAt)).slice(0, 10), endTime: kst(String(r.data.endedAt)),
-      wave: r.data.wave, result: r.data.result,
+      wave: r.data.wave, result: r.data.result, // '게임 오버' | '클리어' | '중단'(새 게임이 덮어쓴 끝나지 않은 판)
       party: (r.data.party as { species: number; level: number; shiny: boolean }[] ?? []).map(p => ({ ...p, name: nameOf(p.species, p.shiny) })),
       // 게임 오버 화면에서 쓴 부활권은 그 판이 진짜 끝나기 전에 기록되므로 "앞 판이 끝난 뒤 ~ 이 판이 끝날 때까지"로 셈
       reviveUsed: revives.filter(v => (v.data.runId ? v.data.runId === r.data.runId : Date.parse(v.at) > prevEnd && Date.parse(v.at) <= end)).length,
@@ -74,14 +85,17 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       활동기록시작일: since,
       항목별: tracking,
       퀴즈기록에남은범위: {
-        하루퀴즈시간: Object.keys(state.quizLog ?? {}).sort()[0] ?? null,
+        하루앱사용시간: Object.keys(state.quizLog ?? {}).sort()[0] ?? null,
         포켓로그하루기록: Object.keys(state.battleLog ?? {}).sort()[0] ?? null,
         보유포켓몬: state.owned.map(p => p.obtainedAt).sort()[0]?.slice(0, 10) ?? null,
       },
     },
     문제풀이: of('answer').map(plain),
+    하루활동설명: '앱사용분 = 퀴즈 앱 화면이 보이는 동안(도감·가방 등 포함), 문제푸는분 = 문제 창이 열려 있는 동안(2026-11-12부터 기록)',
     하루활동: dailyActivity,
     포켓로그: {
+      판결과설명: "result: '게임 오버' / '클리어' / '중단'(끝나지 않은 판을 새 게임이 덮어씀, 2026-11-12부터). 판이 아직 진행 중이면 여기 없어요",
+      판결과수: { 게임오버: runs.filter(r => r.result === '게임 오버').length, 클리어: runs.filter(r => r.result === '클리어').length, 중단: runs.filter(r => r.result === '중단').length },
       판: runs,
       새판시작: starts.map(plain),
       부활권사용: revives.map(plain),

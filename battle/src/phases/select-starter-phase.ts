@@ -3,7 +3,13 @@ import { globalScene } from "#app/global-scene";
 import { speciesDataRegistry } from "#app/global-species-data-registry";
 import { activeOverrides } from "#app/overrides";
 import { Phase } from "#app/phase";
-import { consumeNewBattleStart, hasQuizShinyStarter, quizStartingSpecies } from "#app/quiz-link";
+import {
+  consumeNewBattleStart,
+  hasQuizShinyStarter,
+  noteQuizRunStarted,
+  quizStartingSpecies,
+  reportAbandonedRun,
+} from "#app/quiz-link";
 import { SpeciesFormChangeMoveLearnedTrigger } from "#data/form-change-triggers";
 import { Gender } from "#data/gender";
 import { ChallengeType } from "#enums/challenge-type";
@@ -33,6 +39,9 @@ export class SelectStarterPhase extends Phase {
         // 새 게임 시작 = 오늘 시도 횟수 1 사용 (SPEC 7번). 못 쓰면 제목 화면으로
         void consumeNewBattleStart().then(result => {
           if (result.ok) {
+            // 이 칸에 진행 중인 판이 있었으면 "중단"으로 퀴즈 앱에 남기고, 새 판 시작일을 기억 (2026-11-12)
+            reportAbandonedRun(slotId);
+            noteQuizRunStarted(slotId);
             this.initBattle(starters);
             return;
           }

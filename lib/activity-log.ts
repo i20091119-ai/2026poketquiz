@@ -238,13 +238,13 @@ export function afterAction(before: Before, state: GameState, action: Action, re
   return [...out, ...eventsChange(before, state)];
 }
 
-/** 하루 활동 요약 한 줄 (퀴즈 화면 시간·푼 문제·포켓로그 시간·최고 웨이브·새 판) */
+/** 하루 활동 요약 한 줄 (앱 사용 시간·문제 푸는 시간·푼 문제·포켓로그 시간·최고 웨이브·새 판) */
 export function daySummary(state: GameState, date: string): LogEntry {
   const q = state.quizLog?.[date], b = state.battleLog?.[date];
   return {
     kind: 'day', ukey: date,
     data: {
-      date, quizSeconds: q?.seconds ?? 0, answered: q?.answered ?? 0, correctFirstTry: q?.correct ?? 0,
+      date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, answered: q?.answered ?? 0, correctFirstTry: q?.correct ?? 0,
       battleSeconds: b?.seconds ?? 0, maxWave: b?.maxWave ?? 0, newGames: b?.starts ?? 0,
     },
   };

@@ -363,6 +363,14 @@ export async function appendActivity(player: PlayerId, date: string, entries: Lo
   }
 }
 export type ActivityRow = { seq: number; at: string; date: string; kind: string; data: Record<string, unknown> };
+/** 최근 포켓로그 판 결과 (게임 오버·클리어·중단), 최근 것부터 */
+export async function recentBattleRuns(player: PlayerId, limit = 10): Promise<{ at: string; wave: number; result: string; startedAt: string | null }[]> {
+  if (player !== REAL_PLAYER) return [];
+  try {
+    const res = await db().prepare("SELECT at, data FROM activity_log WHERE player = ? AND kind = 'battleRun' ORDER BY seq DESC LIMIT ?").bind(player, limit).all<{ at: string; data: string }>();
+    return (res.results ?? []).map(r => { const d = JSON.parse(r.data) as Record<string, unknown>; return { at: String(d.endedAt ?? r.at), wave: Number(d.wave) || 0, result: String(d.result ?? ''), startedAt: typeof d.startedAt === 'string' ? d.startedAt : null }; });
+  } catch { return []; }
+}
 export async function readActivity(player: PlayerId = REAL_PLAYER): Promise<{ since: string | null; rows: ActivityRow[] }> {
   const d = db();
   const [since, res] = await Promise.all([
