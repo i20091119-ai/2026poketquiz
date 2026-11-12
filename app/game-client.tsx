@@ -15,7 +15,7 @@ import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
 import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
-import { setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
+import { QUIZ_ATTEMPTS, setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
 import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
 import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
@@ -186,7 +186,7 @@ export default function Game() {
         if (e && e.total > 0 && e.solved === e.total && !e.rewardClaimed) {
           setNotice(`${subject} 탐험을 모두 마쳤어! 선물을 골라 봐.`);
           setReward({ kind: 'explore', subject });
-        } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 다른 날 다시 나와.`);
+        } else if (e?.reviewLater) setNotice(`${subject} 오늘 탐험 끝! 틀린 문제는 이틀 뒤에 다시 나와.`);
         else setNotice(`${subject} 오늘 탐험 끝!`);
       }
     } catch (e) { setError((e as Error).message); }
@@ -201,7 +201,7 @@ export default function Game() {
         setQuiz(null);
         const d = view?.daily;
         if (d && d.boxPicks > 0 && !d.claimed) setReward({ kind: 'daily' });
-        else if (d?.finished) setNotice(`오늘의 미션 끝! 맞힌 문제 ${d.correct.length}개. 틀린 문제는 다른 날 다시 나와.`);
+        else if (d?.finished) setNotice(`오늘의 미션 끝! 맞힌 문제 ${d.correct.length}개. 틀린 문제는 이틀 뒤에 다시 나와.`);
       }
     } else if (rainbowJustDone.current) {
       // 무지개 완성! 탐험을 멈추고 이로치로 바꿀 포켓몬 고르기 창으로
@@ -365,8 +365,8 @@ export default function Game() {
         progress={quiz?.mode === 'daily' ? dailyProgress() : exploreProgress()}
         busy={busy}
         nextLabel={quiz?.mode === 'daily' && view.daily?.finished ? (view.daily.boxPicks > 0 ? '랜덤상자 받으러 가기' : '미션 끝!') : '다음 문제'}
-        chances={quiz?.mode === 'daily' ? (view.daily?.attempts ?? 1) - (view.daily?.tries[quiz.question.id] ?? 0) : 1}
-        maxChances={quiz?.mode === 'daily' ? view.daily?.attempts ?? 1 : 1}
+        chances={quiz?.mode === 'daily' ? (view.daily?.attempts ?? QUIZ_ATTEMPTS) - (view.daily?.tries[quiz.question.id] ?? 0) : QUIZ_ATTEMPTS}
+        maxChances={QUIZ_ATTEMPTS}
         onAnswer={async choice => {
           const r = await act<AnswerResult>({ type: 'answer', mode: quiz!.mode, questionId: quiz!.question.id, choice });
           if (r?.rainbow?.kind === 'complete') rainbowJustDone.current = true;

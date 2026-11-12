@@ -2,9 +2,9 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { ASSETS } from '@/lib/assets';
-import { BALLS, eulReul, POTIONS, potionTargets, type PotionKind } from '@/lib/game-config';
+import { BALLS, battlePowerMaxFeeds, eulReul, growth, POTIONS, potionTargets, type PotionKind } from '@/lib/game-config';
 import type { Ball, ChildView } from '@/lib/game-engine';
-import { evolutionRequirement, evolutionsOf, rootOf, shinyName, species } from '@/lib/pokedex';
+import { evolutionRequirement, evolutionsOf, heartGoalOf, isFinalForm, rootOf, shinyName, species } from '@/lib/pokedex';
 import { BattlePower } from './pokedex-tab';
 import { PokemonImage, TypeBadge } from './common';
 import { potionEffect } from './rewards';
@@ -81,8 +81,13 @@ function FeedDialog({ kind, view, busy, onClose, onFeed }: {
   kind: PotionKind | null; view: ChildView; busy: boolean;
   onClose: () => void; onFeed: (uid: string) => void;
 }) {
-  const [uid, setUid] = useState<string | null>(view.partner);
-  const chosen = view.owned.find(p => p.uid === uid);
+  // 다 진화했고 ★도 최고인 포켓몬은 먹여도 오를 게 없어서 고를 수 없게 (2026-11-12)
+  const maxed = (sp: number) => isFinalForm(sp) && (view.battlePower[rootOf(sp)] ?? 0) >= battlePowerMaxFeeds();
+  const first = view.owned.find(p => p.uid === view.partner && !maxed(p.species)) ?? view.owned.find(p => !maxed(p.species));
+  const [uid, setUid] = useState<string | null>(first?.uid ?? null);
+  const chosen = view.owned.find(p => p.uid === uid && !maxed(p.species));
+  const hearts = chosen ? view.hearts[rootOf(chosen.species)] ?? 0 : 0;
+  const goal = chosen ? heartGoalOf(chosen.species) : 0;
   const targets = kind ? potionTargets(kind) : [];
   const amount = kind ? POTIONS[kind].amount : 0;
   // 고른 포켓몬의 다음 진화 조건 중 이 아이템으로 오르는 것
@@ -96,13 +101,19 @@ function FeedDialog({ kind, view, busy, onClose, onFeed }: {
 
         <div className="partner-choices">
           {view.owned.map(p => (
-            <button key={p.uid} className={'partner-choice' + (p.uid === uid ? ' current' : '')} onClick={() => setUid(p.uid)}>
+            <button key={p.uid} className={'partner-choice' + (p.uid === uid ? ' current' : '') + (maxed(p.species) ? ' maxed' : '')} disabled={maxed(p.species)} onClick={() => setUid(p.uid)}>
               <PokemonImage id={p.species} shiny={p.shiny} />
               <b>{p.shiny ? `✨ ${shinyName(p.species)}` : species(p.species).name}</b>
+              {maxed(p.species) && <small className="maxed-tag">이미 최고예요</small>}
             </button>
           ))}
         </div>
 
+        {chosen && (
+          <p className="feed-hearts">💗 +{growth().feedHearts} {isFinalForm(chosen.species)
+            ? `(💗 ${goal}칸마다 배틀 힘 ★+1, 지금 ${hearts}/${goal})`
+            : hearts >= goal ? '(💗는 이미 가득! 진화할 수 있어)' : `(진화까지 💗 ${hearts}/${goal})`}</p>
+        )}
         {chosen && (
           <div className="feed-power">
             <BattlePower feeds={view.battlePower[rootOf(chosen.species)] ?? 0} />

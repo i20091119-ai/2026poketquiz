@@ -87,7 +87,8 @@ export function eventsChange(before: Before, state: GameState): LogEntry[] {
   const now = JSON.stringify(state.events ?? null);
   const out: LogEntry[] = now === before.events ? [] : [{ kind: 'event', data: { events: state.events ?? null } }];
   // 기간 한정 이벤트: 조각·연속 수·이로치 변신·정산이 바뀌면 그때의 모습을 남김
-  if (JSON.stringify(state.limited ?? null) !== before.limited) out.push({ kind: 'limited', data: { limited: state.limited ?? null } });
+  // (2026-11-12 부모님 결정) 기간 한정 이벤트(레인보우 2026-10-03)는 끝나고 동결: 진행 기록을 더 덧붙이지 않음.
+  // 새 기간 한정 이벤트는 만들지 않음. 지난 기록은 내보내기에 그대로 남음.
   // 나들이 체험보고서: 단계·상태·확인·보상이 바뀌면 그 보고서의 모습을 남김 (글 내용 포함)
   if ((before.outings ?? '') !== outingSummary(state)) {
     const was = JSON.parse(before.outings || '[]') as string[];

@@ -1110,3 +1110,8 @@ button.study-day:active { transform: scale(.94); }
 .legend-now-title { font-size: 20px; }
 .legend-now-gem { position: relative; }
 .legend-now-partner { position: absolute; right: -46px; bottom: -6px; width: 60px; height: 60px; object-fit: contain; animation: hop 1.6s ease-in-out infinite; }
+/* 먹이기: 다 진화하고 ★ 최고인 포켓몬 (2026-11-12) */
+.partner-choice.maxed { opacity: .45; }
+.maxed-tag { font-size: 11px; color: #9a5b00; font-weight: 800; }
+.feed-hearts { margin: 0; font-weight: 800; color: #be185d; text-align: center; }
+.read-aloud-tip { margin: 6px 0 4px; font-weight: 900; color: #b45309; font-size: 17px; }

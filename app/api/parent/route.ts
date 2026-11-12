@@ -1,7 +1,7 @@
 import { buildChildExport } from '@/lib/child-export';
 import { generateQuestions, isAiConfigured } from '@/lib/ai-generator';
 import { normalizeRules, parseHm } from '@/lib/battle-rest';
-import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
+import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, BATTLE_LIMIT_OPTIONS, BATTLE_PASSWORD_MIN, REVIEW_RULES, BALLS, GIFT_SIZES, GRADES, SHINY_CHANCE_BALLS, SHINY_CHANCE_DEFAULT, SUBJECTS, TYPE_INFO, type GiftLimits, type Subject, type TypeKey } from '@/lib/game-config';
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
@@ -111,6 +111,11 @@ async function overview(request: Request) {
       }),
       hardest: bank.questions.filter(q => wrong[q.id]).sort((a, b) => wrong[b.id] - wrong[a.id]).slice(0, 10)
         .map(q => ({ id: q.id, subject: q.subject, prompt: q.prompt, wrong: wrong[q.id], solved: solved.has(q.id) })),
+      /** 어려운 문제: 복습(이틀 뒤 다시 나온 문제)에서 첫 시도에 REVIEW_RULES.hardStreak번 연속 틀린 문제 — 문제·고른 답·틀린 횟수 */
+      hard: Object.entries(progress?.reviewMiss ?? {}).filter(([, m]) => m.streak >= REVIEW_RULES.hardStreak).flatMap(([id, m]) => {
+        const q = bank.questions.find(x => x.id === Number(id));
+        return q ? [{ id: q.id, subject: q.subject, prompt: q.prompt, answer: q.choices[q.answer], picks: m.picks.map(i => q.choices[i] ?? `${i + 1}번`), streak: m.streak, wrong: wrong[q.id] ?? 0, at: m.at }] : [];
+      }),
       /** 과목별 영역 성적 (약점 영역, 반복 오답 포함) */
       areas: areaReport(state, bank),
     },

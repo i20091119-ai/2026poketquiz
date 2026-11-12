@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill, openRetryToday, lockedToday } from './game-engine.ts';
+import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, RETRY_WAIT_SECONDS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill, openRetryToday, lockedToday, berryCount } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
-import { CATCH_POOLS, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
+import { CATCH_POOLS, rootOf, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
 import { megaByKey, megaImages, megaLabel, MEGAS, TOTAL_MEGAS } from './megas.ts';
 import { readFileSync } from 'node:fs';
@@ -153,14 +153,19 @@ test('샘플 문제은행은 모두 형식이 맞다', () => {
 const answerOf = (bank: ActiveBank, id: number) => bank.questions.find(q => q.id === id)!.answer;
 const wrongOf = (bank: ActiveBank, id: number) => (answerOf(bank, id) + 1) % 5;
 
-test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다른 날 다시 나온다', () => {
+test('탐험: 기회 2번(첫 시도에 틀리면 해설·10초 뒤 다시 풀기), 둘 다 틀리면 이틀 뒤 다시 나온다', () => {
   const bank = makeBank(3);
   const state = started(bank);
   const day1 = ctx(bank);
   const day2: Context = { ...ctx(bank), today: '2026-09-27' };
+  const day3: Context = { ...ctx(bank), today: '2026-09-28' };
   const [q, ...others] = bank.questions.filter(q => q.subject === '국어');
 
-  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, day1);
+  const first = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, day1) as { final: boolean; explanation?: string; waitSeconds?: number; answer?: number };
+  assert.deepEqual([first.final, first.waitSeconds, first.answer], [false, RETRY_WAIT_SECONDS, undefined]); // 정답은 아직 안 알려 줌
+  assert.equal(first.explanation, '해설');
+  const second = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: (wrongOf(bank, q.id) + 1) % 5 === q.answer ? (wrongOf(bank, q.id) + 2) % 5 : (wrongOf(bank, q.id) + 1) % 5 }, day1) as { final: boolean; answer: number };
+  assert.deepEqual([second.final, second.answer], [true, q.answer]);
   assert.throws(() => applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1), /다른 날/);
   for (let i = 1; i < 20; i++) assert.notEqual(nextExploreQuestion(state, bank, '국어', day1.today, seeded(i))?.id, q.id);
   for (const o of others) applyAction(state, { type: 'answer', mode: 'explore', questionId: o.id, choice: o.answer }, day1);
@@ -171,14 +176,64 @@ test('탐험: 틀리면 다시 풀 수 없고 안 푼 문제로 남았다가 다
   assert.equal(v1.reviewLater, 1);
   assert.throws(() => applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day1), /모두 맞혀야/);
 
-  // 다음 날: 다시 나오고, 맞히면 과목 마스터
-  assert.equal(childView(state, bank, day2.today).explore.find(e => e.subject === '국어')!.review, 1);
-  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded())?.id, q.id);
+  // 다음 날에는 아직 안 나오고, 이틀 뒤에 다시 나옴. 맞히면 과목 마스터
+  assert.equal(nextExploreQuestion(state, bank, '국어', day2.today, seeded()), null);
+  assert.equal(childView(state, bank, day3.today).explore.find(e => e.subject === '국어')!.review, 1);
+  assert.equal(nextExploreQuestion(state, bank, '국어', day3.today, seeded())?.id, q.id);
   const exp = state.exp;
-  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day2) as { reviewed: boolean };
+  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day3) as { reviewed: boolean };
   assert.equal(r.reviewed, true);
   assert.equal(state.exp, exp + 10);
-  applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day2);
+  applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, day3);
+});
+
+test('탐험: 첫 시도에 틀리고 다시 풀기에서 맞히면 보상은 받고, 이틀 뒤 한 번 더 나온다', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  const day1 = ctx(bank);
+  const q = bank.questions.find(q => q.subject === '수학')!;
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, day1);
+  const exp = state.exp;
+  const r = applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, day1) as { correct: boolean; reviewed: boolean };
+  assert.equal(r.correct, true);
+  assert.equal(r.reviewed, false);
+  assert.equal(state.exp, exp + 10);
+  assert.equal(state.banks[bank.id].review[q.id], day1.today);
+  assert.equal(state.quizLog![day1.today].answered, 1); // 첫 시도만 셈
+  assert.equal(state.quizLog![day1.today].correct, 0);
+});
+
+test('복습: 일일미션에는 과목당 1문제까지, 복습에서 첫 시도에 3번 연속 틀리면 어려운 문제로', () => {
+  const bank = makeBank(6);
+  const state = started(bank);
+  const prog = state.banks[bank.id] ??= { solved: [], wrong: {}, review: {}, subjectRewards: [], masterClaimed: false };
+  // 국어 문제 3개를 틀린 지 이틀 지난 상태로
+  const ko = bank.questions.filter(q => q.subject === '국어').slice(0, 3);
+  for (const q of ko) prog.review[q.id] = '2026-09-20';
+  for (let seed = 1; seed < 8; seed++) {
+    const copy = structuredClone(state);
+    ensureDaily(copy, bank, '2026-09-26', seeded(seed));
+    const ids = copy.daily!.questionIds;
+    assert.equal(ids.length, 18);
+    assert.equal(ko.filter(q => ids.includes(q.id)).length, 1);
+  }
+  // 한 문제를 복습에서 세 번(이틀 간격) 연속 첫 시도에 틀림
+  const q = ko[0];
+  delete prog.review[ko[1].id]; delete prog.review[ko[2].id];
+  let day = '2026-09-26';
+  for (let k = 0; k < 3; k++) {
+    const c: Context = { ...ctx(bank), today: day };
+    state.daily = null;
+    applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, c);
+    applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: wrongOf(bank, q.id) }, c);
+    day = shiftDate(day, 2);
+  }
+  assert.equal(prog.reviewMiss![q.id].streak, 3);
+  assert.deepEqual(prog.reviewMiss![q.id].picks, [wrongOf(bank, q.id), wrongOf(bank, q.id), wrongOf(bank, q.id)]);
+  // 복습에서 첫 시도에 맞히면 목록에서 빠지고 복습도 끝
+  applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, { ...ctx(bank), today: day });
+  assert.equal(prog.reviewMiss![q.id], undefined);
+  assert.equal(prog.review[q.id], undefined);
 });
 
 test('보호자 "오늘 다시 풀게 열기": 오늘 틀려 잠긴 문제를 그 과목만 오늘 다시 풀 수 있다', () => {
@@ -271,29 +326,35 @@ test('일일미션: 과목별 3문제, 정답 1개마다 그 속성 +5', () => {
   assert.equal(state.exp, 10);
 });
 
-test('일일미션: 틀려도 기회가 3번, 다 틀리면 정답을 알려주고 끝', () => {
+test('일일미션: 기회 2번, 첫 시도에 틀리면 해설, 둘 다 틀리면 정답을 알려주고 끝', () => {
   const bank = makeBank();
   const state = started(bank);
   ensureDaily(state, bank, '2026-09-26', seeded());
   const [a, b] = state.daily!.questionIds;
-  // a: 두 번 틀리고 세 번째에 맞힘
-  const r1 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: wrongOf(bank, a) }, ctx(bank)) as { final: boolean; triesLeft: number; answer?: number };
-  assert.deepEqual([r1.final, r1.triesLeft, r1.answer], [false, 2, undefined]); // 기회가 남으면 정답을 알려주지 않음
-  applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: wrongOf(bank, a) }, ctx(bank));
-  const r3 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: answerOf(bank, a) }, ctx(bank)) as { correct: boolean };
-  assert.equal(r3.correct, true);
+  // a: 한 번 틀리고 두 번째에 맞힘
+  const r1 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: wrongOf(bank, a) }, ctx(bank)) as { final: boolean; triesLeft: number; answer?: number; explanation?: string; waitSeconds?: number };
+  assert.deepEqual([r1.final, r1.triesLeft, r1.answer, r1.waitSeconds], [false, 1, undefined, RETRY_WAIT_SECONDS]); // 기회가 남으면 정답은 안 알려 주고 해설만
+  assert.equal(r1.explanation, '해설');
+  const r2 = applyAction(state, { type: 'answer', mode: 'daily', questionId: a, choice: answerOf(bank, a) }, ctx(bank)) as { correct: boolean };
+  assert.equal(r2.correct, true);
   assert.ok(state.daily!.correct.includes(a));
-  // b: 세 번 모두 틀림
-  for (let k = 0; k < 2; k++) applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank));
-  const last = applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank)) as { final: boolean; answer: number };
-  assert.deepEqual([last.final, last.answer], [true, answerOf(bank, b)]);
+  // b: 두 번 모두 틀림
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank));
+  const last = applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: wrongOf(bank, b) }, ctx(bank)) as { final: boolean; answer: number; explanation: string };
+  assert.deepEqual([last.final, last.answer, last.explanation], [true, answerOf(bank, b), '해설']);
   assert.throws(() => applyAction(state, { type: 'answer', mode: 'daily', questionId: b, choice: answerOf(bank, b) }, ctx(bank)), /이미 풀었어요/);
+  assert.equal(DAILY_ATTEMPTS, 2);
 
-  // 둘 다 다음 날 미션에 다시 나온다 (다시 맞힌 문제 포함)
+  // 다음 날에는 안 나오고, 이틀 뒤 미션에 다시 나온다 (같은 과목이면 그중 1문제만)
   for (let seed = 1; seed < 6; seed++) {
+    const next = structuredClone(state);
+    ensureDaily(next, bank, '2026-09-27', seeded(seed));
+    assert.ok(!next.daily!.questionIds.includes(a) && !next.daily!.questionIds.includes(b));
     const copy = structuredClone(state);
-    ensureDaily(copy, bank, '2026-09-27', seeded(seed));
-    assert.ok(copy.daily!.questionIds.includes(a) && copy.daily!.questionIds.includes(b));
+    ensureDaily(copy, bank, '2026-09-28', seeded(seed));
+    const qa = bank.questions.find(q => q.id === a)!, qb = bank.questions.find(q => q.id === b)!;
+    if (qa.subject !== qb.subject) assert.ok(copy.daily!.questionIds.includes(a) && copy.daily!.questionIds.includes(b));
+    else assert.equal([a, b].filter(id => copy.daily!.questionIds.includes(id)).length, 1);
   }
 });
 
@@ -1188,7 +1249,7 @@ test('배틀 힘: 열매·상처약을 먹인 계열은 포켓로그 개체값 +
   state.potions.push({ id: 'm1', kind: 'apple' });
   const grassBefore = state.stats.grass;
   const r = applyAction(state, { type: 'usePotion', potionId: 'm1', uid }, c) as { message: string; battleIv: number };
-  assert.equal(r.message, `${species(906).name}에게 먹였어! 에너지 +5, 배틀 힘도 쑥!`);
+  assert.equal(r.message, `${species(906).name}에게 먹였어! 에너지 +5, 💗 +5, 배틀 힘도 쑥!`);
   assert.equal(state.stats.grass, grassBefore + 5); // 속성 스탯은 그대로 오름
   assert.equal(r.battleIv, 16);
   assert.equal(battleIvOf(state, 907), 16); // 같은 계열(이로치 진화형 포함)은 같은 값
@@ -1455,4 +1516,57 @@ test('나들이: 규칙은 도전할래! 때 고정되고, 예전 기록(나들�
   const old = started(bank); delete old.outings;
   assert.deepEqual(childView(old, bank, '2026-10-05').outings, []);
   assert.throws(() => createOuting(state, { from: 'mom', place: '바다', date: '2026-10-05', letter: '', sights: ['게'], photoIds: [], candidates: [243, 243, 245] }, 't'), /서로 다르게/);
+});
+
+// ---------- 2026-11-12: 열매 → 💗, 열매 보유 상한 ----------
+test('열매·상처약을 먹이면 그 포켓몬 계열 💗 +5 (팀에 없어도), 다 진화하고 ★ 최고면 먹일 수 없음', () => {
+  const bank = makeBank();
+  const c = ctx(bank);
+  const state = started(bank); // 나오하(906) 파트너
+  state.owned.push({ uid: 'pika', species: 25, obtainedAt: 't' }); // 팀에 없는 포켓몬
+  state.potions.push({ id: 'b1', kind: 'thunder' });
+  const r = applyAction(state, { type: 'usePotion', potionId: 'b1', uid: 'pika' }, c) as { message: string; hearts: { amount: number } };
+  assert.equal(r.hearts.amount, GROWTH_DEFAULT.feedHearts);
+  assert.equal(state.hearts![String(rootOf(25))], 5);
+  assert.match(r.message, /💗 \+5/);
+  // 다 진화(라이츄)했고 ★ 최고면 막힘
+  state.owned.push({ uid: 'rai', species: 26, obtainedAt: 't' });
+  simBattlePower(state, 'max');
+  state.potions.push({ id: 'b2', kind: 'thunder' });
+  assert.throws(() => applyAction(state, { type: 'usePotion', potionId: 'b2', uid: 'rai' }, c), /이미 최고예요/);
+  assert.equal(state.potions.length, 1); // 먹이지 못했으니 그대로
+  // 💗 값은 보호자가 바꿀 수 있음
+  setGrowthRules({ feedHearts: 8 });
+  state.owned.push({ uid: 'eevee', species: 133, obtainedAt: 't' });
+  const r3 = applyAction(state, { type: 'usePotion', potionId: 'b2', uid: 'eevee' }, c) as { hearts: { amount: number } };
+  assert.equal(r3.hearts.amount, 8);
+  setGrowthRules(null);
+});
+
+test('열매가 10개 이상이면 랜덤상자·탐험 선물에서 열매 대신 몬스터볼·슈퍼볼 (상처약은 그대로)', () => {
+  const bank = makeBank(3);
+  const state = started(bank);
+  for (let i = 0; i < 10; i++) state.potions.push({ id: 'x' + i, kind: 'apple' });
+  assert.equal(berryCount(state), 10);
+  // 랜덤상자 (여러 번 굴려 열매가 하나도 없는지)
+  for (let seed = 1; seed < 40; seed++) {
+    const s2 = structuredClone(state);
+    const d = { date: '2026-09-26', bankId: bank.id, questionIds: [], correct: [], wrong: [], tries: {}, box: null, claimed: false };
+    s2.daily = { ...d, questionIds: bank.questions.slice(0, 1).map(q => q.id), correct: [bank.questions[0].id] };
+    const r = applyAction(s2, { type: 'dailyBox', pick: 0 }, ctx(bank, seeded(seed))) as { items: ({ kind: string; potion?: string; ball?: string } | null)[] };
+    for (const it of r.items.filter(Boolean)) {
+      assert.ok(it!.kind !== 'potion' || it!.potion === 'potion', `열매가 나옴: ${JSON.stringify(it)}`);
+    }
+  }
+  // 탐험 과목 선물
+  for (const q of bank.questions.filter(q => q.subject === '국어')) applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: q.answer }, ctx(bank));
+  const r = applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank, seeded(3))) as { items: { kind: string; potion?: string; ball?: string }[] };
+  for (const it of r.items) assert.ok(it.kind === 'ball' ? ['poke', 'great'].includes(it.ball!) : it.potion === 'potion');
+  // 상한은 보호자가 바꿀 수 있음
+  setGrowthRules({ berryCap: 50 });
+  const s3 = structuredClone(state);
+  s3.banks[bank.id].subjectRewards = [];
+  const r2 = applyAction(s3, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank, seeded(3))) as { items: { kind: string }[] };
+  assert.ok(r2.items.some(it => it.kind === 'potion'));
+  setGrowthRules(null);
 });
