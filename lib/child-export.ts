@@ -26,9 +26,9 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
   const plain = (r: Row) => ({ time: kst(r.at), date: r.date, ...r.data });
 
   // ---- 하루 활동: 퀴즈 기록에 남은 것(35일·14일) + 활동 기록의 하루 요약(더 오래) ----
-  type Day = { date: string; quizSeconds: number; solveSeconds?: number; answered: number; correctFirstTry: number; battleSeconds: number; maxWave: number; newGames: number };
+  type Day = { date: string; quizSeconds: number; solveSeconds?: number; villageSeconds?: number; answered: number; correctFirstTry: number; battleSeconds: number; maxWave: number; newGames: number };
   const days = new Map<string, Day>();
-  for (const [date, d] of Object.entries(state.quizLog ?? {})) days.set(date, { date, quizSeconds: d.seconds, solveSeconds: d.solveSeconds ?? 0, answered: d.answered, correctFirstTry: d.correct, battleSeconds: 0, maxWave: 0, newGames: 0 });
+  for (const [date, d] of Object.entries(state.quizLog ?? {})) days.set(date, { date, quizSeconds: d.seconds, solveSeconds: d.solveSeconds ?? 0, villageSeconds: d.villageSeconds ?? 0, answered: d.answered, correctFirstTry: d.correct, battleSeconds: 0, maxWave: 0, newGames: 0 });
   for (const [date, d] of Object.entries(state.battleLog ?? {})) days.set(date, { date, quizSeconds: 0, answered: 0, correctFirstTry: 0, ...days.get(date), battleSeconds: d.seconds, maxWave: d.maxWave, newGames: d.starts });
   for (const r of of('day')) days.set(String(r.data.date), r.data as Day);
   const dailyActivity = [...days.values()].sort((a, b) => a.date.localeCompare(b.date))
@@ -37,6 +37,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       // quizMinutes = 앱 사용 시간(퀴즈 앱 화면이 보이는 동안), solveMinutes = 문제 푸는 시간(문제 창이 열려 있는 동안, 2026-11-12부터)
       quizMinutes: Math.round(d.quizSeconds / 6) / 10, 앱사용분: Math.round(d.quizSeconds / 6) / 10,
       solveMinutes: Math.round((d.solveSeconds ?? 0) / 6) / 10, 문제푸는분: Math.round((d.solveSeconds ?? 0) / 6) / 10,
+      마을분: Math.round((d.villageSeconds ?? 0) / 6) / 10,
       battleMinutes: Math.round(d.battleSeconds / 6) / 10,
     }));
 
@@ -91,7 +92,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       },
     },
     문제풀이: of('answer').map(plain),
-    하루활동설명: '앱사용분 = 퀴즈 앱 화면이 보이는 동안(도감·가방 등 포함), 문제푸는분 = 문제 창이 열려 있는 동안(2026-11-12부터 기록)',
+    하루활동설명: '앱사용분 = 퀴즈 앱 화면이 보이는 동안(도감·가방 등 포함), 문제푸는분 = 문제 창이 열려 있는 동안(2026-11-12부터 기록), 마을분 = 포켓몬 마을 안에 있던 동안(2026-11-13부터)',
     하루활동: dailyActivity,
     포켓로그: {
       판결과설명: "result: '게임 오버' / '클리어' / '중단'(끝나지 않은 판을 새 게임이 덮어씀, 2026-11-12부터). 판이 아직 진행 중이면 여기 없어요",
@@ -136,6 +137,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       이벤트: { 지금: state.events ?? null, 부활권: state.reviveTickets ?? 0, 진행기록: of('event').map(plain) },
       기간한정이벤트: { 지금: state.limited ?? null, 진행기록: of('limited').map(plain) },
       나들이체험보고서: { 지금: state.outings ?? [], 진행기록: of('outing').map(plain) },
+      포켓몬마을: { 마을지금: state.village ?? null, 만난손님: state.met ?? [] },
       트레이너훈련과전설조각: { 훈련지금: state.offline ?? null, 전설지금: state.legend ?? null, 부모님기록: of('offline').map(plain), 전설진행기록: of('legend').map(plain) },
     },
     ...(beforeReset.length ? { 처음부터다시하기_이전기록: { 설명: '아이 게임을 처음부터 다시 하기 전에 쌓인 활동 기록(원본 그대로)', 기록: beforeReset.map(plain) } } : {}),

@@ -1,4 +1,5 @@
 "use client";
+import { MATERIAL_INFO, type MaterialKey } from '@/lib/village';
 import { useEffect, useState } from 'react';
 import { ArrowRight, Volume2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -23,6 +24,8 @@ export type AnswerResult = {
   /** 모험 팀이 받은 💗 (정답일 때) */
   hearts?: HeartGainView[];
   /** 레인보우 이벤트 진행 (탐험에서만): 연속 수, 조각을 얻었는지, 아이에게 보여 줄 말 */
+  /** 포켓몬 마을 재료 (정답 확률 · 미션을 끝내면 확정) */
+  village?: { mats: MaterialKey[]; mission: { mats: MaterialKey[]; opened: boolean } | null } | null;
   rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; stage?: 'rainbow' | 'gold'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
 };
 
@@ -38,6 +41,15 @@ type Props = {
   onClose: () => void;
   nextLabel: string;
 };
+
+const matText = (mats: MaterialKey[]) => mats.map(k => `${MATERIAL_INFO[k].emoji} ${MATERIAL_INFO[k].name}`).join(', ');
+/** 포켓몬 마을 재료 소식 */
+function VillageLine({ v }: { v: NonNullable<AnswerResult['village']> }) {
+  return <>
+    {v.mats.length > 0 && <p className="village-line">{matText(v.mats)} +1! 마을 재료를 얻었어</p>}
+    {v.mission && <p className="village-line">🏡 오늘 미션 끝! 포켓몬 마을이 열렸어!{v.mission.mats.length ? ` 재료 ${matText(v.mission.mats)}도 받았어` : ''}</p>}
+  </>;
+}
 
 /** 레인보우 이벤트: 이 과목 연속 수(동그라미 10개)와 조각 소식 */
 function RainbowLine({ r }: { r: NonNullable<AnswerResult['rainbow']> }) {
@@ -147,6 +159,7 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
                 <button type="button" className="secondary small" onClick={() => readExplanation(feedback.explanation!)}><Volume2 size={16} /> 해설 들어 보기</button>
               </>}
               {feedback.correct && feedback.hearts && <HeartLines hearts={feedback.hearts} />}
+              {feedback.village && <VillageLine v={feedback.village} />}
             </div>
           )}
           {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}

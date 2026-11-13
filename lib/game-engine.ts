@@ -11,6 +11,7 @@ import { CATCH_POOLS, evolutionRequirement, evolutionsOf, heartGoalOf, isFinalFo
 import { RARE_POKEMON } from './rare-pokemon.ts';
 import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMessage, stageCandidates, stageNeed, weekDates, weekScore, weekStartOf, type DayBoxKind, type DayMark, type OfflineRules } from './offline.ts';
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
+import { CELL_COUNT, CRAFT_INFO, CRAFTS, dayPickups, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
 export type Question = {
@@ -80,6 +81,8 @@ export type GameState = {
     correct: number[]; wrong: number[]; tries: Record<string, number>;
     box: { items: BoxItem[]; picks: number[] } | null;
     claimed: boolean;
+    /** 복습 모드: 문제은행을 다 풀어 이미 푼 문제로 낸 날 (2026-11-13, 없으면 보통 날) */
+    review?: boolean;
   } | null;
   banks: Record<string, BankProgress>;
   /** 포켓로그(/battle) 새 게임 시도: 날짜(한국 시간)와 그날 시작한 횟수 */
@@ -127,6 +130,31 @@ export type GameState = {
   exploreTries?: { date: string; tries: Record<string, number> };
   /** 보호자가 "오늘 다시 풀게 열기"로 연 문제: 그날은 오늘의 미션 문제여도 탐험에서 다시 풀 수 있음 */
   retryOpen?: { date: string; ids: number[] };
+  /** 포켓몬 마을 (lib/village.ts, 2026-11-13). 재료·만든 물건·밭·손님 */
+  village?: VillageState;
+  /** 마을에서 만난 포켓몬 (손님). 가진 포켓몬(획득)과 따로, 도감에 "만남" 표시 */
+  met?: number[];
+};
+export type VillageGuest = { plot: number; habitat: HabitatKey; species: number };
+export type VillageState = {
+  /** 재료 수 (종류마다 villageRules().matCap 까지) */
+  mats: Partial<Record<MaterialKey, number>>;
+  /** 가방에 있는 만든 물건 (밭에 놓지 않은 것) */
+  items: Partial<Record<CraftKey, number>>;
+  /** 밭 칸에 놓은 물건 (칸 번호 = 밭 × 4 + 자리) */
+  cells: (CraftKey | null)[];
+  /** 밭마다 완성된 서식지와 완성한 날 (손님은 다음 날부터) */
+  habitats: ({ kind: HabitatKey; since: string } | null)[];
+  /** 오늘 주운 자리 */
+  picked?: { date: string; spots: number[] };
+  /** 일일미션 재료를 받은 날 */
+  missionDate?: string;
+  /** 오늘 찾아온 손님 (밭마다 하루 1마리, 하루가 지나면 떠남) */
+  guests?: { date: string; list: VillageGuest[] };
+  /** 마지막으로 마을에 들어간 날 */
+  enteredDate?: string;
+  /** 지금까지 받은 재료 수 (보호자 화면) */
+  gained?: number;
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -182,7 +210,7 @@ export type Gift = {
   reply?: { sticker: ReplySticker; text: string; at: string; /** 보호자가 확인했는지 */ seen?: boolean };
 };
 /** seconds = 앱 사용 시간(퀴즈 앱 화면이 보이는 동안), solveSeconds = 문제 푸는 시간(문제 창이 열려 있는 동안, 2026-11-12부터; 없으면 0) */
-export type QuizDay = { seconds: number; answered: number; correct: number; solveSeconds?: number };
+export type QuizDay = { seconds: number; answered: number; correct: number; solveSeconds?: number; villageSeconds?: number };
 export type BattleDay = { maxWave: number; seconds: number; starts: number };
 /** 포켓로그에 보낼 사탕 한 묶음. species = 퀴즈 도감 번호(게임이 진화 전 첫 모습으로 바꿈) */
 export type CandyGift = { id: string; date: string; species: number; amount: number };
@@ -534,6 +562,22 @@ function ensureDailyCore(state: GameState, bank: ActiveBank | null, today: strin
   const prog = progress(state, bank.id);
   const solved = new Set(prog.solved);
   const ids: number[] = [];
+  // 복습 모드 (2026-11-13): 문제은행을 다 맞혔으면 이미 푼 문제로 같은 수만큼. 전에 틀렸던 문제 먼저, 그다음 맞힌 문제 무작위.
+  // 어제 나온 문제는 뒤로 미뤄 같은 문제만 계속 나오지 않게 합니다. 틀렸을 때 규칙은 보통 날과 같음.
+  if (isBankExhausted(state, bank)) {
+    const prev = new Set(d?.questionIds ?? []);
+    for (const subject of SUBJECTS) {
+      const pool = shuffle(bank.questions.filter(q => q.subject === subject), random);
+      const missed = (q: Question) => (prog.wrong[q.id] ?? 0) > 0;
+      const ordered = [
+        ...pool.filter(q => missed(q) && !prev.has(q.id)), ...pool.filter(q => !missed(q) && !prev.has(q.id)),
+        ...pool.filter(q => missed(q) && prev.has(q.id)), ...pool.filter(q => !missed(q) && prev.has(q.id)),
+      ];
+      ids.push(...ordered.slice(0, DAILY_PER_SUBJECT).map(q => q.id));
+    }
+    state.daily = { date: today, bankId: bank.id, questionIds: ids, correct: [], wrong: [], tries: {}, box: null, claimed: false, review: true };
+    return true;
+  }
   for (const subject of SUBJECTS) {
     const pool = bank.questions.filter(q => q.subject === subject);
     // 전에 틀린 문제 → 안 푼 문제 → 이미 맞힌 문제 순서
@@ -574,6 +618,12 @@ function ensureDailyCore(state: GameState, bank: ActiveBank | null, today: strin
   return true;
 }
 
+/** 문제은행의 모든 문제를 맞혔는지 (복습 모드) */
+export function isBankExhausted(state: GameState, bank: ActiveBank): boolean {
+  if (!bank.questions.length) return false;
+  const solved = new Set(progress(state, bank.id).solved);
+  return bank.questions.every(q => solved.has(q.id));
+}
 /** 오늘의 미션 문제를 모두 풀었는지 (맞혔든 틀렸든) */
 const dailyFinished = (state: GameState) =>
   !!state.daily && state.daily.questionIds.length > 0 &&
@@ -902,7 +952,12 @@ export function nextExploreQuestion(state: GameState, bank: ActiveBank | null, s
 
 // ---------- 행동 ----------
 export type Action =
-  | { type: 'quizTime'; seconds: number; solveSeconds?: number }
+  | { type: 'quizTime'; seconds: number; solveSeconds?: number; villageSeconds?: number }
+  | { type: 'villageEnter' }
+  | { type: 'villagePick'; spot: number; stay?: boolean }
+  | { type: 'villageCraft'; item: CraftKey; stay?: boolean }
+  | { type: 'villagePlace'; cell: number; item: CraftKey; stay?: boolean }
+  | { type: 'villageTake'; cell: number; stay?: boolean }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1079,6 +1134,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           correct: false, final: true, answer: q.answer, explanation: q.explanation,
           message: `아쉬워! 정답은 ${q.answer + 1}번이야. 이 문제는 이틀 뒤에 다시 나올 거야.`,
           candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
+          village: action.mode === 'daily' ? villageAnswer(state, ctx.today, random, false, false) : null,
         };
       }
       if (replay) {
@@ -1112,9 +1168,67 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         candy: action.mode === 'daily' ? settleDailyCandy(state, ctx.today) : null,
         /** 레인보우 이벤트 진행 (탐험에서만) */
         rainbow: action.mode === 'explore' ? rainbowAnswer(state, ctx.today, q, true, false) : null,
+        /** 포켓몬 마을 재료: 첫 시도 정답에 확률로 1개 + 이 답으로 오늘의 미션이 끝났으면 미션 재료 */
+        village: villageAnswer(state, ctx.today, random, firstTry && rewarded, action.mode === 'daily' && !!state.daily?.review),
       };
     }
 
+    case 'villageEnter': {
+      needStarter();
+      if (!villageOpenToday(state, ctx.today)) fail('오늘 미션을 끝내면 마을이 열려요.');
+      villageTimeCheck(state, ctx.today);
+      const v = village(state);
+      v.enteredDate = ctx.today;
+      syncVillage(state, ctx.today, random);
+      meetGuests(state, ctx.today);
+      return { ok: true };
+    }
+    case 'villagePick': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const rules = villageRules();
+      const spots = dayPickups(ctx.today, rules.pickPerDay);
+      const found = spots.find(p => p.spot === action.spot);
+      if (!found) fail('여기에는 재료가 없어요.');
+      if (v.picked?.date !== ctx.today) v.picked = { date: ctx.today, spots: [] };
+      if (v.picked.spots.includes(action.spot)) fail('이미 주웠어요.');
+      if (v.picked.spots.length >= rules.pickPerDay) fail('오늘은 다 주웠어! 내일 또 떨어져 있을 거야.');
+      if ((v.mats[found.kind] ?? 0) >= rules.matCap) fail(`${eunNeun(MATERIAL_INFO[found.kind].name)} 가방에 가득 찼어! (최대 ${rules.matCap}개)`);
+      v.picked.spots.push(action.spot);
+      v.mats[found.kind] = (v.mats[found.kind] ?? 0) + 1;
+      v.gained = (v.gained ?? 0) + 1;
+      return { kind: found.kind, message: `${eulReul(MATERIAL_INFO[found.kind].name)} 주웠어!` };
+    }
+    case 'villageCraft': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!CRAFTS.includes(action.item)) fail('만들 것을 다시 골라 주세요.');
+      const info = CRAFT_INFO[action.item];
+      const cost = Object.entries(info.cost) as [MaterialKey, number][];
+      const short = cost.find(([k, n]) => (v.mats[k] ?? 0) < n);
+      if (short) fail(`${iGa(MATERIAL_INFO[short[0]].name)} ${short[1] - (v.mats[short[0]] ?? 0)}개 더 필요해!`);
+      for (const [k, n] of cost) v.mats[k] = (v.mats[k] ?? 0) - n;
+      v.items[action.item] = (v.items[action.item] ?? 0) + 1;
+      return { item: action.item, message: `${eulReul(info.name)} 만들었어! 가방에 넣었어.` };
+    }
+    case 'villagePlace': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!Number.isInteger(action.cell) || action.cell < 0 || action.cell >= CELL_COUNT) fail('놓을 칸을 다시 골라 주세요.');
+      if (!CRAFTS.includes(action.item)) fail('놓을 것을 다시 골라 주세요.');
+      if (v.cells[action.cell]) fail('이미 놓여 있어요.');
+      if ((v.items[action.item] ?? 0) < 1) fail(`${iGa(CRAFT_INFO[action.item].name)} 가방에 없어요. 먼저 만들어 보자!`);
+      v.items[action.item] = (v.items[action.item] ?? 0) - 1;
+      v.cells[action.cell] = action.item;
+      const made = updateHabitats(v, ctx.today);
+      return { habitat: made, message: made ? `${HABITAT_INFO[made].emoji} ${HABITAT_INFO[made].name} 완성! 내일부터 ${HABITAT_INFO[made].typeText} 손님이 찾아올 거야!` : `${eulReul(CRAFT_INFO[action.item].name)} 놓았어.` };
+    }
+    case 'villageTake': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const item = Number.isInteger(action.cell) ? v.cells[action.cell] : null;
+      if (!item) fail('여기에는 아무것도 없어요.');
+      v.cells[action.cell] = null;
+      v.items[item] = (v.items[item] ?? 0) + 1;
+      updateHabitats(v, ctx.today);
+      return { message: `${eulReul(CRAFT_INFO[item].name)} 가방에 다시 넣었어.` };
+    }
     case 'quizTime': {
       // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 앱 사용 시간)
       const seconds = Number(action.seconds);
@@ -1122,6 +1236,9 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       // 문제 푸는 시간: 그동안 문제 창이 열려 있던 초 (앱 사용 시간과 따로)
       const solve = Number(action.solveSeconds);
       if (Number.isFinite(solve) && solve > 0) { const day = quizDay(state, ctx.today); day.solveSeconds = (day.solveSeconds ?? 0) + Math.min(Math.round(solve), QUIZ_REPORT_MAX_SECONDS); }
+      // 마을 시간: 그동안 마을 화면에 있던 초
+      const vs = Number(action.villageSeconds);
+      if (Number.isFinite(vs) && vs > 0) { const day = quizDay(state, ctx.today); day.villageSeconds = (day.villageSeconds ?? 0) + Math.min(Math.round(vs), QUIZ_REPORT_MAX_SECONDS); }
       return { ok: true };
     }
 
@@ -1826,6 +1943,154 @@ export function settleDailyCandy(state: GameState, today: string): CandyGift | n
   candy.lastGift = gift;
   return gift;
 }
+// ---------- 포켓몬 마을 (lib/village.ts) ----------
+/** 마을 기록 (없으면 만듦: 보기만으로는 만들지 않음) */
+function village(state: GameState): VillageState {
+  const v = state.village ??= { mats: {}, items: {}, cells: [], habitats: [] };
+  v.mats ??= {}; v.items ??= {}; v.cells ??= []; v.habitats ??= [];
+  while (v.cells.length < CELL_COUNT) v.cells.push(null);
+  while (v.habitats.length < PLOTS.length) v.habitats.push(null);
+  return v;
+}
+/** 오늘 일일미션(또는 복습 모드)을 다 풀었으면 마을이 열림 */
+export const villageOpenToday = (state: GameState, today: string) => state.daily?.date === today && dailyFinished(state);
+/** 오늘 마을에 있었던 초 */
+export const villageSecondsToday = (state: GameState, today: string) => state.quizLog?.[today]?.villageSeconds ?? 0;
+/** 오늘 마을에 있을 수 있는 분 (null = 제한 없음) */
+export const villageMinutesToday = (state: GameState, today: string) => villageMinutesAllowed(villageRules(), state.quizLog?.[today]?.answered ?? 0);
+function villageTimeCheck(state: GameState, today: string) {
+  const allowed = villageMinutesToday(state, today);
+  if (allowed !== null && villageSecondsToday(state, today) >= allowed * 60) fail('오늘 마을 시간은 끝났어. 내일 또 놀러 오자!');
+}
+/**
+ * 마을 안에서 하는 행동. 오늘 열렸거나, 들어와 있는 동안 자정이 지났으면(stay: 화면이 아직 마을 안) 허용.
+ * 나가면 다시 잠김 (들어가기는 villageEnter가 오늘 열렸는지 봄).
+ */
+function villageAccess(state: GameState, today: string, stay: boolean | undefined, random: Random): VillageState {
+  if (!state.partner) fail('먼저 첫 파트너를 골라 주세요.');
+  const v = village(state);
+  const inside = !!stay && (v.enteredDate === today || v.enteredDate === shiftDate(today, -1));
+  if (!villageOpenToday(state, today) && !inside) fail('오늘 미션을 끝내면 마을이 열려요.');
+  if (!inside || v.enteredDate === today) villageTimeCheck(state, today);
+  syncVillage(state, today, random);
+  meetGuests(state, today);
+  return v;
+}
+/** 밭마다 서식지가 바뀌었는지 다시 봄. 새로 완성된 서식지(있으면)를 돌려줌 */
+function updateHabitats(v: VillageState, today: string): HabitatKey | null {
+  let made: HabitatKey | null = null;
+  PLOTS.forEach((_, i) => {
+    const kind = habitatOf(v.cells.slice(i * 4, i * 4 + 4));
+    if (kind === (v.habitats[i]?.kind ?? null)) return;
+    v.habitats[i] = kind ? { kind, since: today } : null;
+    if (kind) made = kind;
+  });
+  return made;
+}
+/** 재료 n개 (종류는 무작위, 가득 찬 종류는 다른 종류로, 모두 가득이면 못 받음) */
+function giveMaterials(state: GameState, n: number, random: Random): MaterialKey[] {
+  const v = village(state);
+  const cap = villageRules().matCap;
+  const got: MaterialKey[] = [];
+  for (let i = 0; i < n; i++) {
+    const open = MATERIALS.filter(k => (v.mats[k] ?? 0) < cap);
+    if (!open.length) break;
+    const pick = MATERIALS[Math.floor(random() * MATERIALS.length)];
+    const kind = open.includes(pick) ? pick : open[Math.floor(random() * open.length)];
+    v.mats[kind] = (v.mats[kind] ?? 0) + 1;
+    v.gained = (v.gained ?? 0) + 1;
+    got.push(kind);
+  }
+  return got;
+}
+/** 오늘의 미션이 끝났으면 미션 재료 (하루 한 번). 받은 것과 마을이 막 열렸는지 */
+function villageMission(state: GameState, today: string, random: Random): { mats: MaterialKey[]; opened: boolean } | null {
+  if (!villageOpenToday(state, today) || state.village?.missionDate === today) return null;
+  const rules = villageRules();
+  const mats = giveMaterials(state, state.daily?.review ? rules.reviewMissionMats : rules.missionMats, random);
+  village(state).missionDate = today;
+  return { mats, opened: true };
+}
+/** 정답 하나의 마을 재료 (첫 시도 정답만, 다시 풀어 맞힌 것은 없음) + 미션이 끝났으면 미션 재료 */
+function villageAnswer(state: GameState, today: string, random: Random, firstTryCorrect: boolean, reviewMode: boolean) {
+  const rules = villageRules();
+  const chance = (reviewMode ? rules.reviewChance : rules.quizChance) / 100;
+  const answer = firstTryCorrect && chance > 0 && random() < chance ? giveMaterials(state, 1, random) : [];
+  const mission = villageMission(state, today, random);
+  if (!answer.length && !mission) return null;
+  return { mats: answer, mission };
+}
+/** 날이 바뀌면 손님이 떠나고, 어제까지 완성된 서식지마다 새 손님 1마리 (전설·환상 제외) */
+export function syncVillage(state: GameState, today: string, random: Random): boolean {
+  const v = state.village;
+  if (!v || v.guests?.date === today) return false;
+  const list: VillageGuest[] = [];
+  (v.habitats ?? []).forEach((h, plot) => {
+    if (!h || h.since >= today) return;
+    const pool = guestPool(h.kind).filter(id => !list.some(g => g.species === id));
+    if (pool.length) list.push({ plot, habitat: h.kind, species: pool[Math.floor(random() * pool.length)] });
+  });
+  v.guests = { date: today, list };
+  return true;
+}
+/** 오늘 손님을 도감 "만남"에 (마을에 들어가서 본 때) */
+function meetGuests(state: GameState, today: string) {
+  const guests = state.village?.guests;
+  if (!guests || guests.date !== today) return;
+  const met = state.met ??= [];
+  for (const g of guests.list) if (!met.includes(g.species)) met.push(g.species);
+}
+/** 아이 화면용 마을 */
+export function villageView(state: GameState, today: string) {
+  const v = state.village;
+  const d = state.daily?.date === today ? state.daily : null;
+  const rules = villageRules();
+  const picked = v?.picked?.date === today ? v.picked.spots : [];
+  const residents = [state.partner, ...(state.team ?? [])].map(uid => state.owned.find(p => p.uid === uid)).filter((p): p is OwnedPokemon => !!p)
+    .map(p => ({ species: p.species, shiny: !!p.shiny }));
+  return {
+    open: villageOpenToday(state, today),
+    /** 미션 진행 (잠겨 있을 때 막대) */
+    mission: { done: d ? d.questionIds.filter(id => d.correct.includes(id) || d.wrong.includes(id)).length : 0, total: d?.questionIds.length ?? 0, review: !!d?.review },
+    mats: Object.fromEntries(MATERIALS.map(k => [k, v?.mats?.[k] ?? 0])) as Record<MaterialKey, number>,
+    items: Object.fromEntries(CRAFTS.map(k => [k, v?.items?.[k] ?? 0])) as Record<CraftKey, number>,
+    cells: Array.from({ length: CELL_COUNT }, (_, i) => v?.cells?.[i] ?? null),
+    habitats: PLOTS.map((_, i) => v?.habitats?.[i] ?? null),
+    pickups: dayPickups(today, rules.pickPerDay).filter(p => !picked.includes(p.spot)),
+    pickLeft: Math.max(0, rules.pickPerDay - picked.length),
+    guests: v?.guests?.date === today ? v.guests.list : [],
+    residents,
+    entered: v?.enteredDate === today,
+    time: { allowedMinutes: villageMinutesToday(state, today), usedSeconds: villageSecondsToday(state, today) },
+    rules,
+  };
+}
+export type VillageView = ReturnType<typeof villageView>;
+/** 보호자 화면용 마을 요약 */
+export function villageReport(state: GameState, today: string) {
+  const view = villageView(state, today);
+  return {
+    started: !!state.village, mats: view.mats, items: view.items, gained: state.village?.gained ?? 0,
+    habitats: view.habitats.filter(Boolean).map(h => ({ kind: h!.kind, name: HABITAT_INFO[h!.kind].name, since: h!.since })),
+    guests: view.guests.map(g => ({ species: g.species, name: species(g.species).name, habitat: HABITAT_INFO[g.habitat].name })),
+    met: (state.met ?? []).length, open: view.open, time: view.time,
+  };
+}
+/** 시뮬레이션: 문제은행을 다 푼 상태로 (복습 모드 확인용, 시험용 기록에만) */
+export function simBankDone(state: GameState, bank: ActiveBank, today: string, random: Random) {
+  const prog = progress(state, bank.id);
+  prog.solved = bank.questions.map(q => q.id);
+  prog.review = {};
+  if (state.daily?.date === today) state.daily = null;
+  ensureDaily(state, bank, today, random);
+}
+/** 시뮬레이션: 재료 종류마다 +n (최대까지) */
+export function simVillageMats(state: GameState, n: number) {
+  const v = village(state);
+  const cap = villageRules().matCap;
+  for (const k of MATERIALS) v.mats[k] = Math.min(cap, (v.mats[k] ?? 0) + n);
+}
+
 /** 게임이 가져간 사탕 묶음을 목록에서 뺍니다. 실제로 뺀 개수를 돌려줍니다. */
 export function claimCandy(state: GameState, ids: string[]): number {
   const candy = state.candy;
@@ -1855,14 +2120,14 @@ function quizDay(state: GameState, today: string): QuizDay {
   return state.quizLog[today];
 }
 /** quizSeconds = 앱 사용 시간, solveSeconds = 문제 푸는 시간 */
-export type ActivityDay = { date: string; quizSeconds: number; solveSeconds: number; answered: number; correct: number; battleSeconds: number; battleWave: number; battleStarts: number };
+export type ActivityDay = { date: string; quizSeconds: number; solveSeconds: number; villageSeconds: number; answered: number; correct: number; battleSeconds: number; battleWave: number; battleStarts: number };
 /** 보호자 화면 그래프용: 오늘까지 days 일치 (없는 날은 0) */
 export function activityList(state: GameState, today: string, days: number): ActivityDay[] {
   const out: ActivityDay[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const date = shiftDate(today, -i);
     const q = state.quizLog?.[date], b = state.battleLog?.[date];
-    out.push({ date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, answered: q?.answered ?? 0, correct: q?.correct ?? 0, battleSeconds: b?.seconds ?? 0, battleWave: b?.maxWave ?? 0, battleStarts: b?.starts ?? 0 });
+    out.push({ date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, villageSeconds: q?.villageSeconds ?? 0, answered: q?.answered ?? 0, correct: q?.correct ?? 0, battleSeconds: b?.seconds ?? 0, battleWave: b?.maxWave ?? 0, battleStarts: b?.starts ?? 0 });
   }
   return out;
 }
@@ -1944,6 +2209,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
         tries: state.daily.tries ?? {},
         attempts: DAILY_ATTEMPTS,
         claimed: state.daily.claimed,
+        /** 복습 모드 (문제은행을 다 풀어 이미 푼 문제로 낸 날) */
+        review: !!state.daily.review,
         /** 모두 풀었는지 (틀린 문제 포함) */
         finished: dailyFinished(state),
         /** 고를 수 있는 랜덤상자 수 (0, 1, 2) */
@@ -1985,6 +2252,10 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     balls: state.balls,
     potions: state.potions ?? [],
     bank: bank ? { id: bank.id, title: bank.title } : null,
+    /** 포켓몬 마을 (오늘 미션을 끝내면 열림) */
+    village: villageView(state, today),
+    /** 마을에서 만난 포켓몬 (도감 "만남") */
+    met: state.met ?? [],
     daily,
     explore,
     allMastered: bank ? allMastered(state, bank) : false,

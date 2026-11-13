@@ -1,6 +1,6 @@
 // 화면에 보여 주는 버전 이름. 새 기능을 올릴 때 여기 숫자와 아래 "바뀐 것(UPDATES)"만 고치면 됩니다.
 // 날짜는 인터넷에 올릴 때(만들 때) 자동으로 들어갑니다 (vite.config.ts 의 __BUILD_DATE__).
-export const APP_VERSION = '1.30';
+export const APP_VERSION = '1.31';
 
 /** 하루치 바뀐 것. date는 'YYYY-MM-DD', version은 그날 마지막으로 올린 버전 이름 */
 export interface UpdateDay {
@@ -18,6 +18,18 @@ export interface UpdateDay {
  * (lib/version.test.ts 가 이 규칙을 검사합니다)
  */
 export const UPDATES: UpdateDay[] = [
+  {
+    date: '2026-11-13',
+    version: '1.31',
+    items: [
+      '🏡 포켓몬 마을(시험판): 오늘의 미션을 끝내면 열리는 마을',
+      '마을 재료 4종: 정답 30%·미션 끝 2개·마을에서 하루 3개 줍기',
+      '풀숲·물웅덩이·꽃밭 만들기 → 서식지 3가지 → 다음 날 손님 포켓몬',
+      '손님은 도감 "🏡 마을 손님"에 만남으로 표시(획득 아님)',
+      '문제은행을 다 풀면 "오늘은 복습하는 날"(전에 틀린 문제 먼저)',
+      '학습 현황에 마을 시간·마을 요약, 전체 설정에 마을 시간 제한',
+    ],
+  },
   {
     date: '2026-11-12',
     version: '1.30',

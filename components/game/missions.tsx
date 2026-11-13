@@ -28,6 +28,7 @@ export function DailyTab({ view, busy, onStart, onOpenBox }: {
     <section className="panel mission">
       <div className="section-heading"><span className="pill">TODAY&apos;S MISSION</span><span>{d.date}</span></div>
       <h2>{d.claimed ? '오늘의 미션 성공! 내일 또 만나자' : canOpen ? '랜덤상자를 열 시간이야!' : missed ? '오늘의 미션 끝! 수고했어' : '오늘의 미션을 풀어 보자!'}</h2>
+      {d.review && <p className="review-day">📚 오늘은 복습하는 날! 문제은행을 모두 풀어서, 전에 푼 문제를 다시 풀어 볼 거야. 다 풀면 포켓몬 마을이 열려!</p>}
       <p>{missed
         ? <>상자는 {oneBoxAt}문제 이상 맞히면 받을 수 있어. 틀린 {d.wrong.length}문제는 이틀 뒤에 다시 나와. 내일 또 도전하자!</>
         : <>과목마다 {DAILY_PER_SUBJECT}문제씩, 문제마다 기회는 {d.attempts}번! 틀리면 해설을 소리 내어 읽고 한 번 더 풀어. <b>모두 맞히면 랜덤상자 2개</b>, <b>{oneBoxAt}문제 이상 맞히면 1개</b>를 고를 수 있어. 틀린 문제는 이틀 뒤에 다시 나와.</>}</p>
