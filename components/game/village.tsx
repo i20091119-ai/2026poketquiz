@@ -1,6 +1,7 @@
 "use client";
 // 포켓몬 마을 1단계(시험판, 2026-11-13). 규칙은 lib/village.ts, 기록 변경은 lib/game-engine.ts.
-// 위에서 내려다보는 타일 지도(16×16 타일을 2배 = 32px), 화살표 버튼으로만 움직이고 화면이 아이를 따라 움직여요.
+// 위에서 내려다보는 도트 지도(16×16 타일을 3배 = 48px, 그림은 village-tiles.tsx), 화살표 버튼으로 파트너 포켓몬이 걷고
+// 화면이 파트너를 따라 움직여요. 포켓몬은 포켓로그의 움직이는 도트 그림(anim-mon.tsx). 사람 캐릭터는 없어요(2026-11-13 부모님).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
@@ -9,13 +10,18 @@ import {
   BLOCKED, CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, GUEST_LINES, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
   RESIDENT_LINES, START_POS, type CraftKey, type MaterialKey,
 } from '@/lib/village';
-import { BoySprite, CraftIcon, MaterialIcon, PlacedItem, VillageEntrance, VillageGround } from './village-tiles';
+import { AnimMon } from './anim-mon';
+import { CraftIcon, MaterialIcon, PlacedItem, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
-/* eslint-disable @next/next/no-img-element */
-
-export const TILE = 32; // 16px 타일 × 2 (정수 배)
-const VIEW_COLS = 11; // 352px: 아이 폰(360px)에 맞춤
-const VIEW_ROWS = 13;
+export const TILE = 48; // 16px 타일 × 3 (정수 배)
+const VIEW_ROWS = 9;
+/** 화면에 보이는 칸 수: 폰 너비에 맞춰 7~11칸 (홀수라 파트너가 가운데) */
+function useViewCols() {
+  const calc = () => { if (typeof window === 'undefined') return 7; const n = Math.max(7, Math.min(11, Math.floor((window.innerWidth - 12) / TILE))); return n % 2 ? n : n - 1; };
+  const [cols, setCols] = useState(calc);
+  useEffect(() => { const on = () => setCols(calc()); window.addEventListener('resize', on); return () => window.removeEventListener('resize', on); }, []);
+  return cols;
+}
 const pixelSrc = (id: number) => `/assets/pokemon/pixel/${id}.png`;
 const key = (x: number, y: number) => `${x},${y}`;
 const blocked = new Set(BLOCKED.map(p => key(p.x, p.y)));
@@ -57,9 +63,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   const [inside, setInside] = useState(false);
   const [pos, setPos] = useState(START_POS);
   const [dir, setDir] = useState<'down' | 'up' | 'left' | 'right'>('down');
-  const [step, setStep] = useState(0);
-  // 파트너는 한 칸 뒤에서 따라와요
-  const [follow, setFollow] = useState({ x: START_POS.x + 1, y: START_POS.y });
+  const [hop, setHop] = useState(0);
+  const VIEW_COLS = useViewCols();
   const [sheet, setSheet] = useState<Sheet>(null);
   // 놓기 모드: 고른 물건을 반짝이는 빈 밭 칸을 눌러 바로 놓기
   const [placing, setPlacing] = useState<CraftKey | null>(null);
@@ -126,8 +131,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
     const x = pos.x + dx, y = pos.y + dy;
     setDir(dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up');
     if (!inMap(x, y) || blocked.has(key(x, y))) return;
-    setStep(s => s + 1);
-    setFollow(pos);
+    setHop(h => h + 1);
     setPos({ x, y });
     const p = pickupAt(x, y);
     if (p) {
@@ -136,9 +140,11 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       if (r) setToast(r.message);
     }
   }
+  // 화면 위치: 지도 위쪽 숲 줄(TOP_ROWS)까지 포함한 그림 좌표
+  const fullH = (MAP_H + TOP_ROWS) * TILE;
   const cam = {
     x: Math.max(0, Math.min(MAP_W * TILE - VIEW_COLS * TILE, pos.x * TILE - Math.floor(VIEW_COLS / 2) * TILE)),
-    y: Math.max(0, Math.min(MAP_H * TILE - VIEW_ROWS * TILE, pos.y * TILE - Math.floor(VIEW_ROWS / 2) * TILE)),
+    y: Math.max(0, Math.min(fullH - VIEW_ROWS * TILE, (pos.y + TOP_ROWS) * TILE - Math.floor(VIEW_ROWS / 2) * TILE)),
   };
   const partner = view.owned.find(p => p.uid === view.partner);
   async function placeAt(cell: number) {
@@ -183,8 +189,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
         <button className="secondary small" onClick={close}>나가기</button>
       </div>
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
-        <div className="village-map" style={{ width: MAP_W * TILE, height: MAP_H * TILE, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
+        <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
           <VillageGround tile={TILE} />
+          <div className="village-world" style={{ top: TOP_ROWS * TILE, width: MAP_W * TILE, height: MAP_H * TILE }}>
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
             const p = cellPos(cell);
@@ -207,23 +214,26 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           ))}
           {/* 돌아다니는 포켓몬 */}
           {walkers.map(w => (
-            <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing ? ' pass' : '')} style={{ left: w.x * TILE, top: w.y * TILE }}
+            <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing ? ' pass' : '')}
+              style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: 11 + w.y }}
               onClick={() => setBubble({ id: w.id, text: `${species(w.species).name}: ${(w.guest ? GUEST_LINES : RESIDENT_LINES)[Math.floor(Math.random() * (w.guest ? GUEST_LINES : RESIDENT_LINES).length)]}` })}
               aria-label={species(w.species).name}>
-              <img src={pixelSrc(w.species)} alt="" draggable={false} />
+              <span className="village-shadow" />
+              <AnimMon species={w.species} shiny={w.shiny} scale={1.5} fallback={pixelSrc(w.species)} />
               {w.shiny && <span className="village-shiny">✨</span>}
               {w.guest && <span className="village-guest-mark">손님</span>}
               {bubble?.id === w.id && <span className="village-bubble">{bubble.text}</span>}
             </button>
           ))}
-          {/* 파트너 (한 칸 뒤에서 따라옴) + 나 */}
-          {partner && <span className="village-mon partner" style={{ left: follow.x * TILE, top: follow.y * TILE }}>
-            <img src={pixelSrc(partner.species)} alt="" draggable={false} />
+          {/* 파트너 = 내가 움직이는 포켓몬 (발밑 동그라미) */}
+          {partner && <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
+            <span className="village-me-ring" />
+            <span key={hop} className="village-me-hop">
+              <AnimMon species={partner.species} shiny={partner.shiny} scale={1.5} back={dir === 'up'} flip={dir === 'right'} fallback={pixelSrc(partner.species)} />
+            </span>
+            <span className="village-me-mark">{species(partner.species).name}</span>
           </span>}
-          <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE }}>
-            <BoySprite dir={dir} step={step} />
-            <span className="village-me-mark">나</span>
-          </span>
+          </div>
         </div>
         {placing && <div className="village-placing" role="status">
           <span><CraftIcon kind={placing} scale={1} /> 반짝이는 점선 칸을 눌러 <b>{CRAFT_INFO[placing].name}</b> 놓기! (남은 {v.items[placing]}개)</span>
@@ -233,7 +243,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
         {timeUp && <div className="village-timeup"><p>⏰ 오늘 마을 시간은 끝났어.<br />내일 또 놀러 오자!</p><button className="primary" onClick={close}>나가기</button></div>}
       </div>
 
-      <div className="village-controls">
+      <div className="village-controls" style={{ width: VIEW_COLS * TILE }}>
         <div className="village-mats" aria-label="재료">
           {MATERIALS.map(k => <span key={k} className="village-mat" title={MATERIAL_INFO[k].name}><MaterialIcon kind={k} /><b>{v.mats[k]}</b></span>)}
           <button className="secondary small" onClick={() => setSheet('bag')}>🔨 만들기{bagCount ? ` · 가방 ${bagCount}` : ''}</button>
@@ -249,6 +259,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           <button aria-label="아래로" onClick={() => void move(0, 1)}>▼</button>
           <span />
         </div>
+        <a className="village-credit" href="/assets/village/LICENSE.txt" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 포켓몬 그림: 포켓로그</a>
       </div>
 
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>

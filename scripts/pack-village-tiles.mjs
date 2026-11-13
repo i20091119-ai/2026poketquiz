@@ -1,5 +1,6 @@
 // 포켓몬 마을 타일 그림을 한 장으로 묶습니다 (2026-11-13).
 // 그림 출처: Ninja Adventure Asset Pack (pixel-boy, CC0 1.0 — 누구나 자유롭게 사용 가능). 필요한 조각만 잘라 씁니다.
+// (2026-11-13부터 마을 바닥·나무·집은 Tuxemon 그림 town.png(scripts/pack-village-town.mjs)로 바꿨고, 이 그림은 재료 아이콘만 씁니다.)
 // 다시 만들 때: node scripts/pack-village-tiles.mjs <풀어 둔 묶음 폴더들…>
 //   (Backgrounds/Tilesets, Items/Resource, Actor/Character/Boy 가 들어 있는 폴더를 모두 넘기면 알아서 찾아요)
 // 결과: public/assets/village/village.png (한 장) + lib/data/village-atlas.json (조각 이름 → 자리), 둘 다 git에 포함.

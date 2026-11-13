@@ -1126,30 +1126,42 @@ button.study-day:active { transform: scale(.94); }
 .village-strip-text b { font-size: 16px; }
 .village-strip-text small { font-size: 13px; }
 .village-screen { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; background: #24331f; color: #fff; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); overflow-y: auto; }
-.village-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 352px; max-width: 100%; margin-bottom: 6px; }
+.village-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 336px; max-width: 100%; margin-bottom: 6px; }
 .village-top b { font-size: 17px; }
 .village-picks { font-size: 13px; opacity: .85; }
-.village-view { position: relative; overflow: hidden; border-radius: 10px; border: 3px solid #4d6b3c; flex: none; touch-action: manipulation; }
+.village-view { position: relative; overflow: hidden; border-radius: 12px; border: 3px solid #4d6b3c; flex: none; touch-action: manipulation; background: #40b080; }
 .village-map { position: absolute; left: 0; top: 0; transition: transform .18s ease-out; }
-.village-ground, .village-tile { position: absolute; }
+.village-ground, .village-tile, .village-world { position: absolute; }
+.village-world { left: 0; }
+.vcanvas { display: block; image-rendering: pixelated; }
+.village-ground .vsprite, .village-entrance .vsprite { image-rendering: pixelated; }
+.vquad { display: block; }
 .village-ground { inset: 0; }
 .village-tile { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; line-height: 1; image-rendering: pixelated; }
-.village-cell { position: absolute; border: 2px dashed rgba(255,255,255,.55); background: transparent; padding: 0; display: grid; place-items: center; }
+.village-cell { position: absolute; z-index: 2; border: 2px dashed rgba(255,255,255,.6); background: transparent; padding: 0; display: grid; place-items: center; }
 .village-cell.filled { border-style: solid; border-color: rgba(255,255,255,.25); }
 .village-item { font-size: 24px; line-height: 1; }
-.village-habitat-tag { position: absolute; z-index: 3; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
+.village-habitat-tag { position: absolute; z-index: 40; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
 .village-pickup { position: absolute; display: grid; place-items: center; font-size: 20px; filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 2px #ffe066); animation: village-bob 1.2s ease-in-out infinite; z-index: 2; }
 @keyframes village-bob { 50% { transform: translateY(-4px); } }
-.village-mon, .village-me { position: absolute; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; z-index: 4; transition: left .5s linear, top .5s linear; }
+.village-mon, .village-me { position: absolute; width: 48px; height: 48px; padding: 0; border: 0; background: transparent; z-index: 4; transition: left .5s linear, top .5s linear; }
 .village-me { z-index: 5; transition: left .15s linear, top .15s linear; }
-.village-mon img, .village-me img { position: absolute; left: -32px; bottom: -8px; width: 96px; height: 96px; max-width: none; image-rendering: pixelated; pointer-events: none; }
-.village-me-mark, .village-guest-mark { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #2563eb; color: #fff; white-space: nowrap; }
+.anim-mon { position: absolute; left: 50%; bottom: 4px; max-width: none; image-rendering: pixelated; pointer-events: none; }
+img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
+.village-shadow, .village-me-ring { position: absolute; left: 50%; bottom: 2px; width: 34px; height: 12px; transform: translateX(-50%); border-radius: 50%; background: rgba(20,40,30,.25); pointer-events: none; }
+.village-me-ring { width: 44px; height: 16px; background: rgba(160,235,255,.25); border: 3px solid rgba(160,235,255,.9); animation: village-ring 1.4s ease-in-out infinite; }
+@keyframes village-ring { 50% { transform: translateX(-50%) scale(1.12); } }
+.village-me-hop { position: absolute; inset: 0; animation: village-hop .18s ease-out; }
+@keyframes village-hop { 50% { transform: translateY(-6px); } }
+.village-credit { font-size: 10px; color: rgba(255,255,255,.55); text-decoration: none; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .village-me-ring, .village-me-hop { animation: none; } }
+.village-me-mark, .village-guest-mark { position: absolute; left: 50%; top: -34px; transform: translateX(-50%); font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #2563eb; color: #fff; white-space: nowrap; }
 .village-guest-mark { background: #e5a100; }
-.village-shiny { position: absolute; right: -10px; top: -26px; font-size: 14px; }
-.village-bubble { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 9; width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 12px; background: #fff; color: #26352d; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.village-shiny { position: absolute; right: -8px; top: -24px; font-size: 16px; }
+.village-bubble { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 9; width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 12px; background: #fff; color: #26352d; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
 .village-toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 10; width: max-content; max-width: 320px; padding: 8px 14px; border-radius: 14px; background: rgba(20,30,20,.88); font-weight: 800; font-size: 14px; text-align: center; }
 .village-timeup { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(20,30,20,.85); text-align: center; font-size: 18px; font-weight: 800; }
-.village-controls { width: 352px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
+.village-controls { width: 336px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
 .village-mats { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 18px; }
 .village-mats b { font-size: 14px; margin-left: 2px; }
 .village-pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 50px); gap: 4px; }
@@ -1169,7 +1181,8 @@ button.study-day:active { transform: scale(.94); }
 .village-place-btn { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border: 2px solid #d9e4cb; border-radius: 14px; background: #fff; font: inherit; }
 .village-place-btn span { font-size: 30px; }
 .village-locked { width: 352px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; text-align: center; }
-.village-entrance { width: 100%; height: 220px; border-radius: 14px; background: linear-gradient(#bfe6ff 0 45%, #8fcf6a 45%); display: flex; flex-direction: column; align-items: center; justify-content: center; filter: saturate(.75); image-rendering: pixelated; }
+.village-entrance { position: relative; max-width: 100%; overflow: hidden; border-radius: 14px; border: 3px solid #4d6b3c; }
+.village-entrance:not(.open) { filter: saturate(.7) brightness(.92); }
 .village-entrance-gate { font-size: 90px; line-height: 1; }
 .village-entrance-trees { font-size: 32px; }
 .village-lock-text { margin: 0; font-size: 20px; font-weight: 800; }
@@ -1187,7 +1200,7 @@ button.study-day:active { transform: scale(.94); }
 .village-cost > span { display: inline-flex; align-items: center; gap: 2px; }
 .village-entrance { position: relative; overflow: hidden; border-radius: 14px; background: none !important; height: auto; filter: saturate(.7); max-width: 100%; }
 .village-entrance.open { filter: none; }
-.village-entrance-lock { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.village-entrance-lock { position: absolute; z-index: 50; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
 .village-guests-parent { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; } .village-guests-parent span { display: inline-flex; align-items: center; gap: 4px; }
 .village-me, .village-mon.partner, .village-mon.pass { pointer-events: none; }
 .village-cell.target { border: 3px solid #ffe066; background: rgba(255,224,102,.35); animation: village-target 1s ease-in-out infinite; z-index: 6; }

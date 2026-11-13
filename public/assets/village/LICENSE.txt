@@ -1,2 +1,21 @@
-Village tiles: Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
-License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
+포켓몬 마을 그림 출처 (Village art credits)
+
+1) town.png — 마을 바닥·흙길·연못·나무·집·꽃·버섯·돌 (scripts/pack-village-town.mjs 로 필요한 조각만 잘라 묶음)
+   From the Tuxemon project tilesets (https://github.com/Tuxemon/Tuxemon, mods/tuxemon/gfx/tilesets):
+   - core_outdoor.png, core_outdoor_nature.png, core_outdoor_water.png
+     by rubberduck, based on "Updated Ground Tiles" by rubberduck (original tiles by Buch, commissioned by luke83,
+     changes and additions by luke83 and Past the Future, and original tiles by George_),
+     "Sand n Water" by luke83 and "Grass, Sand, Snow" by PastTheFuture (both based on
+     "Kyrodian Legends Overworld Tileset" by Midi), "Basic Buch Tiles Compiled" by Buch.
+     Licensed under CC BY-SA 4.0 (parts CC BY 3.0 / CC BY 4.0 / CC0).
+   - core_buildings.png (house) — "Inspired 16x16 Tiles" based on "pokemon-inspired-16x16-tiles"
+     by RedVoxel (https://red-voxel.itch.io/), roofs adapted by Jaskrendix. Licensed under CC BY-SA 4.0.
+   Full list: https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
+   License text: https://creativecommons.org/licenses/by-sa/4.0/
+   town.png (잘라 묶은 그림)도 같은 CC BY-SA 4.0 으로 나눕니다.
+
+2) village.png — 재료 그림(풀잎·물방울·꽃잎·나뭇가지)
+   Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
+   License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
+
+3) 마을의 움직이는 포켓몬 그림은 포켓로그(/battle/images/pokemon/)에 이미 있는 그림을 그대로 씁니다.
