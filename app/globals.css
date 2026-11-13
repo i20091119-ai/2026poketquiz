@@ -1189,3 +1189,9 @@ button.study-day:active { transform: scale(.94); }
 .village-entrance.open { filter: none; }
 .village-entrance-lock { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
 .village-guests-parent { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; } .village-guests-parent span { display: inline-flex; align-items: center; gap: 4px; }
+.village-me, .village-mon.partner, .village-mon.pass { pointer-events: none; }
+.village-cell.target { border: 3px solid #ffe066; background: rgba(255,224,102,.35); animation: village-target 1s ease-in-out infinite; z-index: 6; }
+@keyframes village-target { 50% { background: rgba(255,224,102,.7); } }
+.village-placing { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(20,30,20,.9); font-size: 13px; font-weight: 700; }
+.village-placing > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.village-recipe-btns { display: flex; flex-direction: column; gap: 6px; }
