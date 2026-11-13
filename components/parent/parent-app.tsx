@@ -15,7 +15,6 @@ import { aiRequestText } from '@/lib/question-import';
 import { UPDATES, versionLabel } from '@/lib/version';
 import { OutingCreate, OutingReports, OutingRulesEditor, type OutingOverview } from './outing-parent';
 import { OfflineRulesEditor, OfflineSimTools, StudyRecord, type OfflineOverview } from './offline-parent';
-import { VillageReport, VillageRulesEditor, VillageSimTools, type VillageOverview } from './village-parent';
 
 type Keywords = Partial<Record<Subject, string>>;
 type BankSummary = { id: number; title: string; grade: string; keywords: Keywords; status: 'draft' | 'published' | 'archived'; created_at: string; published_at: string | null; question_count: number };
@@ -28,8 +27,6 @@ type Overview = {
   outing: OutingOverview;
   /** 집 공부 기록·전설 조각 (달력·주간·전설 지도·규칙) */
   offline: OfflineOverview;
-  /** 포켓몬 마을 (요약·규칙) */
-  village: VillageOverview;
   /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
@@ -271,7 +268,6 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <TeamReport child={child} ivMax={overview.growth.now.ivMax} />
         <section className="panel parent-section"><StatBoard stats={child.stats} /></section>
         <ActivitySection days={overview.activity} />
-        <VillageReport village={overview.village} />
         {active ? (
           <section className="panel parent-section">
             <h2>공개 중인 문제은행: {active.title}</h2>
@@ -420,7 +416,6 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <GrowthEditor overview={overview} busy={busy} call={call} reload={reload} />
         <OutingRulesEditor overview={overview.outing} busy={busy} call={call} reload={reload} />
         <OfflineRulesEditor overview={overview.offline} busy={busy} call={call} reload={reload} />
-        <VillageRulesEditor village={overview.village} busy={busy} call={call} reload={reload} />
         <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
@@ -646,7 +641,7 @@ function RestEditor({ rest, busy, call, reload }: { rest: Overview['battle']['re
 }
 
 // ---------------- 학습 활동 그래프 ----------------
-const CHART = { quiz: '#2a78d6', solve: '#7b4fc9', village: '#3f9b4f', battle: '#eb6834' }; // 파랑(앱 사용)·보라(문제 푸는)·초록(마을)·주황(포켓로그)
+const CHART = { quiz: '#2a78d6', solve: '#7b4fc9', battle: '#eb6834' }; // 파랑(앱 사용)·보라(문제 푸는)·주황(포켓로그)
 const minutes = (sec: number) => Math.round(sec / 60);
 const weekday = ['일', '월', '화', '수', '목', '금', '토'];
 /** 하루 앱 사용 시간·문제 푸는 시간·포켓로그 시간을 막대로. 최근 7일 또는 최근 4주(주별 합계) */
@@ -654,21 +649,21 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
   const [range, setRange] = useState<'week' | 'month'>('week');
   const [asTable, setAsTable] = useState(false);
   const rows = range === 'week'
-    ? days.slice(-7).map(d => ({ label: `${Number(d.date.slice(8))}일(${weekday[new Date(d.date + 'T00:00:00').getDay()]})`, quiz: minutes(d.quizSeconds), solve: minutes(d.solveSeconds ?? 0), village: minutes(d.villageSeconds ?? 0), battle: minutes(d.battleSeconds), answered: d.answered, correct: d.correct, wave: d.battleWave }))
+    ? days.slice(-7).map(d => ({ label: `${Number(d.date.slice(8))}일(${weekday[new Date(d.date + 'T00:00:00').getDay()]})`, quiz: minutes(d.quizSeconds), solve: minutes(d.solveSeconds ?? 0), battle: minutes(d.battleSeconds), answered: d.answered, correct: d.correct, wave: d.battleWave }))
     : Array.from({ length: 4 }, (_, i) => {
         const week = days.slice(i * 7, i * 7 + 7);
         return {
           label: `${week[0].date.slice(5).replace('-', '/')}~${week[6].date.slice(5).replace('-', '/')}`,
-          quiz: minutes(week.reduce((s, d) => s + d.quizSeconds, 0)), solve: minutes(week.reduce((s, d) => s + (d.solveSeconds ?? 0), 0)), village: minutes(week.reduce((s, d) => s + (d.villageSeconds ?? 0), 0)), battle: minutes(week.reduce((s, d) => s + d.battleSeconds, 0)),
+          quiz: minutes(week.reduce((s, d) => s + d.quizSeconds, 0)), solve: minutes(week.reduce((s, d) => s + (d.solveSeconds ?? 0), 0)), battle: minutes(week.reduce((s, d) => s + d.battleSeconds, 0)),
           answered: week.reduce((s, d) => s + d.answered, 0), correct: week.reduce((s, d) => s + d.correct, 0), wave: Math.max(...week.map(d => d.battleWave)),
         };
       });
-  const totalQuiz = rows.reduce((s, r) => s + r.quiz, 0), totalSolve = rows.reduce((s, r) => s + r.solve, 0), totalVillage = rows.reduce((s, r) => s + r.village, 0), totalBattle = rows.reduce((s, r) => s + r.battle, 0);
+  const totalQuiz = rows.reduce((s, r) => s + r.quiz, 0), totalSolve = rows.reduce((s, r) => s + r.solve, 0), totalBattle = rows.reduce((s, r) => s + r.battle, 0);
   const totalAnswered = rows.reduce((s, r) => s + r.answered, 0), totalCorrect = rows.reduce((s, r) => s + r.correct, 0);
   return (
     <section className="panel parent-section activity">
       <div className="heading-row">
-        <div><h2>하루에 얼마나 했나</h2><p className="muted"><b>앱 사용 시간</b> = 퀴즈 앱 화면이 보이는 동안(도감·가방 보기 포함), <b>문제 푸는 시간</b> = 문제 창이 열려 있는 동안(2026-11-12부터), <b>마을 시간</b> = 포켓몬 마을 안에 있던 동안(2026-11-13부터), 포켓로그 플레이 시간(분). 1분마다 기록해서 1~2분 차이는 날 수 있어요.</p></div>
+        <div><h2>하루에 얼마나 했나</h2><p className="muted"><b>앱 사용 시간</b> = 퀴즈 앱 화면이 보이는 동안(도감·가방 보기 포함), <b>문제 푸는 시간</b> = 문제 창이 열려 있는 동안(2026-11-12부터), 포켓로그 플레이 시간(분). 1분마다 기록해서 1~2분 차이는 날 수 있어요.</p></div>
         <div className="button-row">
           <button className={'chip' + (range === 'week' ? ' on' : '')} onClick={() => setRange('week')}>최근 7일</button>
           <button className={'chip' + (range === 'month' ? ' on' : '')} onClick={() => setRange('month')}>최근 4주</button>
@@ -678,14 +673,13 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
       <div className="parent-summary">
         <span><i className="dot" style={{ background: CHART.quiz }} /> 앱 사용 {totalQuiz}분</span>
         <span><i className="dot" style={{ background: CHART.solve }} /> 문제 푸는 {totalSolve}분</span>
-        <span><i className="dot" style={{ background: CHART.village }} /> 마을 {totalVillage}분</span>
         <span><i className="dot" style={{ background: CHART.battle }} /> 포켓로그 {totalBattle}분</span>
         <span>푼 문제 {totalAnswered}개{totalAnswered ? ` · 첫 시도 정답 ${Math.round((totalCorrect / totalAnswered) * 100)}%` : ''}</span>
       </div>
       {asTable
         ? <table className="battle-log">
-            <thead><tr><th>{range === 'week' ? '날짜' : '주'}</th><th>앱 사용</th><th>문제 푸는</th><th>마을</th><th>포켓로그</th><th>푼 문제</th><th>첫 시도 정답</th><th>최고 웨이브</th></tr></thead>
-            <tbody>{rows.map(r => <tr key={r.label}><td>{r.label}</td><td>{r.quiz}분</td><td>{r.solve}분</td><td>{r.village}분</td><td>{r.battle}분</td><td>{r.answered}개</td><td>{r.correct}개</td><td>{r.wave || '-'}</td></tr>)}</tbody>
+            <thead><tr><th>{range === 'week' ? '날짜' : '주'}</th><th>앱 사용</th><th>문제 푸는</th><th>포켓로그</th><th>푼 문제</th><th>첫 시도 정답</th><th>최고 웨이브</th></tr></thead>
+            <tbody>{rows.map(r => <tr key={r.label}><td>{r.label}</td><td>{r.quiz}분</td><td>{r.solve}분</td><td>{r.battle}분</td><td>{r.answered}개</td><td>{r.correct}개</td><td>{r.wave || '-'}</td></tr>)}</tbody>
           </table>
         : <div className="chart-box">
             <ResponsiveContainer width="100%" height={220}>
@@ -693,12 +687,11 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
                 <CartesianGrid vertical={false} stroke="#e6ede3" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={{ stroke: '#dbe5d9' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={false} tickLine={false} allowDecimals={false} unit="분" />
-                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }} formatter={(v, name) => [`${v}분`, name === 'quiz' ? '앱 사용' : name === 'solve' ? '문제 푸는' : name === 'village' ? '마을' : '포켓로그']}
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }} formatter={(v, name) => [`${v}분`, name === 'quiz' ? '앱 사용' : name === 'solve' ? '문제 푸는' : '포켓로그']}
                   labelFormatter={(l, payload) => { const r = payload?.[0]?.payload as typeof rows[number] | undefined; return r ? `${l} · 푼 문제 ${r.answered}개${r.wave ? ` · ${r.wave}웨이브` : ''}` : String(l); }} />
-                <Legend formatter={v => (v === 'quiz' ? '앱 사용' : v === 'solve' ? '문제 푸는' : v === 'village' ? '마을' : '포켓로그')} iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13 }} />
+                <Legend formatter={v => (v === 'quiz' ? '앱 사용' : v === 'solve' ? '문제 푸는' : '포켓로그')} iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13 }} />
                 <Bar dataKey="quiz" fill={CHART.quiz} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 <Bar dataKey="solve" fill={CHART.solve} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="village" fill={CHART.village} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 <Bar dataKey="battle" fill={CHART.battle} radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
@@ -863,7 +856,6 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
           <p className="muted">순서 예: ‘업데이트 안내 다시 보기’(6장째에서 친구 2마리 고르기) → 일일미션·탐험 정답에서 ‘💗 +2! 파트너랑 친해지고 있어!’ 확인 → ‘에너지 +50’ + ‘💗 가득 차기 1개 전’ → 문제 하나 맞히면 ‘친해졌어!’ → 도감에서 진화. 다 진화한 포켓몬이 팀에 있으면 💗가 차면서 ★+1. 도감 카드의 ‘⚡ 에너지 10 → ★+1’, 가방에서 열매 먹이기, ‘배틀 힘 최고로’ 뒤 포켓로그 팀 선택 화면의 별·‘배틀 힘 최고!’, 첫 화면의 ‘다 컸어!’ 안내도 확인해 보세요.</p>
         </div>
         <div className="sim-limited"><OfflineSimTools busy={busy} call={call} reload={reload} /></div>
-        <div className="sim-limited"><VillageSimTools busy={busy} call={call} reload={reload} /></div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
         {limitedEvents.map(l => (
           <div key={l.id} className="sim-limited">

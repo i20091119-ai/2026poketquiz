@@ -244,7 +244,7 @@ export function daySummary(state: GameState, date: string): LogEntry {
   return {
     kind: 'day', ukey: date,
     data: {
-      date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, villageSeconds: q?.villageSeconds ?? 0, answered: q?.answered ?? 0, correctFirstTry: q?.correct ?? 0,
+      date, quizSeconds: q?.seconds ?? 0, solveSeconds: q?.solveSeconds ?? 0, answered: q?.answered ?? 0, correctFirstTry: q?.correct ?? 0,
       battleSeconds: b?.seconds ?? 0, maxWave: b?.maxWave ?? 0, newGames: b?.starts ?? 0,
     },
   };

@@ -1,2 +1,0 @@
-Village tiles: Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
-License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs

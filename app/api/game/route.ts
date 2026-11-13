@@ -1,9 +1,9 @@
 import { afterAction, beforeAction, eventsChange, type LogEntry } from '@/lib/activity-log';
 import { daySummary } from '@/lib/activity-log';
-import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, syncOffline, syncOutings, syncVillage, type Action } from '@/lib/game-engine';
+import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, syncOffline, syncOutings, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
-import { activeBank, appendActivity, json, latestDefeat, loadGrowthRules, loadStrongOverrides, loadVillageRules, mutateState, offlineRulesNow, outingRulesNow, shinyChanceFor } from '@/lib/server/store';
+import { activeBank, appendActivity, json, latestDefeat, loadGrowthRules, loadStrongOverrides, mutateState, offlineRulesNow, outingRulesNow, shinyChanceFor } from '@/lib/server/store';
 import type { GameState } from '@/lib/game-engine';
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ async function battleInfo(player: Player, state: GameState) {
 
 export async function GET(request: Request) {
   try {
-    const [bank, player, strong, growth, offlineRules] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides(), loadGrowthRules(), offlineRulesNow(), loadVillageRules()]);
+    const [bank, player, strong, growth, offlineRules] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides(), loadGrowthRules(), offlineRulesNow()]);
     const { today } = player;
     const shinyChance = await shinyChanceFor(player.id);
     let log: LogEntry[] = [];
@@ -36,9 +36,8 @@ export async function GET(request: Request) {
       const d = syncOutings(state, today, secureRandom); // 나들이 보고서 기한이 지났으면 정리 (시도 인정이면 랜덤상자)
       // 집 공부: 지난 날 하루 선물 상자, 끝난 주 정산(전설 조각)
       const e = syncOffline(state, { today, now: new Date().toISOString(), random: secureRandom, shinyChance, offlineRules });
-      const f = syncVillage(state, today, secureRandom); // 포켓몬 마을: 날이 바뀌면 손님이 바뀜
       log = safeLog(() => eventsChange(before, state));
-      return { result: null, changed: a || b || c || d || e || f };
+      return { result: null, changed: a || b || c || d || e };
     }, player.id);
     await appendActivity(player.id, today, log);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
@@ -60,7 +59,7 @@ export async function POST(request: Request) {
     if (!action || typeof action !== 'object') return json({ error: '요청을 확인해 주세요.' }, 400);
 
     // strong: 보호자가 바꾼 센 포켓몬·도전 속성 (진화 조건 계산 전에 맞춤)
-    const [bank, player, strong, growth, offlineRules] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides(), loadGrowthRules(), offlineRulesNow(), loadVillageRules()]);
+    const [bank, player, strong, growth, offlineRules] = await Promise.all([activeBank(), playerOf(request), loadStrongOverrides(), loadGrowthRules(), offlineRulesNow()]);
     const { today } = player;
     const shinyChance = await shinyChanceFor(player.id); // 볼을 열 때 이로치 확률 (보호자 개발자 메뉴, 시뮬레이션이면 100%)
     const outingRules = action.type === 'outingAccept' ? await outingRulesNow() : undefined; // 나들이 보고서 규칙 (도전할래! 때 고정)
@@ -73,7 +72,6 @@ export async function POST(request: Request) {
       syncLimited(state, today);
       syncOutings(state, today, secureRandom);
       syncOffline(state, ctx);
-      syncVillage(state, today, secureRandom);
       // 활동 기록을 만들다 오류가 나도 게임 동작은 그대로 진행
       log = safeLog(() => action.type === 'quizTime' ? [daySummary(state, today)] : [...afterAction(before, state, action, result, ctx), ...(action.type === 'answer' ? [daySummary(state, today)] : [])]);
       return { result, changed: true };
