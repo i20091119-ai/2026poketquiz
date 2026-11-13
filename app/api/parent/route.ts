@@ -17,7 +17,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -48,8 +48,8 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides] = await Promise.all([
-    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(),
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides, battleRuns] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(), recentBattleRuns(player.id),
   ]);
   const today = player.today;
   const gate = await battleGate(player, state);
@@ -60,6 +60,8 @@ async function overview(request: Request) {
     grade, grades: GRADES, aiConfigured: isAiConfigured(env),
     battlePasswordSet: !!battleHash,
     battle: {
+      /** 최근 판 결과 10개 (게임 오버·클리어·중단; 진짜 기록만) */
+      runs: battleRuns,
       log: battleLogList(state), leftToday: battleStartsLeft(state, today), tickets: battleTickets(state), candy: candySummary(state, today), limit: battleLimit, limitOptions: BATTLE_LIMIT_OPTIONS, evolution: battleEvolution,
       /** 쉬는 시간 규칙, 오늘만 열어 주기 여부, 지금 막혀 있는지 */
       rest: { rules: restRules, openToday: restOpen === today, now: { blocked: gate.rest.blocked, name: gate.rest.name, until: gate.rest.until }, timeUp: gate.timeUp },

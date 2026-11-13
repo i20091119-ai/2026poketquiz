@@ -31,6 +31,7 @@ type Overview = {
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
   battle: {
+    runs: { at: string; wave: number; result: string; startedAt: string | null }[];
     log: { date: string; maxWave: number; seconds: number; starts: number }[]; leftToday: number; candy: { pending: number; sent: number; rule: { finished: number; perfect: number } };
     /** 하루 시간 제한(분, 0 = 없음)과 고를 수 있는 값 */
     limit: number; limitOptions: readonly number[];
@@ -303,6 +304,23 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
                       <td>{d.maxWave ? `${d.maxWave}웨이브` : '-'}</td>
                       <td>{d.seconds ? `${Math.max(1, Math.round(d.seconds / 60))}분` : '-'}</td>
                       <td>{d.starts ? `${d.starts}번` : '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+          <h3>최근 판 결과</h3>
+          <p className="muted">게임 오버 · 클리어 · <b>중단</b>(끝나지 않은 판을 새 게임이 덮어씀, 2026-11-12부터). 아직 진행 중인 판은 끝나야 여기에 나와요. 진행 중인 판이 있는데 새 게임을 누르면 아이에게 &ldquo;이어할래요?&rdquo;를 먼저 물어요.</p>
+          {overview.battle.runs.length === 0
+            ? <p className="muted">아직 끝난 판이 없어요.</p>
+            : <table className="battle-log">
+                <thead><tr><th>끝난 날</th><th>결과</th><th>웨이브</th><th>시작일</th></tr></thead>
+                <tbody>
+                  {overview.battle.runs.map((r, i) => (
+                    <tr key={i}>
+                      <td>{new Date(r.at).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })}</td>
+                      <td>{r.result === '중단' ? '⏸ 중단' : r.result === '클리어' ? '🏆 클리어' : r.result === '게임 오버' ? '💥 게임 오버' : r.result}</td>
+                      <td>{r.wave}웨이브</td>
+                      <td>{r.startedAt ? new Date(r.startedAt).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) : '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -623,29 +641,29 @@ function RestEditor({ rest, busy, call, reload }: { rest: Overview['battle']['re
 }
 
 // ---------------- 학습 활동 그래프 ----------------
-const CHART = { quiz: '#2a78d6', battle: '#eb6834' }; // 두 색은 색약 검사를 통과한 짝 (파랑·주황)
+const CHART = { quiz: '#2a78d6', solve: '#7b4fc9', battle: '#eb6834' }; // 파랑(앱 사용)·보라(문제 푸는)·주황(포켓로그)
 const minutes = (sec: number) => Math.round(sec / 60);
 const weekday = ['일', '월', '화', '수', '목', '금', '토'];
-/** 하루 퀴즈 시간·포켓로그 시간을 막대로. 최근 7일 또는 최근 4주(주별 합계) */
+/** 하루 앱 사용 시간·문제 푸는 시간·포켓로그 시간을 막대로. 최근 7일 또는 최근 4주(주별 합계) */
 function ActivitySection({ days }: { days: ActivityDay[] }) {
   const [range, setRange] = useState<'week' | 'month'>('week');
   const [asTable, setAsTable] = useState(false);
   const rows = range === 'week'
-    ? days.slice(-7).map(d => ({ label: `${Number(d.date.slice(8))}일(${weekday[new Date(d.date + 'T00:00:00').getDay()]})`, quiz: minutes(d.quizSeconds), battle: minutes(d.battleSeconds), answered: d.answered, correct: d.correct, wave: d.battleWave }))
+    ? days.slice(-7).map(d => ({ label: `${Number(d.date.slice(8))}일(${weekday[new Date(d.date + 'T00:00:00').getDay()]})`, quiz: minutes(d.quizSeconds), solve: minutes(d.solveSeconds ?? 0), battle: minutes(d.battleSeconds), answered: d.answered, correct: d.correct, wave: d.battleWave }))
     : Array.from({ length: 4 }, (_, i) => {
         const week = days.slice(i * 7, i * 7 + 7);
         return {
           label: `${week[0].date.slice(5).replace('-', '/')}~${week[6].date.slice(5).replace('-', '/')}`,
-          quiz: minutes(week.reduce((s, d) => s + d.quizSeconds, 0)), battle: minutes(week.reduce((s, d) => s + d.battleSeconds, 0)),
+          quiz: minutes(week.reduce((s, d) => s + d.quizSeconds, 0)), solve: minutes(week.reduce((s, d) => s + (d.solveSeconds ?? 0), 0)), battle: minutes(week.reduce((s, d) => s + d.battleSeconds, 0)),
           answered: week.reduce((s, d) => s + d.answered, 0), correct: week.reduce((s, d) => s + d.correct, 0), wave: Math.max(...week.map(d => d.battleWave)),
         };
       });
-  const totalQuiz = rows.reduce((s, r) => s + r.quiz, 0), totalBattle = rows.reduce((s, r) => s + r.battle, 0);
+  const totalQuiz = rows.reduce((s, r) => s + r.quiz, 0), totalSolve = rows.reduce((s, r) => s + r.solve, 0), totalBattle = rows.reduce((s, r) => s + r.battle, 0);
   const totalAnswered = rows.reduce((s, r) => s + r.answered, 0), totalCorrect = rows.reduce((s, r) => s + r.correct, 0);
   return (
     <section className="panel parent-section activity">
       <div className="heading-row">
-        <div><h2>하루에 얼마나 했나</h2><p className="muted">퀴즈 화면을 보고 있던 시간과 포켓로그 플레이 시간(분). 1분마다 기록해서 1~2분 차이는 날 수 있어요.</p></div>
+        <div><h2>하루에 얼마나 했나</h2><p className="muted"><b>앱 사용 시간</b> = 퀴즈 앱 화면이 보이는 동안(도감·가방 보기 포함), <b>문제 푸는 시간</b> = 문제 창이 열려 있는 동안(2026-11-12부터), 포켓로그 플레이 시간(분). 1분마다 기록해서 1~2분 차이는 날 수 있어요.</p></div>
         <div className="button-row">
           <button className={'chip' + (range === 'week' ? ' on' : '')} onClick={() => setRange('week')}>최근 7일</button>
           <button className={'chip' + (range === 'month' ? ' on' : '')} onClick={() => setRange('month')}>최근 4주</button>
@@ -653,14 +671,15 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
         </div>
       </div>
       <div className="parent-summary">
-        <span><i className="dot" style={{ background: CHART.quiz }} /> 퀴즈 {totalQuiz}분</span>
+        <span><i className="dot" style={{ background: CHART.quiz }} /> 앱 사용 {totalQuiz}분</span>
+        <span><i className="dot" style={{ background: CHART.solve }} /> 문제 푸는 {totalSolve}분</span>
         <span><i className="dot" style={{ background: CHART.battle }} /> 포켓로그 {totalBattle}분</span>
         <span>푼 문제 {totalAnswered}개{totalAnswered ? ` · 첫 시도 정답 ${Math.round((totalCorrect / totalAnswered) * 100)}%` : ''}</span>
       </div>
       {asTable
         ? <table className="battle-log">
-            <thead><tr><th>{range === 'week' ? '날짜' : '주'}</th><th>퀴즈</th><th>포켓로그</th><th>푼 문제</th><th>첫 시도 정답</th><th>최고 웨이브</th></tr></thead>
-            <tbody>{rows.map(r => <tr key={r.label}><td>{r.label}</td><td>{r.quiz}분</td><td>{r.battle}분</td><td>{r.answered}개</td><td>{r.correct}개</td><td>{r.wave || '-'}</td></tr>)}</tbody>
+            <thead><tr><th>{range === 'week' ? '날짜' : '주'}</th><th>앱 사용</th><th>문제 푸는</th><th>포켓로그</th><th>푼 문제</th><th>첫 시도 정답</th><th>최고 웨이브</th></tr></thead>
+            <tbody>{rows.map(r => <tr key={r.label}><td>{r.label}</td><td>{r.quiz}분</td><td>{r.solve}분</td><td>{r.battle}분</td><td>{r.answered}개</td><td>{r.correct}개</td><td>{r.wave || '-'}</td></tr>)}</tbody>
           </table>
         : <div className="chart-box">
             <ResponsiveContainer width="100%" height={220}>
@@ -668,10 +687,11 @@ function ActivitySection({ days }: { days: ActivityDay[] }) {
                 <CartesianGrid vertical={false} stroke="#e6ede3" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={{ stroke: '#dbe5d9' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 12, fill: '#6c7a72' }} axisLine={false} tickLine={false} allowDecimals={false} unit="분" />
-                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }} formatter={(v, name) => [`${v}분`, name === 'quiz' ? '퀴즈' : '포켓로그']}
+                <Tooltip cursor={{ fill: 'rgba(0,0,0,.04)' }} formatter={(v, name) => [`${v}분`, name === 'quiz' ? '앱 사용' : name === 'solve' ? '문제 푸는' : '포켓로그']}
                   labelFormatter={(l, payload) => { const r = payload?.[0]?.payload as typeof rows[number] | undefined; return r ? `${l} · 푼 문제 ${r.answered}개${r.wave ? ` · ${r.wave}웨이브` : ''}` : String(l); }} />
-                <Legend formatter={v => (v === 'quiz' ? '퀴즈' : '포켓로그')} iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13 }} />
+                <Legend formatter={v => (v === 'quiz' ? '앱 사용' : v === 'solve' ? '문제 푸는' : '포켓로그')} iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 13 }} />
                 <Bar dataKey="quiz" fill={CHART.quiz} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="solve" fill={CHART.solve} radius={[4, 4, 0, 0]} maxBarSize={28} />
                 <Bar dataKey="battle" fill={CHART.battle} radius={[4, 4, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
@@ -824,6 +844,7 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
           <b>🎒 모험 팀 · 💗 · ★ 시험</b>
           <div className="button-row">
             <button className="secondary small" disabled={busy} onClick={() => { try { localStorage.removeItem('pq-adventure-intro-v1'); } catch { /* 저장이 막혀 있으면 그냥 */ } goTo(childScreen)({ preventDefault() {} }); }}>이 기기에서 업데이트 안내 6장 다시 보기</button>
+            <button className="secondary small" disabled={busy} onClick={() => { try { localStorage.removeItem('pq-feed-intro-v1'); } catch { /* 저장이 막혀 있으면 그냥 */ } goTo(childScreen)({ preventDefault() {} }); }}>이 기기에서 먹이기 💗 안내 다시 보기</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simEnergy' })) await reload(); }}>에너지 +50 (모든 속성) · 경험치 +300</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'near' })) await reload(); }}>모험 팀 💗 가득 차기 1개 전으로</button>
             <button className="secondary small" disabled={busy} onClick={async () => { if (await call({ action: 'simHearts', op: 'plus10' })) await reload(); }}>모험 팀 💗 +10</button>
@@ -1234,7 +1255,7 @@ function ExportSection({ busy, call }: { busy: boolean; call: Call }) {
     <section className="panel parent-section">
       <h2><Download size={20} style={{ verticalAlign: '-3px' }} /> 아이 기록 내보내기</h2>
       <p>문제 풀이(고른 답·시도), 하루 활동 시간, 포켓로그 판 기록, 포켓몬·진화·에너지, 볼·상자·선물·이벤트를 한 파일(JSON)로 내려받아요. 시험용(시뮬레이션) 기록은 들어가지 않아요.</p>
-      <p className="muted">고른 답·진화·에너지 변화·볼 결과처럼 예전에는 저장하지 않던 항목은 <b>이 업데이트를 올린 날부터</b> 쌓여요. 그 전 내용은 이전에 남아 있던 것(하루 퀴즈 시간 35일, 포켓로그 하루 기록 14일, 보유 포켓몬 얻은 날, 선물 기록)만 들어가요. 파일 맨 앞 &lsquo;기록시작&rsquo;에 항목별 시작일이 적혀 있어요.</p>
+      <p className="muted">고른 답·진화·에너지 변화·볼 결과처럼 예전에는 저장하지 않던 항목은 <b>이 업데이트를 올린 날부터</b> 쌓여요. 그 전 내용은 이전에 남아 있던 것(하루 앱 사용 시간 35일, 포켓로그 하루 기록 14일, 보유 포켓몬 얻은 날, 선물 기록)만 들어가요. 파일 맨 앞 &lsquo;기록시작&rsquo;에 항목별 시작일이 적혀 있어요.</p>
       <div><button className="primary small" disabled={busy} onClick={async () => {
         const data = await call<{ file?: unknown; message?: string }>({ action: 'exportChild' });
         if (!data?.file) return;

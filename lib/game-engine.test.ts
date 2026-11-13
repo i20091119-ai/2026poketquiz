@@ -1570,3 +1570,37 @@ test('열매가 10개 이상이면 랜덤상자·탐험 선물에서 열매 대�
   assert.ok(r2.items.some(it => it.kind === 'potion'));
   setGrowthRules(null);
 });
+
+// ---------- 2026-11-12: 문제 푸는 시간 · 포켓로그 "중단" 판 ----------
+test('앱 사용 시간과 문제 푸는 시간을 따로 쌓고, 하루 활동·내보내기에 둘 다 나옴', () => {
+  const bank = makeBank();
+  const state = started(bank);
+  applyAction(state, { type: 'quizTime', seconds: 60, solveSeconds: 25 }, ctx(bank));
+  applyAction(state, { type: 'quizTime', seconds: 60 }, ctx(bank)); // 예전 화면(문제 시간 없음)
+  applyAction(state, { type: 'quizTime', seconds: 30, solveSeconds: 999 }, ctx(bank)); // 한 번에 최대 120초
+  const day = state.quizLog!['2026-09-26'];
+  assert.equal(day.seconds, 150);
+  assert.equal(day.solveSeconds, 25 + 120);
+  const list = activityList(state, '2026-09-26', 7);
+  assert.equal(list[list.length - 1].solveSeconds, 145);
+  const file = buildChildExport({ state, rows: [], since: null, appVersion: 't', exportedAt: '2026-09-27T00:00:00Z' });
+  const d = file.하루활동.find(x => x.date === '2026-09-26')!;
+  assert.equal(d.앱사용분, 2.5);
+  assert.equal(d.문제푸는분, 2.4);
+});
+
+test('아이 기록 내보내기: 판 결과는 게임 오버 / 클리어 / 중단으로 나뉘고, 중단 판은 게임이 기억한 시작일을 씀', () => {
+  const state = started(makeBank());
+  const rows = [
+    { seq: 1, at: '2026-10-04T01:00:00Z', date: '2026-10-04', kind: 'battleStart', data: {} },
+    { seq: 2, at: '2026-10-09T01:00:00Z', date: '2026-10-09', kind: 'battleRun', data: { runId: 'a1760000000000', endedAt: '2026-10-09T01:00:00Z', startedAt: '2026-10-04T01:00:05Z', wave: 30, result: '중단', party: [] } },
+    { seq: 3, at: '2026-10-09T01:00:01Z', date: '2026-10-09', kind: 'battleStart', data: {} },
+    { seq: 4, at: '2026-10-10T01:00:00Z', date: '2026-10-10', kind: 'battleRun', data: { runId: '1760100000000', endedAt: '2026-10-10T01:00:00Z', wave: 12, result: '게임 오버', party: [] } },
+  ];
+  const file = buildChildExport({ state, rows, since: '2026-10-01', appVersion: 't', exportedAt: '2026-10-11T00:00:00Z' });
+  assert.deepEqual(file.포켓로그.판결과수, { 게임오버: 1, 클리어: 0, 중단: 1 });
+  const stopped = file.포켓로그.판.find(r => r.result === '중단')!;
+  assert.equal(stopped.wave, 30);
+  assert.equal(stopped.startDate, '2026-10-04');
+  assert.equal(file.포켓로그.판.find(r => r.result === '게임 오버')!.startDate, '2026-10-09');
+});

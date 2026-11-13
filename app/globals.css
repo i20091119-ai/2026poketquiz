@@ -1115,3 +1115,5 @@ button.study-day:active { transform: scale(.94); }
 .maxed-tag { font-size: 11px; color: #9a5b00; font-weight: 800; }
 .feed-hearts { margin: 0; font-weight: 800; color: #be185d; text-align: center; }
 .read-aloud-tip { margin: 6px 0 4px; font-weight: 900; color: #b45309; font-size: 17px; }
+.feed-intro-pics { display: flex; justify-content: center; align-items: center; gap: 10px; }
+.feed-intro-pics img { width: 64px; height: 64px; object-fit: contain; }

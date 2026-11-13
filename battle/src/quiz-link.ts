@@ -498,6 +498,119 @@ export function reportQuizRun(entry: { waveIndex: number; timestamp: number }, i
   ]);
 }
 
+// ---------- 끝나지 않은 판 (2026-11-12 부모님 요청) ----------
+// 판 결과는 원래 게임 오버·클리어 때만 남았습니다. 진행 중인 판을 새 게임이 덮어쓰면 그 판을 "중단(웨이브 N, 시작일)"으로 남기고,
+// 진행 중인 판이 있는데 새 게임을 누르면 먼저 "이어할래요?"를 묻습니다.
+const RUN_STARTED_KEY = "quizRunStartedAt";
+const QUIZ_SESSION_SLOTS = 5;
+type SavedSession = {
+  waveIndex?: number;
+  timestamp?: number;
+  playTime?: number;
+  party?: { species?: number; level?: number; shiny?: boolean }[];
+};
+function readSavedSession(slotId: number): SavedSession | null {
+  const raw = localStorage.getItem(getSessionDataLocalStorageKey(slotId));
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(decrypt(raw, bypassLogin)) as SavedSession;
+  } catch {
+    return null;
+  }
+}
+function runStartedMap(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(RUN_STARTED_KEY) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+/** 새 게임을 시작한 날을 슬롯마다 기억 (중단 기록의 "시작일") */
+export function noteQuizRunStarted(slotId: number): void {
+  const map = runStartedMap();
+  map[slotId] = new Date().toISOString();
+  localStorage.setItem(RUN_STARTED_KEY, JSON.stringify(map));
+}
+/** 이 기기에 진행 중인 판(저장된 판)이 있으면 가장 최근 것 */
+export function findInProgressRun(): { slotId: number; wave: number } | null {
+  let best: { slotId: number; wave: number; time: number } | null = null;
+  for (let slotId = 0; slotId < QUIZ_SESSION_SLOTS; slotId++) {
+    const s = readSavedSession(slotId);
+    if (!s) {
+      continue;
+    }
+    const time = Number(s.timestamp) || 0;
+    if (!best || time > best.time) {
+      best = { slotId, wave: Number(s.waveIndex) || 1, time };
+    }
+  }
+  return best ? { slotId: best.slotId, wave: best.wave } : null;
+}
+/** 새 게임이 이 슬롯의 진행 중인 판을 덮어쓰기 직전에: 그 판을 "중단"으로 퀴즈 앱에 남김 */
+export function reportAbandonedRun(slotId: number): void {
+  const s = readSavedSession(slotId);
+  if (!s) {
+    return;
+  }
+  const startedAt = runStartedMap()[slotId] ?? null;
+  const lastSaved = Number(s.timestamp) || Date.now();
+  const abandoned = {
+    id: `a${lastSaved}`,
+    wave: Number(s.waveIndex) || 1,
+    startedAt,
+    lastSavedAt: new Date(lastSaved).toISOString(),
+    playTime: Number(s.playTime) || null,
+    party: (s.party ?? [])
+      .slice(0, 6)
+      .map(p => ({ species: Number(p.species), level: Number(p.level), shiny: !!p.shiny })),
+  };
+  void fetch(QUIZ_RUNS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ abandoned }),
+    keepalive: true,
+  }).catch(err => console.warn("중단한 판을 퀴즈 앱에 올리지 못했어요:", err));
+}
+/** 진행 중인 판이 있을 때 새 게임을 누르면: 이어할지 묻는 창. 이어하면 true */
+export function askContinueRun(wave: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const wrap = document.createElement("div");
+    wrap.style.cssText =
+      "position:fixed;inset:0;z-index:2147483647;background:rgba(20,24,32,.75);display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif";
+    const box = document.createElement("div");
+    box.style.cssText =
+      "background:#fff;color:#1f2d27;border-radius:20px;padding:22px 20px 18px;max-width:340px;width:100%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.35)";
+    box.innerHTML = `<div style="font-size:44px;line-height:1">🎮</div>
+      <div style="font-size:19px;font-weight:800;margin:6px 0 8px">진행 중인 판이 있어요 (웨이브 ${wave})</div>
+      <p style="font-size:15px;line-height:1.5;color:#4a5d51;margin:0 0 16px">이어할래요?<br><small>새로 시작해서 같은 칸에 저장하면 이 판은 "중단"으로 남아요.</small></p>`;
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px";
+    const fresh = document.createElement("button");
+    fresh.textContent = "새로 할래";
+    fresh.style.cssText =
+      "flex:1;border:1px solid #cbd8c3;background:#fff;color:#1f2d27;border-radius:14px;padding:13px;font-size:16px;font-weight:700";
+    const cont = document.createElement("button");
+    cont.textContent = "이어할래!";
+    cont.style.cssText =
+      "flex:1;border:0;background:#17674e;color:#fff;border-radius:14px;padding:13px;font-size:16px;font-weight:800";
+    const done = (v: boolean) => {
+      wrap.remove();
+      resolve(v);
+    };
+    fresh.onclick = () => done(false);
+    cont.onclick = () => done(true);
+    row.append(fresh, cont);
+    box.append(row);
+    wrap.append(box);
+    for (const type of ["pointerdown", "touchstart", "keydown"]) {
+      wrap.addEventListener(type, e => e.stopPropagation());
+    }
+    document.body.append(wrap);
+  });
+}
+
 /** 이 슬롯의 웨이브 시작 저장을 체력 가득 채운 상태로 바꿉니다. 저장이 없으면 false */
 function healSavedSlot(slotId: number): boolean {
   const key = getSessionDataLocalStorageKey(slotId);
