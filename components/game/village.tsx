@@ -61,8 +61,6 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   // 파트너는 한 칸 뒤에서 따라와요
   const [follow, setFollow] = useState({ x: START_POS.x + 1, y: START_POS.y });
   const [sheet, setSheet] = useState<Sheet>(null);
-  // 놓기 모드: 고른 물건을 반짝이는 빈 밭 칸을 눌러 바로 놓기
-  const [placing, setPlacing] = useState<CraftKey | null>(null);
   const [toast, setToast] = useState('');
   const [bubble, setBubble] = useState<{ id: string; text: string } | null>(null);
   const [timeUp, setTimeUp] = useState(false);
@@ -141,15 +139,6 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
     y: Math.max(0, Math.min(MAP_H * TILE - VIEW_ROWS * TILE, pos.y * TILE - Math.floor(VIEW_ROWS / 2) * TILE)),
   };
   const partner = view.owned.find(p => p.uid === view.partner);
-  async function placeAt(cell: number) {
-    if (!placing || busy) return;
-    const item = placing;
-    const r = await act<{ message: string }>({ type: 'villagePlace', cell, item, stay: true });
-    if (!r) return;
-    setToast(r.message);
-    // 가방에 더 있으면 계속 놓기, 없으면 끝
-    if (v.items[item] - 1 <= 0) setPlacing(null);
-  }
   const close = () => { setInside(false); onClose(); };
 
   // ---------- 잠김 ----------
@@ -189,10 +178,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
             const p = cellPos(cell);
             const item = v.cells[cell];
-            const target = !!placing && !item;
             return (
-              <button key={'c' + cell} className={'village-cell' + (item ? ' filled' : '') + (target ? ' target' : '')} style={{ left: p.x * TILE, top: p.y * TILE, width: TILE, height: TILE }}
-                aria-label={item ? `${CRAFT_INFO[item].name} (누르면 가방으로)` : '빈 칸 (누르면 놓기)'} onClick={() => (target ? void placeAt(cell) : setSheet({ cell }))}>
+              <button key={'c' + cell} className={'village-cell' + (item ? ' filled' : '')} style={{ left: p.x * TILE, top: p.y * TILE, width: TILE, height: TILE }}
+                aria-label={item ? `${CRAFT_INFO[item].name} (누르면 가방으로)` : '빈 칸 (누르면 놓기)'} onClick={() => setSheet({ cell })}>
                 <PlacedItem cells={v.cells} cell={cell} tile={TILE} />
               </button>
             );
@@ -207,7 +195,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           ))}
           {/* 돌아다니는 포켓몬 */}
           {walkers.map(w => (
-            <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing ? ' pass' : '')} style={{ left: w.x * TILE, top: w.y * TILE }}
+            <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '')} style={{ left: w.x * TILE, top: w.y * TILE }}
               onClick={() => setBubble({ id: w.id, text: `${species(w.species).name}: ${(w.guest ? GUEST_LINES : RESIDENT_LINES)[Math.floor(Math.random() * (w.guest ? GUEST_LINES : RESIDENT_LINES).length)]}` })}
               aria-label={species(w.species).name}>
               <img src={pixelSrc(w.species)} alt="" draggable={false} />
@@ -225,10 +213,6 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
             <span className="village-me-mark">나</span>
           </span>
         </div>
-        {placing && <div className="village-placing" role="status">
-          <span><CraftIcon kind={placing} scale={1} /> 반짝이는 점선 칸을 눌러 <b>{CRAFT_INFO[placing].name}</b> 놓기! (남은 {v.items[placing]}개)</span>
-          <button className="secondary small" onClick={() => setPlacing(null)}>그만</button>
-        </div>}
         {toast && <div className="village-toast" role="status">{toast}</div>}
         {timeUp && <div className="village-timeup"><p>⏰ 오늘 마을 시간은 끝났어.<br />내일 또 놀러 오자!</p><button className="primary" onClick={close}>나가기</button></div>}
       </div>
@@ -253,7 +237,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
 
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
-          {sheet === 'bag' ? <CraftSheet view={view} busy={busy} act={act} onToast={setToast} onPlace={k => { setSheet(null); setPlacing(k); }} />
+          {sheet === 'bag' ? <CraftSheet view={view} busy={busy} act={act} onToast={setToast} />
             : <CellSheet view={view} cell={sheet.cell} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />}
           <button className="secondary" onClick={() => setSheet(null)}>닫기</button>
         </div>
@@ -263,13 +247,11 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
 }
 
 /** 만들기: 재료 2개 → 풀숲·물웅덩이·꽃밭 (가방으로) */
-function CraftSheet({ view, busy, act, onToast, onPlace }: {
-  view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onPlace: (k: CraftKey) => void;
-}) {
+function CraftSheet({ view, busy, act, onToast }: { view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void }) {
   const v = view.village;
   return <>
     <h3>🔨 만들기</h3>
-    <p className="village-sheet-note">재료로 만들고 <b>🌱 밭에 놓기</b>를 눌러 봐! 밭(점선 네모 4칸)을 채우면 서식지가 돼.</p>
+    <p className="village-sheet-note">재료를 모아 만들고, 밭(갈색 칸)에 놓아 봐! 4칸을 맞추면 서식지가 돼.</p>
     <div className="village-recipes">
       {CRAFTS.map(k => {
         const info = CRAFT_INFO[k];
@@ -279,10 +261,7 @@ function CraftSheet({ view, busy, act, onToast, onPlace }: {
           <div key={k} className="village-recipe">
             <span className="village-recipe-icon"><CraftIcon kind={k} /></span>
             <span><b>{info.name}</b><small className="village-cost">{cost.map(([m, n]) => <span key={m}><MaterialIcon kind={m} scale={1} /> {MATERIAL_INFO[m].name} {n}</span>)}</small><small>가방에 {v.items[k]}개</small></span>
-            <span className="village-recipe-btns">
-              <button className="primary small" disabled={busy || !can} onClick={async () => { const r = await act<{ message: string }>({ type: 'villageCraft', item: k, stay: true }); if (r) onToast(r.message); }}>만들기</button>
-              {v.items[k] > 0 && <button className="secondary small glow" disabled={busy} onClick={() => onPlace(k)}>🌱 밭에 놓기</button>}
-            </span>
+            <button className="primary small" disabled={busy || !can} onClick={async () => { const r = await act<{ message: string }>({ type: 'villageCraft', item: k, stay: true }); if (r) onToast(r.message); }}>만들기</button>
           </div>
         );
       })}
