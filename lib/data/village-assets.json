@@ -1,0 +1,635 @@
+{
+ "tile": 16,
+ "sheets": {
+  "ground": {
+   "file": "/assets/village/ground.png",
+   "width": 128,
+   "height": 64
+  },
+  "objects": {
+   "file": "/assets/village/objects.png",
+   "width": 160,
+   "height": 144
+  }
+ },
+ "ground": {
+  "grass": {
+   "rect": [
+    0,
+    0,
+    16,
+    16
+   ],
+   "kind": "tile",
+   "source": "outdoor",
+   "label": "풀"
+  },
+  "water": {
+   "rect": [
+    16,
+    0,
+    16,
+    16
+   ],
+   "kind": "tile",
+   "source": "outdoor",
+   "label": "물"
+  },
+  "sand": {
+   "rect": [
+    32,
+    0,
+    32,
+    32
+   ],
+   "kind": "set",
+   "source": "outdoor",
+   "label": "흙길 테두리 세트(모서리·변·끝)"
+  },
+  "sandIn": {
+   "rect": [
+    64,
+    0,
+    32,
+    32
+   ],
+   "kind": "inner",
+   "source": "outdoor",
+   "label": "흙길 안쪽 모서리"
+  },
+  "shore": {
+   "rect": [
+    96,
+    0,
+    32,
+    32
+   ],
+   "kind": "set",
+   "source": "outdoor",
+   "label": "물가 테두리 세트(모래 물가, 가운데 비어 물이 보임)"
+  },
+  "shoreIn": {
+   "rect": [
+    0,
+    32,
+    32,
+    32
+   ],
+   "kind": "inner",
+   "source": "outdoor",
+   "label": "물가 안쪽 모서리"
+  }
+ },
+ "objects": {
+  "house": {
+   "rect": [
+    0,
+    0,
+    80,
+    96
+   ],
+   "cells": [
+    5,
+    6
+   ],
+   "foot": [
+    0,
+    3,
+    5,
+    3
+   ],
+   "source": "house",
+   "label": "집"
+  },
+  "treeRound": {
+   "rect": [
+    80,
+    0,
+    32,
+    48
+   ],
+   "cells": [
+    2,
+    3
+   ],
+   "foot": [
+    0,
+    1,
+    2,
+    2
+   ],
+   "source": "outdoor",
+   "label": "둥근 나무"
+  },
+  "treePine": {
+   "rect": [
+    112,
+    0,
+    32,
+    48
+   ],
+   "cells": [
+    2,
+    3
+   ],
+   "foot": [
+    0,
+    1,
+    2,
+    2
+   ],
+   "source": "outdoor",
+   "label": "뾰족 나무"
+  },
+  "pineSmall": {
+   "rect": [
+    144,
+    0,
+    16,
+    32
+   ],
+   "cells": [
+    1,
+    2
+   ],
+   "foot": [
+    0,
+    1,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "작은 뾰족 나무"
+  },
+  "bush": {
+   "rect": [
+    0,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "source": "outdoor",
+   "label": "덤불(풀숲)"
+  },
+  "bushRose": {
+   "rect": [
+    16,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "source": "outdoor",
+   "label": "꽃 덤불"
+  },
+  "flowerRed": {
+   "rect": [
+    32,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "빨간 꽃"
+  },
+  "flowerYellow": {
+   "rect": [
+    48,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "노란 꽃"
+  },
+  "flowerWhite": {
+   "rect": [
+    64,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "흰 꽃"
+  },
+  "flowerPink": {
+   "rect": [
+    80,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "분홍 꽃"
+  },
+  "flowerBlue": {
+   "rect": [
+    96,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "파란 꽃"
+  },
+  "flowerOrange": {
+   "rect": [
+    112,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "주황 꽃"
+  },
+  "mushroom": {
+   "rect": [
+    128,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "빨간 버섯"
+  },
+  "mushroomBrown": {
+   "rect": [
+    144,
+    96,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "갈색 버섯"
+  },
+  "rock": {
+   "rect": [
+    0,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "돌"
+  },
+  "stump": {
+   "rect": [
+    16,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "그루터기"
+  },
+  "lily": {
+   "rect": [
+    32,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "연잎(물 위)"
+  },
+  "fenceTL": {
+   "rect": [
+    48,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 TL"
+  },
+  "fenceT": {
+   "rect": [
+    64,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 T"
+  },
+  "fenceTR": {
+   "rect": [
+    80,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 TR"
+  },
+  "fenceL": {
+   "rect": [
+    96,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 L"
+  },
+  "fencePost": {
+   "rect": [
+    112,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 Post"
+  },
+  "fenceR": {
+   "rect": [
+    128,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 R"
+  },
+  "fenceBL": {
+   "rect": [
+    144,
+    112,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 BL"
+  },
+  "fenceB": {
+   "rect": [
+    0,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 B"
+  },
+  "fenceBR": {
+   "rect": [
+    16,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "outdoor",
+   "label": "나무 울타리 BR"
+  },
+  "matLeaf": {
+   "rect": [
+    32,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "재료: 풀잎"
+  },
+  "matTwig": {
+   "rect": [
+    48,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "재료: 나뭇가지"
+  },
+  "matPetal": {
+   "rect": [
+    64,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "재료: 꽃잎"
+  },
+  "matDrop": {
+   "rect": [
+    80,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "ninja",
+   "label": "재료: 물방울 (임시, 다른 그림체)"
+  }
+ },
+ "sources": {
+  "outdoor": {
+   "name": "Tuxemon \"Core Outdoor\" / \"Core Outdoor Nature\" / \"Core Outdoor Water\"",
+   "by": "rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반)",
+   "license": "CC BY-SA 4.0",
+   "url": "https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md"
+  },
+  "house": {
+   "name": "Tuxemon \"Core Buildings\" 중 \"Inspired 16x16 Tiles\"",
+   "by": "RedVoxel (지붕 고침: Jaskrendix)",
+   "license": "CC BY-SA 4.0",
+   "url": "https://opengameart.org/content/pokemon-inspired-16x16-tiles"
+  },
+  "ninja": {
+   "name": "Ninja Adventure Asset Pack",
+   "by": "pixel-boy",
+   "license": "CC0 1.0",
+   "url": "https://pixel-boy.itch.io/ninja-adventure-asset-pack"
+  }
+ }
+}

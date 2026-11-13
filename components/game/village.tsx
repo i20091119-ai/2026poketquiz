@@ -7,11 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import {
-  BLOCKED, CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, GUEST_LINES, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
+  CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, GUEST_LINES, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
   RESIDENT_LINES, START_POS, type CraftKey, type MaterialKey,
 } from '@/lib/village';
 import { AnimMon } from './anim-mon';
-import { CraftIcon, MaterialIcon, PlacedItem, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
+import { blockedCells } from '@/lib/village-map';
+import { CraftIcon, MaterialIcon, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
 const VIEW_ROWS = 9;
@@ -24,7 +25,7 @@ function useViewCols() {
 }
 const pixelSrc = (id: number) => `/assets/pokemon/pixel/${id}.png`;
 const key = (x: number, y: number) => `${x},${y}`;
-const blocked = new Set(BLOCKED.map(p => key(p.x, p.y)));
+const blocked = blockedCells();
 const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
 
 /** 첫 화면: 마을 입구 버튼 (잠김 / 열림) */
@@ -190,7 +191,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       </div>
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
-          <VillageGround tile={TILE} />
+          <VillageGround tile={TILE} cells={v.cells} />
           <div className="village-world" style={{ top: TOP_ROWS * TILE, width: MAP_W * TILE, height: MAP_H * TILE }}>
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
@@ -200,7 +201,6 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
             return (
               <button key={'c' + cell} className={'village-cell' + (item ? ' filled' : '') + (target ? ' target' : '')} style={{ left: p.x * TILE, top: p.y * TILE, width: TILE, height: TILE }}
                 aria-label={item ? `${CRAFT_INFO[item].name} (누르면 가방으로)` : '빈 칸 (누르면 놓기)'} onClick={() => (target ? void placeAt(cell) : setSheet({ cell }))}>
-                <PlacedItem cells={v.cells} cell={cell} tile={TILE} />
               </button>
             );
           })}

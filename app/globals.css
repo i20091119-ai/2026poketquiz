@@ -1139,7 +1139,7 @@ button.study-day:active { transform: scale(.94); }
 .village-ground { inset: 0; }
 .village-tile { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; line-height: 1; image-rendering: pixelated; }
 .village-cell { position: absolute; z-index: 2; border: 2px dashed rgba(255,255,255,.6); background: transparent; padding: 0; display: grid; place-items: center; }
-.village-cell.filled { border-style: solid; border-color: rgba(255,255,255,.25); }
+.village-cell.filled { border-color: transparent; }
 .village-item { font-size: 24px; line-height: 1; }
 .village-habitat-tag { position: absolute; z-index: 40; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
 .village-pickup { position: absolute; display: grid; place-items: center; font-size: 20px; filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 2px #ffe066); animation: village-bob 1.2s ease-in-out infinite; z-index: 2; }

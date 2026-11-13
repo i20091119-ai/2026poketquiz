@@ -1,6 +1,6 @@
 포켓몬 마을 그림 출처 (Village art credits)
 
-1) town.png — 마을 바닥·흙길·연못·나무·집·꽃·버섯·돌 (scripts/pack-village-town.mjs 로 필요한 조각만 잘라 묶음)
+1) ground.png(땅) · objects.png(물건) — 마을 바닥·흙길·물가·나무·집·꽃·버섯·돌·울타리·재료 (scripts/pack-village-town.mjs 로 필요한 조각만 잘라 묶음, 조각별 목록은 ASSETS.md)
    From the Tuxemon project tilesets (https://github.com/Tuxemon/Tuxemon, mods/tuxemon/gfx/tilesets):
    - core_outdoor.png, core_outdoor_nature.png, core_outdoor_water.png
      by rubberduck, based on "Updated Ground Tiles" by rubberduck (original tiles by Buch, commissioned by luke83,
@@ -12,9 +12,9 @@
      by RedVoxel (https://red-voxel.itch.io/), roofs adapted by Jaskrendix. Licensed under CC BY-SA 4.0.
    Full list: https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
    License text: https://creativecommons.org/licenses/by-sa/4.0/
-   town.png (잘라 묶은 그림)도 같은 CC BY-SA 4.0 으로 나눕니다.
+   ground.png · objects.png (잘라 묶은 그림)도 같은 CC BY-SA 4.0 으로 나눕니다.
 
-2) village.png — 재료 그림(풀잎·물방울·꽃잎·나뭇가지)
+2) village.png — 재료 그림 중 물방울 하나만 objects.png 의 matDrop 으로 옮겨 씀 (그림체가 달라 임시)
    Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
    License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
 

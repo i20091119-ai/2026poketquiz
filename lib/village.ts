@@ -45,14 +45,7 @@ export const cellPos = (cell: number) => {
   const i = cell % 4;
   return { x: p.x + (i % 2), y: p.y + Math.floor(i / 2) };
 };
-/** 마을 꾸밈 (그림 자리, 걸을 수 없음): 집 4×3, 나무 2×2, 연못 3×3 */
-export const HOUSE = { x: 4, y: 1, w: 4, h: 3 };
-export const TREES: { x: number; y: number; pink?: boolean }[] = [
-  { x: 0, y: 0 }, { x: 10, y: 0, pink: true }, { x: 0, y: 10 }, { x: 10, y: 10 }, { x: 0, y: 18, pink: true }, { x: 10, y: 18 },
-];
-export const POND = { x: 1, y: 15, w: 3, h: 3 };
-/** 흙길: 집 앞에서 아래로 2칸 너비 + 가운데 가로 1줄 */
-export const isPath = (x: number, y: number) => ((x === 5 || x === 6) && y >= 4) || y === 8;
+// 집·나무·길·연못 같은 지도 모습은 lib/village-map.ts (칸 단위 기록: 칸마다 땅 + 그 위 물건)
 /** 땅에 떨어진 재료가 나올 수 있는 자리 (날마다 그중 몇 곳) */
 export const PICK_SPOTS: { x: number; y: number }[] = [
   { x: 3, y: 2 }, { x: 9, y: 3 }, { x: 3, y: 6 }, { x: 8, y: 10 }, { x: 4, y: 12 },
@@ -60,13 +53,6 @@ export const PICK_SPOTS: { x: number; y: number }[] = [
 ];
 /** 집 문 앞: 처음 서는 자리 */
 export const START_POS = { x: 5, y: 4 };
-const rect = (r: { x: number; y: number; w: number; h: number }) =>
-  Array.from({ length: r.w * r.h }, (_, i) => ({ x: r.x + (i % r.w), y: r.y + Math.floor(i / r.w) }));
-/** 걸을 수 없는 칸 (집·나무·연못) */
-export const BLOCKED: { x: number; y: number }[] = [
-  ...rect(HOUSE), ...TREES.flatMap(t => rect({ x: t.x, y: t.y, w: 2, h: 2 })), ...rect(POND),
-];
-
 // ---------- 규칙 숫자 (보호자 공간 전체 설정 "포켓몬 마을 규칙"에서 바꾸면 settings.village_rules에 바꾼 것만) ----------
 export type VillageTimeMode = 'off' | 'daily' | 'perQuiz';
 export const VILLAGE_DEFAULT = {
