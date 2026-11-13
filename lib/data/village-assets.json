@@ -612,6 +612,35 @@
    "label": "재료: 물방울 (임시, 다른 그림체)"
   }
  },
+ "players": {
+  "seojun": {
+   "file": "/assets/village/player.png",
+   "width": 48,
+   "height": 128,
+   "frame": [
+    16,
+    32
+   ],
+   "cells": [
+    1,
+    2
+   ],
+   "rows": {
+    "down": 0,
+    "left": 1,
+    "right": 2,
+    "up": 3
+   },
+   "walk": [
+    1,
+    0,
+    1,
+    2
+   ],
+   "source": "catch",
+   "label": "서준이 (빨간 모자 트레이너, 4방향 걷기)"
+  }
+ },
  "sources": {
   "outdoor": {
    "name": "Tuxemon \"Core Outdoor\" / \"Core Outdoor Nature\" / \"Core Outdoor Water\"",
@@ -624,6 +653,12 @@
    "by": "RedVoxel (지붕 고침: Jaskrendix)",
    "license": "CC BY-SA 4.0",
    "url": "https://opengameart.org/content/pokemon-inspired-16x16-tiles"
+  },
+  "catch": {
+   "name": "Tuxemon \"Postboy\" 걷는 그림 (Catch Challenger 원작)",
+   "by": "Catch Challenger (색 고침: Sanglorian)",
+   "license": "CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0)",
+   "url": "https://github.com/alphaonex86/CatchChallenger-datapack"
   },
   "ninja": {
    "name": "Ninja Adventure Asset Pack",

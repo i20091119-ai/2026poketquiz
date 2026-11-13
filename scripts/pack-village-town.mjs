@@ -4,8 +4,9 @@
 // - 물건: 집·나무·덤불·꽃·버섯·돌·그루터기·연잎·울타리·재료 그림.
 // 그림 출처: Tuxemon 게임의 무료 타일(CC BY-SA 4.0 등) + 물방울 하나만 Ninja Adventure(CC0, 예전 village.png).
 // 다시 만들 때: node scripts/pack-village-town.mjs <Tuxemon 저장소의 mods/tuxemon/gfx/tilesets 폴더>
+//   (서준이 걷는 그림은 같은 저장소의 mods/tuxemon/sprites/postboy.png 를 찾아 씀)
 // 결과(모두 git에 포함, 원본 묶음은 안 넣음):
-//   public/assets/village/ground.png, public/assets/village/objects.png
+//   public/assets/village/ground.png, public/assets/village/objects.png, public/assets/village/player.png(서준이)
 //   lib/data/village-assets.json (조각 이름 → 자리·칸 크기·밟는 칸·출처)
 //   public/assets/village/ASSETS.md (그림 목록: 칸 크기·원본·그린 사람·사용 조건)
 import { createRequire } from 'node:module';
@@ -34,6 +35,12 @@ const SOURCES = {
     by: 'RedVoxel (지붕 고침: Jaskrendix)',
     license: 'CC BY-SA 4.0',
     url: 'https://opengameart.org/content/pokemon-inspired-16x16-tiles',
+  },
+  catch: {
+    name: 'Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작)',
+    by: 'Catch Challenger (색 고침: Sanglorian)',
+    license: 'CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0)',
+    url: 'https://github.com/alphaonex86/CatchChallenger-datapack',
   },
   ninja: {
     name: 'Ninja Adventure Asset Pack',
@@ -123,11 +130,21 @@ const o = await packSheet(objects, 160, (p, r) => ({
   rect: r, cells: p.cells, foot: p.foot, ...(p.flat ? { flat: true } : null), source: sourceOf(p.file), label: p.label,
 }));
 await write(g, 'ground.png');
+// 서준이: 16×32 칸 3장(걷기) × 4줄(아래·왼쪽·오른쪽·위)
+const playerFile = path.join(dir, '..', '..', 'sprites', 'postboy.png');
+await sharp(playerFile).png({ compressionLevel: 9 }).toFile(path.join(root, 'public', 'assets', 'village', 'player.png'));
+const playerMeta = await sharp(playerFile).metadata();
+const players = {
+  seojun: {
+    file: '/assets/village/player.png', width: playerMeta.width, height: playerMeta.height, frame: [16, 32], cells: [1, 2],
+    rows: { down: 0, left: 1, right: 2, up: 3 }, walk: [1, 0, 1, 2], source: 'catch', label: '서준이 (빨간 모자 트레이너, 4방향 걷기)',
+  },
+};
 await write(o, 'objects.png');
 const manifest = {
   tile: TILE,
   sheets: { ground: { file: '/assets/village/ground.png', width: g.width, height: g.height }, objects: { file: '/assets/village/objects.png', width: o.width, height: o.height } },
-  ground: g.atlas, objects: o.atlas, sources: SOURCES,
+  ground: g.atlas, objects: o.atlas, players, sources: SOURCES,
 };
 writeFileSync(path.join(root, 'lib', 'data', 'village-assets.json'), JSON.stringify(manifest, null, 1) + '\n');
 
@@ -149,6 +166,12 @@ const md = [
   '| 이름 | 설명 | 칸 | 밟기 | 원본 | 그린 사람 | 사용 조건 |',
   '|---|---|---|---|---|---|---|',
   ...Object.entries(o.atlas).map(([n, p]) => row(n, p, `${p.cells[0]}×${p.cells[1]}`, p.foot ? `못 감: ${p.foot[2]}×${p.foot[3]}칸` : '감')),
+  '',
+  '## 캐릭터 (player.png, 배경 투명)',
+  '',
+  '| 이름 | 설명 | 칸 | 밟기 | 원본 | 그린 사람 | 사용 조건 |',
+  '|---|---|---|---|---|---|---|',
+  ...Object.entries(players).map(([n, p]) => row(n, p, '1×2 (16×32 걷기 3장 × 4방향)', '-')),
   '',
   '## 출처',
   '',

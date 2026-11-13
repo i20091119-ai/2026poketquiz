@@ -18,4 +18,7 @@
    Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
    License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
 
-3) 마을의 움직이는 포켓몬 그림은 포켓로그(/battle/images/pokemon/)에 이미 있는 그림을 그대로 씁니다.
+3) player.png — 서준이 걷는 그림: Tuxemon "Postboy" overland sprite by Catch Challenger
+   (https://github.com/alphaonex86/CatchChallenger-datapack, CC BY 4.0), palette changed by Sanglorian (Tuxemon, CC BY-SA 4.0).
+
+4) 마을의 움직이는 포켓몬 그림은 포켓로그(/battle/images/pokemon/)에 이미 있는 그림을 그대로 씁니다.

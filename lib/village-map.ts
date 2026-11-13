@@ -7,6 +7,8 @@ import { MAP_H, MAP_W, PLOTS } from './village.ts';
 import type { CraftKey } from './village.ts';
 
 export const TILE_PX = assets.tile;
+/** 마을을 걷는 아이 캐릭터 (2026-11-13 부모님: 포켓로그처럼 서준이가 마을에 있어야 함). 그림은 assets.players */
+export const PLAYER = { name: '서준', sprite: 'seojun' as keyof typeof assets.players };
 
 /** 땅 종류: 풀 / 흙길 / 밭(흙, 서식지를 만드는 곳) / 물 */
 export type GroundKind = 'grass' | 'path' | 'soil' | 'water';

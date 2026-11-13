@@ -1,7 +1,8 @@
 "use client";
 // 포켓몬 마을 1단계(시험판, 2026-11-13). 규칙은 lib/village.ts, 기록 변경은 lib/game-engine.ts.
-// 위에서 내려다보는 도트 지도(16×16 타일을 3배 = 48px, 그림은 village-tiles.tsx), 화살표 버튼으로 파트너 포켓몬이 걷고
-// 화면이 파트너를 따라 움직여요. 포켓몬은 포켓로그의 움직이는 도트 그림(anim-mon.tsx). 사람 캐릭터는 없어요(2026-11-13 부모님).
+// 위에서 내려다보는 도트 지도(16×16 타일을 3배 = 48px, 그림은 village-tiles.tsx), 화살표 버튼으로 서준이가 걷고
+// 파트너 포켓몬이 한 칸 뒤에서 따라와요(포켓로그처럼 트레이너 + 포켓몬). 화면은 서준이를 따라 움직여요.
+// 포켓몬은 포켓로그의 움직이는 도트 그림(anim-mon.tsx).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
@@ -11,8 +12,8 @@ import {
   RESIDENT_LINES, START_POS, type CraftKey, type MaterialKey,
 } from '@/lib/village';
 import { AnimMon } from './anim-mon';
-import { blockedCells } from '@/lib/village-map';
-import { CraftIcon, MaterialIcon, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
+import { blockedCells, PLAYER } from '@/lib/village-map';
+import { CraftIcon, MaterialIcon, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
 const VIEW_ROWS = 9;
@@ -64,7 +65,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   const [inside, setInside] = useState(false);
   const [pos, setPos] = useState(START_POS);
   const [dir, setDir] = useState<'down' | 'up' | 'left' | 'right'>('down');
-  const [hop, setHop] = useState(0);
+  const [step, setStep] = useState(0);
+  // 파트너는 한 칸 뒤에서 따라와요 (바라보는 쪽 = 걸어간 쪽)
+  const [follow, setFollow] = useState({ x: START_POS.x + 1, y: START_POS.y, dir: 'left' as 'down' | 'up' | 'left' | 'right' });
   const VIEW_COLS = useViewCols();
   const [sheet, setSheet] = useState<Sheet>(null);
   // 놓기 모드: 고른 물건을 반짝이는 빈 밭 칸을 눌러 바로 놓기
@@ -132,7 +135,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
     const x = pos.x + dx, y = pos.y + dy;
     setDir(dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up');
     if (!inMap(x, y) || blocked.has(key(x, y))) return;
-    setHop(h => h + 1);
+    setStep(s => s + 1);
+    setFollow({ x: pos.x, y: pos.y, dir: x > pos.x ? 'right' : x < pos.x ? 'left' : y > pos.y ? 'down' : 'up' });
     setPos({ x, y });
     const p = pickupAt(x, y);
     if (p) {
@@ -225,14 +229,17 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
               {bubble?.id === w.id && <span className="village-bubble">{bubble.text}</span>}
             </button>
           ))}
-          {/* 파트너 = 내가 움직이는 포켓몬 (발밑 동그라미) */}
-          {partner && <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
+          {/* 파트너: 서준이 한 칸 뒤에서 따라옴 (발밑 동그라미) */}
+          {partner && <span className="village-mon partner" style={{ left: follow.x * TILE, top: follow.y * TILE, width: TILE, height: TILE, zIndex: 11 + follow.y }}>
             <span className="village-me-ring" />
-            <span key={hop} className="village-me-hop">
-              <AnimMon species={partner.species} shiny={partner.shiny} scale={1.5} back={dir === 'up'} flip={dir === 'right'} fallback={pixelSrc(partner.species)} />
-            </span>
-            <span className="village-me-mark">{species(partner.species).name}</span>
+            <AnimMon species={partner.species} shiny={partner.shiny} scale={1.5} back={follow.dir === 'up'} flip={follow.dir === 'right'} fallback={pixelSrc(partner.species)} />
           </span>}
+          {/* 서준이 */}
+          <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
+            <span className="village-shadow" />
+            <span className="village-me-body"><PlayerSprite sprite={PLAYER.sprite} dir={dir} step={step} /></span>
+            <span className="village-me-mark">{PLAYER.name}</span>
+          </span>
           </div>
         </div>
         {placing && <div className="village-placing" role="status">

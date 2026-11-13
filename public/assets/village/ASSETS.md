@@ -48,8 +48,15 @@
 | matPetal | 재료: 꽃잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matDrop | 재료: 물방울 (임시, 다른 그림체) | 1×1 | 감 | Ninja Adventure Asset Pack | pixel-boy | CC0 1.0 |
 
+## 캐릭터 (player.png, 배경 투명)
+
+| 이름 | 설명 | 칸 | 밟기 | 원본 | 그린 사람 | 사용 조건 |
+|---|---|---|---|---|---|---|
+| seojun | 서준이 (빨간 모자 트레이너, 4방향 걷기) | 1×2 (16×32 걷기 3장 × 4방향) | - | Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작) | Catch Challenger (색 고침: Sanglorian) | CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0) |
+
 ## 출처
 
 - Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" — rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) — CC BY-SA 4.0 — https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
 - Tuxemon "Core Buildings" 중 "Inspired 16x16 Tiles" — RedVoxel (지붕 고침: Jaskrendix) — CC BY-SA 4.0 — https://opengameart.org/content/pokemon-inspired-16x16-tiles
+- Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작) — Catch Challenger (색 고침: Sanglorian) — CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0) — https://github.com/alphaonex86/CatchChallenger-datapack
 - Ninja Adventure Asset Pack — pixel-boy — CC0 1.0 — https://pixel-boy.itch.io/ninja-adventure-asset-pack

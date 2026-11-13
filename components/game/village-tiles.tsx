@@ -27,6 +27,14 @@ export function ObjectSprite({ kind, scale = 3, style, title }: { kind: ObjectKi
   return <i className="vsprite" title={title} aria-hidden={!title} style={{ ...sheetStyle(assets.sheets.objects, OBJECTS[kind].rect, scale), ...style }} />;
 }
 
+/** 걷는 사람 (16×32, 4방향 × 걷기 3장). step이 바뀔 때마다 다음 걸음, 서 있으면 가운데 장면 */
+export function PlayerSprite({ sprite, dir, step, scale = 3 }: { sprite: keyof typeof assets.players; dir: 'down' | 'up' | 'left' | 'right'; step: number; scale?: number }) {
+  const p = assets.players[sprite];
+  const col = p.walk[step % p.walk.length];
+  const row = p.rows[dir];
+  return <i className="vsprite" aria-hidden style={sheetStyle(p, [col * p.frame[0], row * p.frame[1], p.frame[0], p.frame[1]], scale)} />;
+}
+
 // ---------- 땅 층 ----------
 let sheetImg: Promise<HTMLImageElement> | null = null;
 function loadGroundSheet() {
