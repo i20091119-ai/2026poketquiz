@@ -18,12 +18,15 @@ import type { PotionKind } from '@/lib/game-config';
 import { KeyChooser, LevelGuide, LockedRegions, useLevelPopups, VillageLevelBar } from './village-level';
 import { isOpenCell, lockedText } from '@/lib/village-level';
 import { CatchGame, FunIntro, funIntroSeen, ToolsTab, type CatchResult } from './village-fun';
-import type { ToolKey } from '@/lib/village-tools';
+import { TOOL_INFO, TOOLS, type ToolKey } from '@/lib/village-tools';
+import { ASSETS } from '@/lib/assets';
+import { BALLS } from '@/lib/game-config';
 import { groundAt } from '@/lib/village-map';
 import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
+/* eslint-disable @next/next/no-img-element */
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
 const VIEW_ROWS = 9;
 /** 화면에 보이는 칸 수: 폰 너비에 맞춰 7~11칸 (홀수라 파트너가 가운데) */
@@ -53,7 +56,7 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 }
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
-type Sheet = null | 'bag' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
+type Sheet = null | 'make' | 'bag' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
 type MakeTab = 'habitat' | DecorTab | 'tools';
 type DecorPlacing = { item: DecorKey; variant: number };
 
@@ -444,7 +447,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           <span className="village-mat" title="철 (훈련으로 받아요)"><IronIcon /><b>{craft.iron}</b></span>
           <span className="village-mat" title="반짝돌 (복습 문제를 맞히면 받아요)"><SparkleIcon /><b>{craft.sparkle}</b></span>
           <button className="secondary small" onClick={() => setSheet('workbench')}>🔨 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
-          <button className="secondary small" onClick={() => setSheet('bag')}>🔨 만들기{bagCount + decorBagCount ? ` · 가방 ${bagCount + decorBagCount}` : ''}</button>
+          <button className="secondary small" onClick={() => setSheet('make')}>🔨 만들기</button>
+          <button className="secondary small village-bag-btn" onClick={() => setSheet('bag')}>🎒 가방{bagCount + decorBagCount + craft.saplings + craft.balls.length ? ` ${bagCount + decorBagCount + craft.saplings + craft.balls.length}` : ''}</button>
         </div>
         <div className="village-pad" aria-label="움직이기">
           <span />
@@ -472,9 +476,13 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
               onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined}
               onPlant={() => setSheet('plant')} />
             : sheet === 'plant' ? <PlantSheet onPick={k => { setSheet(null); setPlacing(null); setDecorPlacing(null); setPlanting(k); }} />
-            : sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast} onHelp={() => { setSheet(null); setFunOpen(true); }}
-              onPlace={k => { setSheet(null); setDecorPlacing(null); setPlacing(k); }}
-              onPlaceDecor={k => { setSheet(null); setPlacing(null); setDecorPlacing({ item: k, variant: 0 }); }} />
+            : sheet === 'make' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast} onHelp={() => { setSheet(null); setFunOpen(true); }}
+              onOpenBag={() => setSheet('bag')} />
+            : sheet === 'bag' ? <BagSheet view={view} busy={busy} onMake={() => setSheet('make')}
+              onPlace={k => { setSheet(null); setDecorPlacing(null); setPlanting(null); setPlacing(k); }}
+              onPlaceDecor={k => { setSheet(null); setPlacing(null); setPlanting(null); setDecorPlacing({ item: k, variant: 0 }); }}
+              onPlant={() => setSheet('plant')}
+              onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined} />
             : 'decorAt' in sheet ? <DecorTakeSheet view={view} at={sheet.decorAt} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
             : <CellSheet view={view} cell={sheet.cell} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />}
           <button className="secondary" onClick={() => setSheet(null)}>닫기</button>
@@ -485,12 +493,12 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
 }
 
 /** 만들기: 재료 2개 → 풀숲·물웅덩이·꽃밭 (가방으로) */
-function CraftSheet({ view, busy, act, onToast, onPlace }: {
-  view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onPlace: (k: CraftKey) => void;
+function CraftSheet({ view, busy, act, onToast }: {
+  view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void;
 }) {
   const v = view.village;
   return <>
-    <p className="village-sheet-note">재료로 만들고 <b>🌱 밭에 놓기</b>를 눌러 봐! 밭(점선 네모 4칸)을 채우면 서식지가 되고, 다음 날 손님이 와.</p>
+    <p className="village-sheet-note">재료로 만들고 <b>🎒 가방</b>에서 밭에 놓아 봐! 밭(점선 네모 4칸)을 채우면 서식지가 되고, 다음 날 손님이 와.</p>
     <div className="village-recipes">
       {CRAFTS.map(k => {
         const info = CRAFT_INFO[k];
@@ -502,7 +510,6 @@ function CraftSheet({ view, busy, act, onToast, onPlace }: {
             <span><b>{info.name}</b><small className="village-cost">{cost.map(([m, n]) => <span key={m}><MaterialIcon kind={m} scale={1} /> {MATERIAL_INFO[m].name} {n}</span>)}</small><small>가방에 {v.items[k]}개</small></span>
             <span className="village-recipe-btns">
               <button className="primary small" disabled={busy || !can} onClick={async () => { const r = await act<{ message: string }>({ type: 'villageCraft', item: k, stay: true }); if (r) onToast(r.message); }}>만들기</button>
-              {v.items[k] > 0 && <button className="secondary small glow" disabled={busy} onClick={() => onPlace(k)}>🌱 밭에 놓기</button>}
             </span>
           </div>
         );
@@ -515,7 +522,7 @@ function CraftSheet({ view, busy, act, onToast, onPlace }: {
         const need = Object.entries(info.need).map(([k, n]) => `${CRAFT_INFO[k as CraftKey].name} ${n}`).join(' + ');
         return <small key={h}>{info.emoji} <b>{info.name}</b> = {need} → {info.typeText} 손님</small>;
       })}
-      <small><MaterialIcon kind="twig" scale={1} /> 나뭇가지는 다음에 쓸 곳이 생겨요. 모아 두자!</small>
+      <small><MaterialIcon kind="twig" scale={1} /> 나뭇가지는 🧰 도구(낚싯대·잠자리채)를 만들 때 써요!</small>
     </div>
   </>;
 }
@@ -556,29 +563,30 @@ function DecorIcon({ item, variant = 0, scale = 2 }: { item: DecorKey; variant?:
 
 /** 만들기 창 하나에 세 칸: 🌱 서식지(밭) · 🎨 꾸미기(풀밭) · ⛰️ 땅 바꾸기(풀밭) — 2026-11-14 부모님: 만들기·꾸미기가 헷갈려서 합침 */
 const MAKE_TABS: { key: MakeTab; label: string }[] = [{ key: 'habitat', label: '🌱 서식지' }, { key: 'decor', label: '🎨 꾸미기' }, { key: 'ground', label: '⛰️ 땅' }, { key: 'tools', label: '🧰 도구' }];
-function MakeSheet({ tab, onTab, view, busy, act, onToast, onPlace, onPlaceDecor, onHelp }: {
+function MakeSheet({ tab, onTab, view, busy, act, onToast, onHelp, onOpenBag }: {
   tab: MakeTab; onTab: (t: MakeTab) => void; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void;
-  onPlace: (k: CraftKey) => void; onPlaceDecor: (k: DecorKey) => void; onHelp: () => void;
+  onHelp: () => void; onOpenBag: () => void;
 }) {
   return <>
     <h3>🔨 만들기</h3>
     <div className="village-make-tabs" role="tablist">
       {MAKE_TABS.map(t => <button key={t.key} role="tab" aria-selected={tab === t.key} className={'village-make-tab' + (tab === t.key ? ' on' : '')} onClick={() => onTab(t.key)}>{t.label}</button>)}
     </div>
-    {tab === 'habitat' ? <CraftSheet view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlace} />
+    {tab === 'habitat' ? <CraftSheet view={view} busy={busy} act={act} onToast={onToast} />
       : tab === 'tools' ? <ToolsTab view={view} busy={busy} act={act} onToast={onToast} onHelp={onHelp} />
-      : <DecorSheet tab={tab} view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlaceDecor} />}
+      : <DecorSheet tab={tab} view={view} busy={busy} act={act} onToast={onToast} />}
+    {tab !== 'tools' && <p className="village-sheet-note">만든 것은 <b>🎒 가방</b>에 들어가. <button className="link-btn" onClick={onOpenBag}>가방 열어 보기</button></p>}
   </>;
 }
 
 /** 꾸미기·땅 바꾸기: 재료로 만들기 → 가방, 🌱 놓기로 마을 풀밭에 */
-function DecorSheet({ tab, view, busy, act, onToast, onPlace }: {
-  tab: DecorTab; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onPlace: (k: DecorKey) => void;
+function DecorSheet({ tab, view, busy, act, onToast }: {
+  tab: DecorTab; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void;
 }) {
   const v = view.village;
   return <>
     <p className="village-sheet-note">{tab === 'decor'
-      ? <>재료로 꾸미기 물건을 만들고 <b>🌱 놓기</b>를 눌러 마을 풀밭에 놓아 봐! 놓은 물건을 누르면 가방으로 돌아와.</>
+      ? <>재료로 꾸미기 물건을 만들고 <b>🎒 가방</b>에서 마을 풀밭에 놓아 봐! 놓은 물건을 누르면 가방으로 돌아와.</>
       : <>풀밭을 연못·흙길·돌길로 바꿔 봐! 옆에 붙여 놓으면 이어져. 바꾼 칸을 누르면 풀밭으로 되돌릴 수 있어.</>}</p>
     <div className="village-recipes">
       {DECOR_ITEMS.filter(k => DECOR_INFO[k].tab === tab).map(k => {
@@ -592,7 +600,6 @@ function DecorSheet({ tab, view, busy, act, onToast, onPlace }: {
               <small>가방에 {v.decorBag[k]}개{info.note ? ` · ${info.note}` : ''}</small></span>
             <span className="village-recipe-btns">
               <button className="primary small" disabled={busy || !can} onClick={async () => { const r = await act<{ message: string }>({ type: 'decorCraft', item: k, stay: true }); if (r) onToast(r.message); }}>만들기</button>
-              {v.decorBag[k] > 0 && <button className="secondary small glow" disabled={busy} onClick={() => onPlace(k)}>🌱 놓기</button>}
             </span>
           </div>
         );
@@ -620,5 +627,54 @@ function DecorTakeSheet({ view, at, busy, act, onToast, onDone }: {
     <h3><ObjectSprite kind={d!.item === 'bush' ? 'bushSmall' : d!.kind} scale={2} /> {DECOR_INFO[d!.item].name}</h3>
     <p className="village-sheet-note">가방에 다시 넣을까? 다른 곳에 다시 놓을 수 있어.</p>
     <button className="primary" disabled={busy} onClick={take}>가방에 넣기</button>
+  </>;
+}
+
+/** 🎒 가방 (2026-11-14 부모님: 만들기와 가방을 나눔): 가진 것을 모아 보고 놓기·심기·열기. 만들기는 🔨 만들기 창에서 */
+function BagSheet({ view, busy, onMake, onPlace, onPlaceDecor, onPlant, onOpenBall }: {
+  view: ChildView; busy: boolean; onMake: () => void;
+  onPlace: (k: CraftKey) => void; onPlaceDecor: (k: DecorKey) => void; onPlant: () => void; onOpenBall?: (b: CraftedBall) => void;
+}) {
+  const v = view.village;
+  const c = v.craft;
+  const habitat = CRAFTS.filter(k => v.items[k] > 0);
+  const decor = DECOR_ITEMS.filter(k => DECOR_INFO[k].tab === 'decor' && v.decorBag[k] > 0);
+  const ground = DECOR_ITEMS.filter(k => DECOR_INFO[k].tab === 'ground' && v.decorBag[k] > 0);
+  const tools = TOOLS.filter(k => c.tools[k] > 0);
+  const empty = !habitat.length && !decor.length && !ground.length && !tools.length && !c.saplings && !c.balls.length;
+  return <>
+    <h3>🎒 가방</h3>
+    {empty && <p className="village-sheet-note">가방에 놓을 물건이 없어. <button className="link-btn" onClick={onMake}>🔨 만들기</button>에서 만들어 보자!</p>}
+    {habitat.length > 0 && <div className="bag-section"><b>🌱 밭에 놓을 것</b><small>누르면 반짝이는 밭 칸에 놓아</small>
+      <div className="bag-grid">{habitat.map(k => (
+        <button key={k} className="bag-item" disabled={busy} onClick={() => onPlace(k)}><CraftIcon kind={k} /><span>{CRAFT_INFO[k].name}</span><b>{v.items[k]}</b></button>
+      ))}</div></div>}
+    {decor.length > 0 && <div className="bag-section"><b>🎨 꾸미기</b><small>누르면 풀밭에 놓아</small>
+      <div className="bag-grid">{decor.map(k => (
+        <button key={k} className="bag-item" disabled={busy} onClick={() => onPlaceDecor(k)}><DecorIcon item={k} /><span>{DECOR_INFO[k].name}</span><b>{v.decorBag[k]}</b></button>
+      ))}</div></div>}
+    {ground.length > 0 && <div className="bag-section"><b>⛰️ 땅 바꾸기</b><small>누르면 풀밭을 바꿔</small>
+      <div className="bag-grid">{ground.map(k => (
+        <button key={k} className="bag-item" disabled={busy} onClick={() => onPlaceDecor(k)}><DecorIcon item={k} /><span>{DECOR_INFO[k].name}</span><b>{v.decorBag[k]}</b></button>
+      ))}</div></div>}
+    {(c.saplings > 0 || c.balls.length > 0) && <div className="bag-section"><b>🌳 묘목 · ⚪ 만든 볼</b>
+      <div className="bag-grid">
+        {c.saplings > 0 && <button className="bag-item" disabled={busy} onClick={onPlant}><ObjectSprite kind="sapling" scale={2} /><span>묘목 심기</span><b>{c.saplings}</b></button>}
+        {c.balls.map(b => (
+          <button key={b.id} className="bag-item" disabled={busy || !onOpenBall} onClick={() => onOpenBall?.(b)}><img src={ASSETS.ball[b.kind]} alt="" width={32} height={32} /><span>{BALLS[b.kind].label} 열기</span></button>
+        ))}
+      </div></div>}
+    {tools.length > 0 && <div className="bag-section"><b>🧰 도구</b><small>{tools.includes('rod') ? '물가에 서면 낚시하기 버튼이 나와' : '날아다니는 벌레를 눌러 봐'}</small>
+      <div className="bag-grid">{tools.map(k => (
+        <span key={k} className="bag-item tool"><span className="tool-icon">{TOOL_INFO[k].emoji}</span><span>{TOOL_INFO[k].name}</span><b>{c.tools[k]}번 남음</b></span>
+      ))}</div></div>}
+    <div className="bag-section"><b>🪨 재료</b>
+      <div className="bag-mats">
+        {MATERIALS.map(k => <span key={k}><MaterialIcon kind={k} /> {MATERIAL_INFO[k].name} <b>{v.mats[k]}</b></span>)}
+        <span><IronIcon /> 철 <b>{c.iron}</b></span>
+        <span><SparkleIcon /> 반짝돌 <b>{c.sparkle}</b></span>
+      </div>
+      <small className="bag-hint">철은 트레이너 훈련, 반짝돌은 복습 문제를 맞히면 받아. 열매는 아이 화면 🎒 가방 탭에 있어.</small>
+    </div>
   </>;
 }

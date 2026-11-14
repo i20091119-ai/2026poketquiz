@@ -1317,3 +1317,15 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .catch-got { display: grid; place-items: center; }
 .catch-met { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .catch-left { font-size: 13px; opacity: .8; margin: 0; }
+/* 마을 가방 (2026-11-14) */
+.village-bag-btn { background: #fff3d6; }
+.bag-section { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid #eee; }
+.bag-section > small { opacity: .7; font-size: 12px; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+.bag-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 10px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 12px; text-align: center; }
+.bag-item b { font-size: 14px; }
+.bag-item:not(.tool):not(:disabled) { cursor: pointer; }
+.bag-item:not(.tool):active { transform: scale(.96); }
+.bag-mats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
+.bag-mats span { display: inline-flex; align-items: center; gap: 3px; }
+.bag-hint { opacity: .7; font-size: 12px; }
