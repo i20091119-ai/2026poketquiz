@@ -92,7 +92,7 @@ test('마을: 하루 줍기 3개, 종류별 최대 20개', () => {
   assert.throws(() => applyAction(s2, { type: 'villagePick', spot: spots[0].spot }, ctx(bank)), /가득/);
 });
 
-test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손님, 도감 "만남"(획득 아님)', () => {
+test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손님, 📖 방명록(획득 아님)', () => {
   setVillageRules(null);
   const bank = makeBank();
   const state = started(bank);
@@ -126,7 +126,7 @@ test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손�
     assert.ok(sp.types.some(t => (types[g.habitat] as readonly string[]).includes(t)));
   }
   assert.equal(state.owned.length, owned); // 손님은 획득이 아님
-  assert.deepEqual([...(state.met ?? [])].sort(), guests.map(g => g.species).sort());
+  assert.deepEqual(Object.keys(state.village!.guestbook!).map(Number).sort(), guests.map(g => g.species).sort()); // 📖 방명록 (2026-11-14, 도감 "만남" 대신)
   // 되가져오면 서식지가 풀림
   applyAction(state, { type: 'villageTake', cell: 0 }, ctx(bank, next));
   assert.equal(state.village!.habitats[0], null);

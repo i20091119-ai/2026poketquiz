@@ -30,8 +30,8 @@ export const RECIPE_INFO: Record<RecipeKey, { name: string; emoji: string; tier?
 export const STUDY_MATS = ['iron', 'sparkle'] as const;
 export type StudyMat = typeof STUDY_MATS[number];
 export const STUDY_MAT_INFO: Record<StudyMat, { name: string; how: string }> = {
-  iron: { name: '철', how: '트레이너 훈련을 열심히 한 주에 우편함으로 와요' },
-  sparkle: { name: '반짝돌', how: '이틀 뒤 복습 문제를 처음에 맞히면 받아요' },
+  iron: { name: '철', how: '트레이너 훈련을 열심히 한 주나, 미션을 5일 끝낸 주에 우편함으로 와요' },
+  sparkle: { name: '반짝돌', how: '이틀 뒤 복습 문제를 처음에 맞히거나, 오늘 미션을 하나도 안 틀리면 받아요' },
 };
 /** 레시피 재료: 열매(한 종류)·돌멩이·철·반짝돌 */
 export type RecipeCost = { berry: number; stone: number; iron: number; sparkle: number };
@@ -45,9 +45,11 @@ export const CRAFT_DEFAULT = {
   guestChance: 33,
   /** 철: 훈련 주 합계가 ironHighAt 이상이면 ironHigh개, ironLowAt 이상이면 ironLow개 */
   ironHighAt: 5, ironHigh: 2, ironLowAt: 3, ironLow: 1,
-  /** 반짝돌: 이틀 뒤 복습 문제를 처음에 맞히면 */
-  sparkle: 1,
-  pokeBerry: 10, pokeStone: 3,
+  /** 반짝돌: 이틀 뒤 복습 문제를 처음에 맞히면 sparkle개, 일일미션을 오답 0으로 다 맞히면 sparklePerfect개, 합쳐서 하루 sparkleDaily개까지 */
+  sparkle: 1, sparklePerfect: 1, sparkleDaily: 2,
+  /** 미션 철: 한 주(월~일)에 일일미션을 missionIronDays일 이상 끝내면 다음 월요일 우편함에 missionIron개 (훈련 철과 따로) */
+  missionIronDays: 5, missionIron: 1,
+  pokeBerry: 10, pokeStone: 3, pokeSparkle: 1,
   greatBerry: 30, greatStone: 5, greatIron: 2,
   ultraBerry: 99, ultraSparkle: 1,
   saplingBerry: 5, saplingStone: 2,
@@ -69,8 +71,13 @@ export const CRAFT_FIELDS: Field[] = [
   { key: 'ironLowAt', label: '철 조금: 주 합계 이상', min: 1, max: 7, group: '철·반짝돌 (공부로만)' },
   { key: 'ironLow', label: '철 조금: 개수', min: 0, max: 10, group: '철·반짝돌 (공부로만)' },
   { key: 'sparkle', label: '복습 첫 정답 반짝돌', min: 0, max: 5, group: '철·반짝돌 (공부로만)' },
+  { key: 'sparklePerfect', label: '미션 오답 0 반짝돌', min: 0, max: 5, group: '철·반짝돌 (공부로만)' },
+  { key: 'sparkleDaily', label: '반짝돌 하루 최대', min: 0, max: 10, group: '철·반짝돌 (공부로만)' },
+  { key: 'missionIronDays', label: '미션 철: 한 주에 미션 끝낸 날 이상', min: 1, max: 7, group: '철·반짝돌 (공부로만)' },
+  { key: 'missionIron', label: '미션 철: 개수', min: 0, max: 10, group: '철·반짝돌 (공부로만)' },
   { key: 'pokeBerry', label: '몬스터볼: 열매', min: 1, max: 999, group: '레시피' },
   { key: 'pokeStone', label: '몬스터볼: 돌멩이', min: 0, max: 20, group: '레시피' },
+  { key: 'pokeSparkle', label: '몬스터볼: 반짝돌', min: 0, max: 20, group: '레시피' },
   { key: 'greatBerry', label: '슈퍼볼: 열매', min: 1, max: 999, group: '레시피' },
   { key: 'greatStone', label: '슈퍼볼: 돌멩이', min: 0, max: 20, group: '레시피' },
   { key: 'greatIron', label: '슈퍼볼: 철', min: 0, max: 20, group: '레시피' },
@@ -78,14 +85,14 @@ export const CRAFT_FIELDS: Field[] = [
   { key: 'ultraSparkle', label: '하이퍼볼: 반짝돌', min: 0, max: 20, group: '레시피' },
   { key: 'saplingBerry', label: '묘목: 열매', min: 1, max: 999, group: '레시피' },
   { key: 'saplingStone', label: '묘목: 돌멩이', min: 0, max: 20, group: '레시피' },
-  { key: 'levelNeed2', label: '레벨 2까지 별', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeedStep', label: '레벨 3까지 별 (레벨 2에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeedGrow', label: '그 뒤 레벨마다 더 늘어나는 별', min: 0, max: 200, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'starGuest', label: '별: 새 손님 만남', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'starHabitat', label: '별: 서식지에 손님 온 날', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'starMake', label: '별: 서식지·꾸미기 물건 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'starBall', label: '별: 볼·묘목 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'starHarvest', label: '별: 열매 따기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'levelNeed2', label: '레벨 2까지 마을점수', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'levelNeedStep', label: '레벨 3까지 마을점수 (레벨 2에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'levelNeedGrow', label: '그 뒤 레벨마다 더 늘어나는 마을점수', min: 0, max: 200, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'starGuest', label: '마을점수: 새 손님 만남', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'starHabitat', label: '마을점수: 서식지에 손님 온 날', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'starMake', label: '마을점수: 서식지·꾸미기 물건 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'starBall', label: '마을점수: 볼·묘목 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'starHarvest', label: '마을점수: 열매 따기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'rodTwig', label: '낚싯대: 나뭇가지', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
   { key: 'rodLeaf', label: '낚싯대: 풀잎', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
   { key: 'netTwig', label: '잠자리채: 나뭇가지', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
@@ -110,7 +117,7 @@ export const craftRules = (): CraftRules => current;
 
 export function recipeCost(key: RecipeKey, r: CraftRules = current): RecipeCost {
   switch (key) {
-    case 'poke': return { berry: r.pokeBerry, stone: r.pokeStone, iron: 0, sparkle: 0 };
+    case 'poke': return { berry: r.pokeBerry, stone: r.pokeStone, iron: 0, sparkle: r.pokeSparkle };
     case 'great': return { berry: r.greatBerry, stone: r.greatStone, iron: r.greatIron, sparkle: 0 };
     case 'ultra': return { berry: r.ultraBerry, stone: 0, iron: 0, sparkle: r.ultraSparkle };
     case 'sapling': return { berry: r.saplingBerry, stone: r.saplingStone, iron: 0, sparkle: 0 };
