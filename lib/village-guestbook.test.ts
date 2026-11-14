@@ -174,3 +174,50 @@ test('미션 철: 한 주(월~일)에 미션을 5일 끝내면 다음 월요일 
   assert.match(r.message, /미션을 열심히 끝낸/);
   reset();
 });
+
+// ---------- 합치기 전 확인 (2026-11-14 부모님) ----------
+test('확인 1: 방명록이 비어도 서식지 손님은 도감에 없는 포켓몬 중에서도 오고, 전설·환상은 안 옴', () => {
+  const state = initialState();
+  state.dex.push(1, 7, 10, 43, 60, 69, 129, 191);
+  state.village = { mats: {}, items: {}, cells: [], habitats: [{ kind: 'green', since: '2026-11-13' }, { kind: 'shore', since: '2026-11-13' }, { kind: 'garden', since: '2026-11-13' }], guestbook: {} } as unknown as GameState['village'];
+  let notOwned = 0, total = 0;
+  for (let d = 0; d < 14; d++) {
+    syncVillage(state, `2026-11-${String(14 + d).padStart(2, '0')}`, seeded(1000 + d * 7919));
+    for (const g of state.village!.guests!.list) { total++; if (!state.dex.includes(g.species)) notOwned++; assert.ok(species(g.species).tier < 3, '전설·환상'); }
+  }
+  assert.equal(total, 42);
+  assert.ok(notOwned > 30, `도감에 없는 손님 ${notOwned}/${total}`);
+});
+
+test('확인 2: 한 번이라도 틀린 날에도 복습 첫 정답 반짝돌은 나오고, 없어지는 건 오답 0 반짝돌뿐', () => {
+  reset();
+  const bank = makeBank(30);
+  const state = started(bank);
+  const q = bank.questions[0];
+  for (let t = 0; t < 2; t++) applyAction(state, { type: 'answer', mode: 'explore', questionId: q.id, choice: 1 }, ctx(bank, '2026-11-12'));
+  ensureDaily(state, bank, TODAY, seeded());
+  const other = state.daily!.questionIds.find(x => x !== q.id)!;
+  applyAction(state, { type: 'answer', mode: 'daily', questionId: other, choice: 1 }, ctx(bank)); // 미션에서 한 번 틀림
+  const inDaily = state.daily!.questionIds.includes(q.id);
+  const r = applyAction(state, { type: 'answer', mode: inDaily ? 'daily' : 'explore', questionId: q.id, choice: 0 }, ctx(bank)) as { sparkle?: number };
+  assert.equal(r.sparkle, 1);
+  let last: { village?: { mission?: { sparkle?: number } } } = {};
+  for (const x of state.daily!.questionIds) if (!state.daily!.correct.includes(x) && !state.daily!.wrong.includes(x)) last = applyAction(state, { type: 'answer', mode: 'daily', questionId: x, choice: 0 }, ctx(bank)) as never;
+  assert.equal(last.village?.mission?.sparkle ?? 0, 0);
+  assert.equal(state.village!.study!.sparkle, 1);
+});
+
+test('확인 3: 진화형 손님(버터플)은 첫 모습(캐터피)으로 주되, 캐터피를 이미 가졌으면 후보에서 빠짐', () => {
+  const state = initialState();
+  state.village = { mats: {}, items: {}, cells: [], habitats: [], guestbook: { '12': { first: TODAY, visits: 1 } } } as never;
+  assert.equal(rootOf(12), 10);
+  const f = pickCraftedSpecies(state, 'poke', seeded(1), 0)!;
+  assert.deepEqual([f.id, f.fromBook], [10, true]);
+  state.dex.push(10);
+  for (let k = 1; k < 200; k++) {
+    const g = pickCraftedSpecies(state, 'poke', seeded(k), 0)!;
+    assert.notEqual(g.id, 10);
+    assert.ok(!state.dex.includes(g.id));
+    assert.ok(!g.fromBook);
+  }
+});
