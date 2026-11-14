@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ko" translate="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="google" content="notranslate">
+<meta name="theme-color" content="#1f6b52">
+<title>포켓몬 마을 설명서</title>
+<style>
+  :root { --bg: #f4f8f1; --card: #ffffff; --ink: #20302a; --soft: #5b6b63; --green: #1f6b52; --gold: #f2b83b; --line: #dfe9dc; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overscroll-behavior: none; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    word-break: keep-all; overflow-wrap: break-word; -webkit-text-size-adjust: 100%; }
+  .top { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--green); color: #fff; }
+  .top h1 { flex: 1; margin: 0; font-size: 19px; }
+  .top button { border: 0; border-radius: 12px; padding: 8px 14px; font-size: 16px; font-weight: 800; background: #fff; color: var(--green); }
+  .count { font-weight: 700; font-size: 15px; opacity: .9; }
+  main { max-width: 560px; margin: 0 auto; padding: 14px 16px 120px; }
+  .page { display: none; }
+  .page.on { display: block; animation: show .25s ease; }
+  @keyframes show { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .page h2 { margin: 6px 0 12px; font-size: 27px; line-height: 1.3; }
+  .page p, .page li { font-size: 21px; line-height: 1.55; margin: 8px 0; }
+  .page ul { padding-left: 4px; list-style: none; margin: 8px 0; }
+  .page li { margin: 10px 0; }
+  .big { font-size: 64px; text-align: center; margin: 10px 0; }
+  .shot { display: block; width: 100%; max-width: 250px; margin: 12px auto; border-radius: 18px; border: 3px solid var(--line); background: #233; }
+  .shots { display: flex; gap: 8px; justify-content: center; }
+  .shots .shot { width: 48%; margin: 12px 0; }
+  .crop { width: 100%; max-width: 420px; }
+  .tip { background: #fff7dd; border: 2px solid #f3dc8f; border-radius: 16px; padding: 10px 14px; font-size: 19px !important; }
+  .card { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 10px 14px; margin: 10px 0; }
+  .card b { color: var(--green); }
+  .recipe { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 20px; }
+  .recipe span:nth-child(odd) { font-size: 30px; }
+  .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(244,248,241,.96); border-top: 2px solid var(--line); }
+  .nav button { flex: 1; border: 0; border-radius: 16px; padding: 16px 10px; font-size: 21px; font-weight: 900; }
+  .prev { background: #e5ece2; color: var(--ink); }
+  .next { background: var(--green); color: #fff; }
+  .nav button:disabled { opacity: .35; }
+  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 14px 0 4px; }
+  .dots i { width: 9px; height: 9px; border-radius: 50%; background: #c8d6c4; }
+  .dots i.on { background: var(--green); transform: scale(1.3); }
+  .menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .menu button { border: 2px solid var(--line); background: #fff; border-radius: 14px; padding: 12px 8px; font-size: 18px; font-weight: 800; color: var(--ink); text-align: left; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>📘 포켓몬 마을 설명서</h1>
+  <span class="count" id="count"></span>
+  <button id="close">닫기</button>
+</header>
+<main id="pages">
+
+<section class="page" data-title="처음">
+  <div class="big">🏡</div>
+  <h2>포켓몬 마을 설명서</h2>
+  <p>마을에서 뭘 하는지 알려 줄게!</p>
+  <p>아래 <b>다음 ▶</b>을 눌러 한 장씩 넘겨 봐.</p>
+  <p>보고 싶은 것만 골라 봐도 돼.</p>
+  <div class="menu" id="menu"></div>
+</section>
+
+<section class="page" data-title="마을 열기">
+  <h2>🔒 마을은 언제 열려?</h2>
+  <img class="shot crop" src="img/home-strip.jpg" alt="첫 화면 포켓몬 마을 칸">
+  <p>오늘 <b>일일미션</b>을 다 풀면 열려.</p>
+  <p>첫 화면의 <b>🏡 포켓몬 마을</b>을 눌러 들어가.</p>
+</section>
+
+<section class="page" data-title="걷기">
+  <h2>🚶 걷기 · 나가기</h2>
+  <img class="shot" src="img/map.jpg" alt="마을 화면">
+  <ul>
+    <li>▲ ◀ ▶ ▼ 버튼으로 걸어.</li>
+    <li>서준이가 걷고 파트너가 따라와.</li>
+    <li>나갈 땐 위쪽 <b>나가기</b>를 눌러.</li>
+  </ul>
+</section>
+
+<section class="page" data-title="누르기">
+  <h2>✨ 노랗게 반짝이면 눌러 봐</h2>
+  <img class="shot" src="img/tree.jpg" alt="반짝이는 열매나무와 우편함">
+  <ul>
+    <li>🍎 열매나무 → 열매 따기</li>
+    <li>🪨 회색 바위 → 돌멩이 캐기</li>
+    <li>📮 우편함 → 택배 받기</li>
+    <li>🐾 손님 → 말 걸기</li>
+  </ul>
+</section>
+
+<section class="page" data-title="줍기">
+  <h2>🍃 땅에 떨어진 재료 줍기</h2>
+  <img class="shot" src="img/map.jpg" alt="땅에 떨어진 재료">
+  <p>반짝이는 재료가 있는 칸으로 <b>걸어가면</b> 저절로 주워.</p>
+  <p>하루에 <b>3개</b> 주울 수 있어.</p>
+  <p class="tip">위쪽에 "줍기 ○개 남음"이 보여.</p>
+</section>
+
+<section class="page" data-title="바위">
+  <h2>🪨 바위에서 돌멩이 캐기</h2>
+  <img class="shot" src="img/rock.jpg" alt="돌멩이를 캤다는 글">
+  <p>회색 바위를 눌러 봐.</p>
+  <p>돌멩이가 나와! 하루에 <b>5개</b>까지야.</p>
+</section>
+
+<section class="page" data-title="열매나무">
+  <h2>🍎 열매 따기</h2>
+  <img class="shot" src="img/tree.jpg" alt="열매를 땄다는 글">
+  <p>미션을 끝낸 날, 나무마다 <b>1개</b> 열려.</p>
+  <p>안 따면 다음 날 사라져. 괜찮아!</p>
+</section>
+
+<section class="page" data-title="손님">
+  <h2>🐾 손님에게 말 걸기</h2>
+  <img class="shot" src="img/guest.jpg" alt="손님이 말하는 모습">
+  <p>"손님" 표시가 있는 포켓몬을 눌러.</p>
+  <p>좋아하는 것을 알려 줘.</p>
+  <p>가끔 열매를 선물로 줘! 🎁</p>
+  <p class="tip">손님마다 하루에 한 번이야.</p>
+</section>
+
+<section class="page" data-title="재료">
+  <h2>🎒 재료는 어디서 나와?</h2>
+  <img class="shot" src="img/bag.jpg" alt="가방의 재료 칸">
+  <ul>
+    <li>✅ 문제를 처음에 맞히면 가끔</li>
+    <li>🏁 일일미션을 끝내면 2개</li>
+    <li>🍃 마을에서 줍기</li>
+    <li>🪨 바위 캐기 = 돌멩이</li>
+    <li>🎣 낚시 = 물방울 · 진흙</li>
+    <li>🦋 벌레잡기 = 꽃잎 · 풀잎</li>
+  </ul>
+</section>
+
+<section class="page" data-title="반짝돌·철">
+  <h2>💎 공부해야 생기는 재료</h2>
+  <div class="card"><p><b>반짝돌</b> 💎</p>
+    <p>이틀 뒤 다시 나온 문제를 처음에 맞히면 1개!</p>
+    <p>오늘 미션을 하나도 안 틀리면 1개!</p>
+    <p>하루에 <b>2개</b>까지야.</p></div>
+  <div class="card"><p><b>철</b> 🔩 (우편함 택배)</p>
+    <p>트레이너 훈련을 열심히 한 주에 와.</p>
+    <p>미션을 한 주에 5일 끝내도 와!</p></div>
+</section>
+
+<section class="page" data-title="만들기">
+  <h2>🔨 만들기</h2>
+  <img class="shot" src="img/make-habitat.jpg" alt="만들기 창">
+  <p>재료로 물건을 <b>만드는</b> 곳이야.</p>
+  <p>칸이 4개 있어.<br>🌱 서식지 · 🎨 꾸미기 · ⛰️ 땅 · 🧰 도구</p>
+  <p>만든 건 <b>🎒 가방</b>에 들어가.</p>
+</section>
+
+<section class="page" data-title="가방">
+  <h2>🎒 가방에서 놓기</h2>
+  <img class="shot" src="img/bag2.jpg" alt="가방 안 물건">
+  <p>가방에서 물건을 눌러.</p>
+  <p>노랗게 반짝이는 칸을 누르면 놓여!</p>
+  <p class="tip">놓은 걸 다시 누르면 가방으로 돌아와.</p>
+</section>
+
+<section class="page" data-title="서식지">
+  <h2>🌱 서식지를 만들면 손님이 와</h2>
+  <p>점선 네모 밭 4칸을 채워 봐.</p>
+  <div class="card">
+    <p>🌳 풀숲 4개 → <b>풀 타입</b> 손님</p>
+    <p>🌳 풀숲 2 + 🫧 물웅덩이 2 → <b>물 타입</b> 손님</p>
+    <p>🌼 꽃밭 4개 → <b>벌레 · 페어리</b> 손님</p>
+  </div>
+  <p><b>다음 날</b> 손님이 놀러 와!</p>
+  <p class="tip">손님은 내 포켓몬이 아니야. 📖 방명록에 적혀.</p>
+</section>
+
+<section class="page" data-title="묘목">
+  <h2>🌳 열매나무 심기</h2>
+  <img class="shot" src="img/make-sapling.jpg" alt="묘목 만들기">
+  <p>🔨 만들기 → 🌱 서식지 칸 맨 아래에 있어.</p>
+  <p><b>열매 5 + 돌멩이 2</b>로 묘목을 만들어.</p>
+  <p>열매는 아무거나 섞어도 돼.</p>
+  <p class="tip">나무 자리가 꽉 차면 버튼 옆에 이유가 나와. 땅을 넓히면 자리가 늘어나!</p>
+</section>
+
+<section class="page" data-title="꾸미기">
+  <h2>🎨 꾸미기 · ⛰️ 땅 바꾸기</h2>
+  <img class="shot" src="img/make-decor.jpg" alt="꾸미기 물건">
+  <p>꽃, 울타리, 벤치로 마을을 꾸며 봐.</p>
+  <p>⛰️ 땅 칸에서는 연못, 흙길, 돌길을 만들어.</p>
+  <p class="tip">붙여 놓으면 길과 연못이 이어져!</p>
+</section>
+
+<section class="page" data-title="제작대">
+  <h2>🔮 제작대에서 볼 만들기</h2>
+  <img class="shot" src="img/workbench.jpg" alt="제작대 창">
+  <p>제작대에서는 <b>볼만</b> 만들어.</p>
+  <div class="recipe">
+    <span>🔴</span><span>몬스터볼 = 열매 10 + 돌멩이 3 + 반짝돌 1</span>
+    <span>🔵</span><span>슈퍼볼 = 열매 30 + 돌멩이 5 + 철 2</span>
+    <span>🟡</span><span>하이퍼볼 = 열매 99 + 반짝돌 1</span>
+  </div>
+  <p class="tip">"열매 183/10"은 열매를 다 합쳐 183개 가졌다는 뜻이야.</p>
+</section>
+
+<section class="page" data-title="만든 볼">
+  <h2>⚪ 만든 볼을 열면?</h2>
+  <div class="big">🔴 🔵 🟡</div>
+  <p>아직 도감에 없는 포켓몬이 나와!</p>
+  <p>마을에서 만난 포켓몬이 먼저 나와.</p>
+  <p>하이퍼볼일수록 드문 포켓몬이야.</p>
+  <p>가끔 ✨ 이로치도 나와!</p>
+  <p class="tip">볼은 🎒 가방에서 눌러 열어.</p>
+</section>
+
+<section class="page" data-title="방명록">
+  <h2>📖 방명록</h2>
+  <img class="shot" src="img/guestbook.jpg" alt="방명록">
+  <p>마을에 놀러 온 포켓몬이 적혀.</p>
+  <p>낚시, 벌레잡기로 만난 포켓몬도!</p>
+  <p class="tip">"?"는 아직 안 온 친구야.</p>
+</section>
+
+<section class="page" data-title="방명록 한 장">
+  <h2>🐾 포켓몬을 눌러 봐</h2>
+  <img class="shot" src="img/guestbook-entry.jpg" alt="방명록 한 장">
+  <ul>
+    <li>📅 처음 온 날</li>
+    <li>🐾 온 횟수 (하루에 도장 하나)</li>
+    <li>💗 좋아하는 열매 · 물건</li>
+    <li>💬 들은 말</li>
+  </ul>
+</section>
+
+<section class="page" data-title="도구">
+  <h2>🧰 낚싯대 · 잠자리채 만들기</h2>
+  <img class="shot" src="img/make-tools.jpg" alt="도구 만들기">
+  <p>🔨 만들기 → 🧰 도구 칸에서 만들어.</p>
+  <p>🎣 낚싯대 = 나뭇가지 3 + 풀잎 2</p>
+  <p>🦋 잠자리채 = 나뭇가지 2 + 꽃잎 2</p>
+  <p class="tip">도구는 <b>15번</b> 쓰면 부서져. 놓쳐도 1번 닳아. 다시 만들면 돼!</p>
+</section>
+
+<section class="page" data-title="벌레잡기">
+  <h2>🦋 벌레잡기</h2>
+  <div class="shots"><img class="shot" src="img/bug.jpg" alt="벌레잡기"><img class="shot" src="img/bug-result.jpg" alt="잡았다"></div>
+  <p>날아다니는 벌레를 눌러.</p>
+  <p>▼ 화살표가 <b>초록 칸</b>에 오면 "휘둘러!"</p>
+</section>
+
+<section class="page" data-title="낚시">
+  <h2>🎣 낚시</h2>
+  <div class="shots"><img class="shot" src="img/fish-spot.jpg" alt="낚시하기 버튼"><img class="shot" src="img/fish-bite.jpg" alt="퐁!"></div>
+  <p>물 옆에 서면 <b>🎣 낚시하기</b> 버튼이 나와.</p>
+  <p>찌가 <b>퐁!</b> 하면 바로 "당겨!"</p>
+  <p class="tip">너무 빨라도, 늦어도 놓쳐.</p>
+</section>
+
+<section class="page" data-title="잡으면">
+  <h2>🎁 잡으면 뭐가 나와?</h2>
+  <img class="shot" src="img/fish-result.jpg" alt="낚았다">
+  <p>재료가 나와. 가끔 열매도!</p>
+  <p>가끔 포켓몬을 만나. 📖 방명록에 적혀!</p>
+</section>
+
+<section class="page" data-title="마을점수">
+  <h2>🏠 마을점수</h2>
+  <img class="shot" src="img/level-2.jpg" alt="마을점수 받는 방법">
+  <ul>
+    <li>처음 보는 손님 → 🏠 3</li>
+    <li>손님이 온 서식지 → 🏠 2</li>
+    <li>물건 만들기 → 🏠 1</li>
+    <li>볼 · 묘목 만들기 → 🏠 2</li>
+    <li>열매 따기 → 🏠 1</li>
+  </ul>
+  <p class="tip">마을점수가 모이면 마을 레벨이 올라!</p>
+</section>
+
+<section class="page" data-title="열쇠">
+  <h2>🔑 열쇠로 땅 넓히기</h2>
+  <img class="shot" src="img/key.jpg" alt="열쇠로 땅 고르기">
+  <p>레벨이 오르면 🔑 열쇠 1개!</p>
+  <p>붙어 있는 🔒 땅 중에 하나를 골라 열어.</p>
+  <p>왼쪽, 오른쪽, 아래 중에서 골라.</p>
+  <p class="tip">위쪽 ❓를 누르면 다시 볼 수 있어.</p>
+</section>
+
+<section class="page" data-title="먹이기">
+  <h2>🍎 포켓몬에게 먹이기</h2>
+  <div class="big">🎒 ➜ 🍎 ➜ 😋</div>
+  <p>먹이기는 마을이 아니라 <b>첫 화면 가방</b>에서 해.</p>
+  <p>열매를 누르고, 먹일 포켓몬을 골라.</p>
+  <ul>
+    <li>⚡ 에너지 +5</li>
+    <li>💗 +5</li>
+    <li>배틀 힘 ★ +1</li>
+  </ul>
+  <p class="tip">마을 가방의 열매는 보기만 해. 열매는 볼 만들 때도 써!</p>
+</section>
+
+<section class="page" data-title="나가졌을 때">
+  <h2>😮 실수로 나가졌어!</h2>
+  <p>괜찮아! 마을에 있었으면 다시 마을로 돌아와.</p>
+  <p>포켓로그는 다시 들어가서 <b>이어하기</b>를 눌러.</p>
+  <p class="tip">게임을 끌 땐 폰의 홈 버튼을 눌러.</p>
+  <div class="big">👍</div>
+  <p style="text-align:center">이제 마을에서 놀아 보자!</p>
+</section>
+
+</main>
+<div class="nav">
+  <button class="prev" id="prev">◀ 앞으로</button>
+  <button class="next" id="next">다음 ▶</button>
+</div>
+<script>
+(function () {
+  var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
+  var at = 0;
+  var dots = document.createElement('div'); dots.className = 'dots';
+  pages.forEach(function () { dots.appendChild(document.createElement('i')); });
+  document.getElementById('pages').appendChild(dots);
+  var menu = document.getElementById('menu');
+  pages.forEach(function (p, i) {
+    if (i === 0) return;
+    var b = document.createElement('button');
+    b.textContent = p.querySelector('h2').textContent;
+    b.onclick = function () { go(i); };
+    menu.appendChild(b);
+  });
+  function go(i) {
+    at = Math.max(0, Math.min(pages.length - 1, i));
+    pages.forEach(function (p, k) { p.classList.toggle('on', k === at); });
+    Array.prototype.forEach.call(dots.children, function (d, k) { d.classList.toggle('on', k === at); });
+    document.getElementById('count').textContent = (at + 1) + ' / ' + pages.length;
+    document.getElementById('prev').disabled = at === 0;
+    document.getElementById('next').textContent = at === pages.length - 1 ? '처음으로 ↺' : '다음 ▶';
+    window.scrollTo(0, 0);
+  }
+  document.getElementById('prev').onclick = function () { go(at - 1); };
+  document.getElementById('next').onclick = function () { go(at === pages.length - 1 ? 0 : at + 1); };
+  // 옆으로 밀어서 넘기기
+  var sx = null, sy = null;
+  document.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (sx === null) return;
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? at + 1 : at - 1);
+    sx = null;
+  }, { passive: true });
+  // 닫기: 게임 안(창 속)이면 게임에 알리고, 따로 열었으면 게임 첫 화면으로
+  document.getElementById('close').onclick = function () {
+    if (window.parent !== window) window.parent.postMessage({ type: 'pq-guide-close' }, location.origin);
+    else location.assign('/');
+  };
+  go(0);
+})();
+</script>
+</body>
+</html>
