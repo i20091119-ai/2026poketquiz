@@ -13,6 +13,7 @@ import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMess
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { DECOR_BAG_MAX, DECOR_INFO, DECOR_ITEMS, DECOR_MAX, decorCells, decorCost, decorCostsNow, decorIndexAt, decorSpotProblem, TERRAIN_MAX, terrainIndexAt, type DecorKey, type DecorPlaced } from './village-decor.ts';
 import type { TerrainCell } from './village-map.ts';
+import { BERRY_KINDS, berryOfType, craftRules, ironForWeek, RECIPE_INFO, RECIPES, recipeCost, GATHER_ROCKS, STUDY_MAT_INFO, TREE_SPOTS, type RecipeKey } from './village-craft.ts';
 import { CELL_COUNT, CRAFT_INFO, CRAFTS, dayPickups, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
@@ -105,6 +106,8 @@ export type GameState = {
   gifts?: Gift[];
   /** 배틀 추가권: 그날 새 게임 횟수를 다 썼을 때 1장으로 한 번 더. 안 쓰면 남아 있음 */
   battleTickets?: number;
+  /** 열매가 들어온 곳별 개수 (2026-11-14부터 셈: 상자·선물·마을 열매나무·손님·제작 볼 대신 돌려받음) */
+  berrySources?: Partial<Record<BerrySource, number>>;
   /** 도전 이벤트 (이벤트 탭) */
   events?: { allClear?: AllClearEvent; streak?: StreakEvent };
   /** 부활권: 게임 오버된 포켓로그 판을 그 웨이브에서 체력 가득 채워 되살림 */
@@ -163,6 +166,25 @@ export type VillageState = {
   decor?: DecorPlaced[];
   /** 땅 바꾸기(2026-11-14): 풀밭을 물·흙길·돌길로 바꾼 칸 (없으면 지도 그대로) */
   terrain?: TerrainCell[];
+  // ---- 열매나무·제작대 (2026-11-14, lib/village-craft.ts). 모두 없으면 빈 값 ----
+  /** 심은 열매나무 (자리 = TREE_SPOTS 번호, 나무마다 열매 한 종류). 없으면 첫 자리에 파트너 계열 열매나무 1그루 */
+  trees?: { spot: number; berry: PotionKind; since: string }[];
+  /** 오늘 열매를 딴 나무 자리 (그날만, 안 딴 열매는 다음 날 사라짐) */
+  harvested?: { date: string; spots: number[] };
+  /** 오늘 바위에서 캔 돌멩이 수 */
+  gathered?: { date: string; n: number };
+  /** 오늘 말을 건 손님 (밭 번호) */
+  talked?: { date: string; plots: number[] };
+  /** 공부로만 얻는 재료: 철(훈련 택배)·반짝돌(복습 첫 정답) */
+  study?: { iron?: number; sparkle?: number };
+  /** 우편함 택배 (아직 안 연 것) */
+  mail?: { id: string; kind: 'iron'; amount: number; week: string; at: string }[];
+  /** 만들었지만 아직 안 심은 묘목 수 */
+  saplings?: number;
+  /** 만들었지만 아직 안 연 제작 볼 */
+  craftedBalls?: { id: string; kind: 'poke' | 'great' | 'ultra'; made: string }[];
+  /** 제작 기록 (날짜·레시피·쓴 열매·나온 포켓몬) */
+  craftLog?: { at: string; date: string; recipe: RecipeKey; berry: PotionKind; ballId?: string; result?: { species: number; shiny: boolean } | { returned: number } }[];
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -458,22 +480,37 @@ function rollPotion(potion: PotionKind): BoxItem {
 }
 /** 가진 열매 수 (상처약 제외) */
 export const berryCount = (state: GameState) => (state.potions ?? []).filter(p => p.kind !== 'potion').length;
-/** 열매가 growth().berryCap개 이상이면 상자에서 열매 대신 볼 (2026-11-12: 열매가 쌓이기만 하는 문제) */
-const berryCapped = (state: GameState) => berryCount(state) >= growth().berryCap;
+/** 이 종류 열매를 몇 개 가졌는지 */
+export const berryOf = (state: GameState, kind: PotionKind) => (state.potions ?? []).filter(p => p.kind === kind).length;
+/**
+ * 열매 보유 상한: 종류마다 growth().berryCap개(기본 99). 가득 찬 종류의 열매가 상자에서 나오면 대신 볼.
+ * (2026-11-14 부모님: 11/12의 "열매 10개 넘으면 볼" 규칙을 없애고 상한 99로. 레시피가 "열매 한 종류"라 종류마다 셈)
+ */
+export const berryCapped = (state: GameState, kind: PotionKind) => kind !== 'potion' && berryOf(state, kind) >= growth().berryCap;
+/** 열매가 들어온 곳 (보호자 내보내기 "열매 들어온 곳별 개수") */
+export type BerrySource = 'box' | 'gift' | 'tree' | 'guest' | 'returned';
+function noteBerry(state: GameState, source: BerrySource, n = 1) {
+  const s = state.berrySources ??= {};
+  s[source] = (s[source] ?? 0) + n;
+}
 /** 열매 대신 나오는 볼: 랜덤상자 표의 몬스터볼·슈퍼볼 비율 그대로 */
 const CAP_BALL_TABLE = DAILY_BOX_TABLE.filter(r => r.item.kind === 'ball' && (r.item.ball === 'poke' || r.item.ball === 'great'));
 /** 상자 표에서 하나 뽑기 (열매가 많으면 열매 칸은 몬스터볼·슈퍼볼로) */
 function rollBoxItem(state: GameState, table: readonly (typeof DAILY_BOX_TABLE)[number][], random: Random): BoxItem {
   const row = weighted<(typeof DAILY_BOX_TABLE)[number]>(table, random);
-  if (row.item.kind === 'potion' && row.item.potion !== 'potion' && berryCapped(state)) {
+  if (row.item.kind === 'potion' && berryCapped(state, row.item.potion)) {
     const ball = weighted<(typeof DAILY_BOX_TABLE)[number]>(CAP_BALL_TABLE, random).item as { kind: 'ball'; ball: BallKind };
     return { kind: 'ball', ball: ball.ball };
   }
   return row.item.kind === 'potion' ? rollPotion(row.item.potion) : { kind: 'ball', ball: row.item.ball };
 }
-/** 보상을 주고, 볼이면 새 볼 id를 돌려줍니다. */
-function grant(state: GameState, item: BoxItem): string | null {
-  if (item.kind === 'potion') { (state.potions ??= []).push({ id: nextId(state, 'm'), kind: item.potion }); return null; }
+/** 보상을 주고, 볼이면 새 볼 id를 돌려줍니다. 열매면 들어온 곳(source)을 셈 */
+function grant(state: GameState, item: BoxItem, source: BerrySource = 'box'): string | null {
+  if (item.kind === 'potion') {
+    (state.potions ??= []).push({ id: nextId(state, 'm'), kind: item.potion });
+    if (item.potion !== 'potion') noteBerry(state, source);
+    return null;
+  }
   if (item.kind === 'ticket') { state.battleTickets = (state.battleTickets ?? 0) + 1; return null; }
   const id = nextId(state, 'b');
   state.balls.push({ id, kind: item.ball });
@@ -491,6 +528,8 @@ export type OfflineWeek = {
   goal: number;
   /** 정산 (주가 끝난 뒤 처음 앱을 열 때): 합계, 조각을 줬는지, 그때 보석 상태(주간 기록 팝업 연출용) */
   settled?: { at: string; score: number; piece: boolean; stage: number; need: number; before: number; lateAt?: string };
+  /** 이 주 정산으로 우편함에 보낸 철 (2026-11-14부터 정산한 주만, 고쳐서 합계가 오르면 차이만큼 더 보냄) */
+  iron?: number;
   /** 부모님 응원 한 줄 (그 주의 주간 기록 팝업에 보임) */
   cheer?: { by: GiftSender; text: string; at: string };
 };
@@ -969,6 +1008,13 @@ export type Action =
   | { type: 'decorCraft'; item: DecorKey; stay?: boolean }
   | { type: 'decorPlace'; item: DecorKey; x: number; y: number; variant?: number; stay?: boolean }
   | { type: 'decorTake'; x: number; y: number; stay?: boolean }
+  | { type: 'villageHarvest'; spot: number; stay?: boolean }
+  | { type: 'villageGather'; rock: number; stay?: boolean }
+  | { type: 'villageTalk'; plot: number; stay?: boolean }
+  | { type: 'villageMail'; stay?: boolean }
+  | { type: 'villageMake'; recipe: RecipeKey; berry: PotionKind; stay?: boolean }
+  | { type: 'villagePlant'; spot: number; berry: PotionKind; stay?: boolean }
+  | { type: 'openCraftedBall'; id: string }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1156,6 +1202,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       // 이틀 지나 다시 나온 문제를 첫 시도에 맞히면 복습 끝. 다시 풀기로 맞힌 문제(오늘 틀림)는 이틀 뒤 한 번 더 나옵니다.
       const reviewed = dueReview && firstTry;
       if (reviewed) delete prog.review[q.id];
+      // 반짝돌 (2026-11-14 열매·제작대): 복습 문제를 첫 시도에 맞히면
+      const sparkle = reviewed ? giveSparkle(state) : 0;
       const newlySolved = !prog.solved.includes(q.id);
       if (newlySolved) prog.solved.push(q.id);
       // 첫 시도에 맞혔을 때만 그 영역의 정답으로 기록 (다시 풀어서 맞힌 것은 이미 오답으로 기록됨)
@@ -1172,7 +1220,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         hearts = giveTeamHearts(state);
       }
       return {
-        correct: true, explanation: q.explanation, reviewed, hearts,
+        correct: true, explanation: q.explanation, reviewed, hearts, sparkle,
         gained: rewarded ? { type: q.type, amount: statGain, exp: REWARD_PER_ANSWER.exp } : undefined,
         message: reviewed ? '지난번에 틀린 문제, 이번엔 맞혔어!' : '정답이야!',
         /** 이 답으로 오늘의 미션이 끝나 사탕을 보냈으면 그 내용 */
@@ -1300,6 +1348,116 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (item) bag[item] = (bag[item] ?? 0) + 1;
       return { message: item ? `풀밭으로 되돌렸어. ${eulReul(DECOR_INFO[item].name)} 가방에 넣었어.` : '풀밭으로 되돌렸어.' };
     }
+    // ---------- 열매나무·제작대 (2026-11-14, lib/village-craft.ts) ----------
+    case 'villageHarvest': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const trees = ensureTrees(state, v, ctx.today);
+      const tree = trees.find(t => t.spot === action.spot);
+      if (!tree) fail('여기에는 열매나무가 없어요.');
+      if (v.harvested?.date !== ctx.today) v.harvested = { date: ctx.today, spots: [] };
+      if (v.harvested.spots.includes(tree.spot)) fail('이 나무는 오늘 다 땄어! 내일 또 열려.');
+      if (!treeGrown(tree, ctx.today)) fail('오늘 심은 나무야. 내일부터 열매가 열려!');
+      const label = POTIONS[tree.berry].label;
+      if (berryCapped(state, tree.berry)) fail(`${iGa(label)} 가방에 가득 찼어! (최대 ${growth().berryCap}개) 제작대에서 볼을 만들어 볼까?`);
+      v.harvested.spots.push(tree.spot);
+      (state.potions ??= []).push({ id: nextId(state, 'm'), kind: tree.berry });
+      noteBerry(state, 'tree');
+      return { berry: tree.berry, message: `${eulReul(label)} 땄어! 🍎` };
+    }
+    case 'villageGather': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!Number.isInteger(action.rock) || !GATHER_ROCKS[action.rock]) fail('여기에는 바위가 없어요.');
+      const limit = craftRules().stoneDaily;
+      if (v.gathered?.date !== ctx.today) v.gathered = { date: ctx.today, n: 0 };
+      if (v.gathered.n >= limit) fail(`오늘은 돌멩이를 다 캤어! (하루 ${limit}개) 내일 또 캘 수 있어.`);
+      const cap = villageRules().matCap;
+      if ((v.mats.stone ?? 0) >= cap) fail(`돌멩이가 가방에 가득 찼어! (최대 ${cap}개)`);
+      v.gathered.n += 1;
+      v.mats.stone = (v.mats.stone ?? 0) + 1;
+      v.gained = (v.gained ?? 0) + 1;
+      return { message: `돌멩이를 캤어! 🪨 (오늘 ${v.gathered.n}/${limit})` };
+    }
+    case 'villageTalk': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const guest = v.guests?.date === ctx.today ? v.guests.list.find(g => g.plot === action.plot) : undefined;
+      if (!guest) fail('지금은 손님이 없어요.');
+      if (v.talked?.date !== ctx.today) v.talked = { date: ctx.today, plots: [] };
+      const name = species(guest.species).name;
+      if (v.talked.plots.includes(action.plot)) return { gift: null, message: `${name}: 오늘 정말 즐거웠어!` };
+      v.talked.plots.push(action.plot);
+      if (random() * 100 >= craftRules().guestChance) return { gift: null, message: `${name}: 만나서 반가워!` };
+      const kind = pick(BERRY_KINDS, random);
+      if (berryCapped(state, kind)) return { gift: null, message: `${name}: ${POTIONS[kind].label}을 주고 싶었는데 가방이 가득 찼네!` };
+      (state.potions ??= []).push({ id: nextId(state, 'm'), kind });
+      noteBerry(state, 'guest');
+      return { gift: kind, message: `${name}: 이거 선물이야! 🎁 ${eulReul(POTIONS[kind].label)} 받았어!` };
+    }
+    case 'villageMail': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const mail = v.mail ?? [];
+      if (!mail.length) return { iron: 0, message: '아직 택배가 없어. 트레이너 훈련을 열심히 하면 철이 와!' };
+      const iron = mail.reduce((n, m) => n + m.amount, 0);
+      v.study = { ...v.study, iron: (v.study?.iron ?? 0) + iron };
+      v.mail = [];
+      return { iron, message: `📦 택배가 왔어! 철 ${iron}개를 받았어. 트레이너 훈련 덕분이야!` };
+    }
+    case 'villageMake': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!RECIPES.includes(action.recipe)) fail('만들 것을 다시 골라 주세요.');
+      if (!BERRY_KINDS.includes(action.berry)) fail('어떤 열매를 쓸지 골라 줘.');
+      const info = RECIPE_INFO[action.recipe];
+      const cost = recipeCost(action.recipe);
+      if (action.recipe === 'sapling' && ensureTrees(state, v, ctx.today).length + (v.saplings ?? 0) >= craftRules().treeMax) fail(`열매나무는 ${craftRules().treeMax}그루까지 키울 수 있어!`);
+      const short = craftShortage(state, v, action.berry, cost);
+      if (short) fail(short);
+      // 재료 빼기: 고른 종류 열매 → 돌멩이 → 철 → 반짝돌
+      let left = cost.berry;
+      state.potions = (state.potions ?? []).filter(p => !(p.kind === action.berry && left-- > 0));
+      v.mats.stone = (v.mats.stone ?? 0) - cost.stone;
+      v.study = { iron: (v.study?.iron ?? 0) - cost.iron, sparkle: (v.study?.sparkle ?? 0) - cost.sparkle };
+      const log: NonNullable<VillageState['craftLog']>[number] = { at: ctx.now, date: ctx.today, recipe: action.recipe, berry: action.berry };
+      (v.craftLog ??= []).push(log);
+      if (action.recipe === 'sapling') {
+        v.saplings = (v.saplings ?? 0) + 1;
+        return { recipe: action.recipe, message: '열매나무 묘목을 만들었어! 🌱 마을에 심어 보자.' };
+      }
+      const id = nextId(state, 'c');
+      (v.craftedBalls ??= []).push({ id, kind: action.recipe, made: ctx.today });
+      log.ballId = id;
+      return { recipe: action.recipe, ballId: id, message: `${eulReul(info.name)} 만들었어! 🔨 열면 아직 못 만난 포켓몬이 나와!` };
+    }
+    case 'villagePlant': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if ((v.saplings ?? 0) < 1) fail('묘목이 없어. 제작대에서 열매나무 묘목을 먼저 만들어 보자!');
+      if (!BERRY_KINDS.includes(action.berry)) fail('어떤 열매나무로 키울지 골라 줘.');
+      const trees = ensureTrees(state, v, ctx.today);
+      if (!Number.isInteger(action.spot) || !TREE_SPOTS[action.spot] || action.spot >= craftRules().treeMax) fail('여기에는 심을 수 없어요.');
+      if (trees.some(t => t.spot === action.spot)) fail('여기에는 벌써 나무가 있어.');
+      trees.push({ spot: action.spot, berry: action.berry, since: ctx.today });
+      v.saplings = (v.saplings ?? 0) - 1;
+      return { message: `${POTIONS[action.berry].label} 나무를 심었어! 🌳 내일부터 열매가 열려.` };
+    }
+    case 'openCraftedBall': {
+      const v = state.village;
+      const index = v?.craftedBalls?.findIndex(b => b.id === action.id) ?? -1;
+      if (!v || index < 0) fail('볼을 찾을 수 없어요.');
+      const [ball] = v.craftedBalls!.splice(index, 1);
+      const log = v.craftLog?.find(l => l.ballId === ball.id);
+      const found = pickCraftedSpecies(state, ball.kind, random, ctx.shinyChance?.ultra);
+      if (!found) {
+        // 만날 포켓몬이 하나도 없으면 볼 대신 열매를 돌려줌
+        const berry = log?.berry ?? 'apple';
+        const n = Math.max(0, Math.min(recipeCost(ball.kind).berry, growth().berryCap - berryOf(state, berry)));
+        for (let i = 0; i < n; i++) (state.potions ??= []).push({ id: nextId(state, 'm'), kind: berry });
+        noteBerry(state, 'returned', n);
+        if (log) log.result = { returned: n };
+        return { caught: 0, tier: 0, shiny: false, duplicate: false, returned: { berry, n }, message: `이제 만날 포켓몬이 없어! ${POTIONS[berry].label} ${n}개를 돌려받았어.` };
+      }
+      const result = addPokemon(state, found.id, ctx.now, found.shiny);
+      if (log) log.result = { species: found.id, shiny: found.shiny };
+      const name = found.shiny ? shinyName(found.id) : species(found.id).name;
+      return { caught: found.id, tier: found.tier, shiny: found.shiny, crafted: ball.kind, ...result, message: found.shiny ? `✨ 이로치다! ${eulReul(name)} 만났어!` : `${eulReul(name)} 만났어! 처음 만나는 친구야!` };
+    }
     case 'quizTime': {
       // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 앱 사용 시간)
       const seconds = Number(action.seconds);
@@ -1351,11 +1509,10 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         ...others.map(kind => ({ kind, weight: EXPLORE_ITEM_WEIGHTS.otherBerry / others.length })),
         { kind: 'potion' as PotionKind, weight: EXPLORE_ITEM_WEIGHTS.potion },
       ];
-      // 열매가 많으면 열매 칸은 몬스터볼·슈퍼볼로 (상처약은 그대로)
-      const capped = berryCapped(state);
+      // 가득 찬 종류의 열매 칸은 몬스터볼·슈퍼볼로 (상처약은 그대로)
       const items: BoxItem[] = [0, 1, 2].map(() => {
         const kind = weighted<(typeof table)[number]>(table, random).kind;
-        if (capped && kind !== 'potion') {
+        if (berryCapped(state, kind)) {
           const ball = weighted<(typeof DAILY_BOX_TABLE)[number]>(CAP_BALL_TABLE, random).item as { kind: 'ball'; ball: BallKind };
           return { kind: 'ball', ball: ball.ball };
         }
@@ -1500,7 +1657,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
         case 'berry': {
           if (!action.subject || !SUBJECTS.includes(action.subject)) fail('어떤 열매를 받을지 계열을 골라 줘.');
           item = rollPotion(SUBJECT_BERRY[action.subject]);
-          grant(state, item);
+          grant(state, item, 'gift');
           opened.got = POTIONS[SUBJECT_BERRY[action.subject]].label;
           break;
         }
@@ -2023,6 +2180,76 @@ function village(state: GameState): VillageState {
   while (v.habitats.length < PLOTS.length) v.habitats.push(null);
   return v;
 }
+// ---------- 열매나무·제작대 도우미 ----------
+/** 파트너 계열의 열매 (첫 열매나무) */
+function partnerBerry(state: GameState): PotionKind {
+  const p = state.owned.find(o => o.uid === state.partner);
+  return p ? berryOfType(species(p.species).types[0]) : 'apple';
+}
+/** 심은 열매나무 (없으면 보여 주기용 첫 나무 1그루, 저장은 하지 않음) */
+export function treesOf(state: GameState, today: string): NonNullable<VillageState['trees']> {
+  return state.village?.trees ?? [{ spot: 0, berry: partnerBerry(state), since: today }];
+}
+/** 묘목으로 심은 나무는 다음 날부터 열매가 열림 (첫 나무는 처음부터) */
+const treeGrown = (t: { spot: number; since: string }, today: string) => t.spot === 0 || t.since < today;
+/** 열매나무 기록을 만듦 (첫 나무 1그루가 처음부터 있음) */
+function ensureTrees(state: GameState, v: VillageState, today: string) {
+  return v.trees ??= [{ spot: 0, berry: partnerBerry(state), since: today }];
+}
+/** 재료가 모자라면 초1 말로 무엇이 몇 개 모자란지 (다 있으면 null) */
+export function craftShortage(state: GameState, v: VillageState | undefined, berry: PotionKind, cost: { berry: number; stone: number; iron: number; sparkle: number }): string | null {
+  const need: string[] = [];
+  const b = berryOf(state, berry);
+  if (b < cost.berry) need.push(`${POTIONS[berry].label} ${cost.berry - b}개`);
+  const stone = v?.mats?.stone ?? 0;
+  if (stone < cost.stone) need.push(`돌멩이 ${cost.stone - stone}개`);
+  const iron = v?.study?.iron ?? 0;
+  if (iron < cost.iron) need.push(`철 ${cost.iron - iron}개`);
+  const sparkle = v?.study?.sparkle ?? 0;
+  if (sparkle < cost.sparkle) need.push(`반짝돌 ${cost.sparkle - sparkle}개`);
+  if (!need.length) return null;
+  const hint = iron < cost.iron ? ` (${STUDY_MAT_INFO.iron.how})` : sparkle < cost.sparkle ? ` (${STUDY_MAT_INFO.sparkle.how})` : '';
+  return `${need.join(', ')}가 더 필요해!${hint}`;
+}
+/**
+ * 제작 볼에서 나올 포켓몬: 아직 도감에 없는 1단계 포켓몬만 (전설·환상 제외, 등급 0~2).
+ * 그 등급에 없으면 가까운 등급 → 그래도 없으면 아직 없는 이로치(1단계) → 그것도 없으면 null(열매를 돌려줌).
+ * 하이퍼볼만 이로치 확률(하이퍼볼 확률·보호자 스위치를 따름).
+ */
+export function pickCraftedSpecies(state: GameState, kind: 'poke' | 'great' | 'ultra', random: Random, ultraShinyChance?: number): { id: number; tier: number; shiny: boolean } | null {
+  const tier = RECIPE_INFO[kind].tier ?? 0;
+  const order = [tier, tier + 1, tier - 1, tier + 2, tier - 2].filter(t => t >= 0 && t <= 2);
+  for (const t of order) {
+    const pool = CATCH_POOLS[t].filter(id => !state.dex.includes(id));
+    if (!pool.length) continue;
+    const shiny = kind === 'ultra' && random() * 100 < (ultraShinyChance ?? SHINY_CHANCE_DEFAULT.ultra);
+    return { id: pick(pool, random), tier: t, shiny };
+  }
+  for (const t of order) {
+    const pool = CATCH_POOLS[t].filter(id => !(state.shiny ?? []).includes(id));
+    if (pool.length) return { id: pick(pool, random), tier: t, shiny: true };
+  }
+  return null;
+}
+/** 철: 훈련 주간 정산 때 마을 우편함 택배로 (공부로만). 이미 보낸 만큼은 빼고 보냄 */
+function sendIron(state: GameState, week: { iron?: number }, score: number, ws: string, now: string): boolean {
+  const want = ironForWeek(score);
+  const more = want - (week.iron ?? 0);
+  if (more <= 0) return false;
+  week.iron = want;
+  const v = village(state);
+  (v.mail ??= []).push({ id: nextId(state, 'k'), kind: 'iron', amount: more, week: ws, at: now });
+  return true;
+}
+/** 반짝돌: 이틀 뒤 복습 문제를 첫 시도에 맞히면 (공부로만) */
+function giveSparkle(state: GameState): number {
+  const n = craftRules().sparkle;
+  if (n <= 0) return 0;
+  const v = village(state);
+  v.study = { ...v.study, sparkle: (v.study?.sparkle ?? 0) + n };
+  return n;
+}
+
 /** 오늘 일일미션(또는 복습 모드)을 다 풀었으면 마을이 열림 */
 export const villageOpenToday = (state: GameState, today: string) => state.daily?.date === today && dailyFinished(state);
 /** 오늘 마을에 있었던 초 */
@@ -2139,9 +2366,31 @@ export function villageView(state: GameState, today: string) {
     decor: (v?.decor ?? []).filter(d => DECOR_ITEMS.includes(d.item)),
     terrain: v?.terrain ?? [],
     decorCosts: decorCostsNow(),
+    /** 열매나무·제작대 (2026-11-14) */
+    craft: craftView(state, today),
   };
 }
 export type VillageView = ReturnType<typeof villageView>;
+/** 마을 화면의 열매나무·제작대 정보 (보기만, 기록은 바꾸지 않음) */
+function craftView(state: GameState, today: string) {
+  const v = state.village;
+  const rules = craftRules();
+  const harvested = v?.harvested?.date === today ? v.harvested.spots : [];
+  return {
+    rules,
+    recipes: Object.fromEntries(RECIPES.map(k => [k, recipeCost(k)])) as Record<RecipeKey, ReturnType<typeof recipeCost>>,
+    trees: treesOf(state, today).map(t => ({ ...t, grown: treeGrown(t, today), ready: !harvested.includes(t.spot) && treeGrown(t, today) })),
+    saplings: v?.saplings ?? 0,
+    stoneLeft: Math.max(0, rules.stoneDaily - (v?.gathered?.date === today ? v.gathered.n : 0)),
+    iron: v?.study?.iron ?? 0,
+    sparkle: v?.study?.sparkle ?? 0,
+    mail: (v?.mail ?? []).reduce((n, m) => n + m.amount, 0),
+    balls: v?.craftedBalls ?? [],
+    berries: Object.fromEntries(BERRY_KINDS.map(k => [k, berryOf(state, k)])) as Record<PotionKind, number>,
+    berryCap: growth().berryCap,
+    talked: v?.talked?.date === today ? v.talked.plots : [],
+  };
+}
 /** 보호자 화면용 마을 요약 */
 export function villageReport(state: GameState, today: string) {
   const view = villageView(state, today);
@@ -2151,6 +2400,8 @@ export function villageReport(state: GameState, today: string) {
     guests: view.guests.map(g => ({ species: g.species, name: species(g.species).name, habitat: HABITAT_INFO[g.habitat].name })),
     met: (state.met ?? []).length, open: view.open, time: view.time,
     decorPlaced: view.decor.length, decorBag: view.decorBag, terrainChanged: view.terrain.length,
+    craft: { trees: view.craft.trees.length, iron: view.craft.iron, sparkle: view.craft.sparkle, mail: view.craft.mail, balls: view.craft.balls.length, made: state.village?.craftLog?.length ?? 0 },
+    berrySources: state.berrySources ?? {},
   };
 }
 /** 시뮬레이션: 문제은행을 다 푼 상태로 (복습 모드 확인용, 시험용 기록에만) */
@@ -2160,6 +2411,37 @@ export function simBankDone(state: GameState, bank: ActiveBank, today: string, r
   prog.review = {};
   if (state.daily?.date === today) state.daily = null;
   ensureDaily(state, bank, today, random);
+}
+/**
+ * 시뮬레이션(시험용 기록에만): 열매·제작대 확인용.
+ * berries = 열매 종류마다 +20(상한까지) / berry99 = 사과열매를 상한까지 / study = 철 +2·반짝돌 +1 / stone = 돌멩이 +10 /
+ * reviewDue = 맞힌 문제 2개를 "이틀 전에 틀린 복습 문제"로 (오늘 일일미션·탐험에 다시 나와 반짝돌 확인) / dexFull = 1~2등급 포켓몬을 모두 도감에(대체 규칙 확인)
+ */
+export function simVillageCraft(state: GameState, op: string, bank: ActiveBank | null, today: string): string {
+  const cap = growth().berryCap;
+  const v = village(state);
+  const add = (kind: PotionKind, n: number) => { for (let i = 0; i < n && berryOf(state, kind) < cap; i++) (state.potions ??= []).push({ id: nextId(state, 'm'), kind }); };
+  switch (op) {
+    case 'berries': for (const k of BERRY_KINDS) add(k, 20); return '열매를 종류마다 20개씩 넣었어요(상한까지).';
+    case 'berry99': add('apple', cap); return `사과열매를 ${cap}개까지 채웠어요. 상자에서 사과열매 대신 볼이 나오는지 보세요.`;
+    case 'study': v.study = { iron: (v.study?.iron ?? 0) + 2, sparkle: (v.study?.sparkle ?? 0) + 1 }; return '철 2개·반짝돌 1개를 넣었어요.';
+    case 'stone': v.mats.stone = Math.min(villageRules().matCap, (v.mats.stone ?? 0) + 10); return '돌멩이를 10개 넣었어요.';
+    case 'reviewDue': {
+      if (!bank) return '공개한 문제은행이 없어요.';
+      const prog = progress(state, bank.id);
+      const ids = prog.solved.slice(0, 2);
+      if (!ids.length) return '맞힌 문제가 아직 없어요. 문제를 몇 개 푼 뒤 눌러 주세요.';
+      for (const id of ids) prog.review[id] = shiftDate(today, -REVIEW_RULES.delayDays);
+      prog.solved = prog.solved.filter(id => !ids.includes(id));
+      if (state.daily?.date === today && !dailyFinished(state)) state.daily = null;
+      return `맞힌 문제 ${ids.length}개를 오늘 복습할 문제로 만들었어요. 탐험이나 일일미션에서 처음에 맞히면 반짝돌이 와요.`;
+    }
+    case 'dexFull': {
+      for (const t of [0, 1, 2]) for (const id of CATCH_POOLS[t]) if (!state.dex.includes(id)) state.dex.push(id);
+      return '흔함·조금 드묾·희귀 포켓몬을 모두 도감에 넣었어요(시험용). 제작 볼을 열면 이로치나 열매 돌려받기가 나와요.';
+    }
+  }
+  return '시험 항목을 다시 골라 주세요.';
 }
 /** 시뮬레이션: 재료 종류마다 +n (최대까지) */
 export function simVillageMats(state: GameState, n: number) {
@@ -2610,6 +2892,7 @@ export function syncOffline(state: GameState, ctx: LegendCtx): boolean {
     if (!hasMarks && !week.settled) continue;
     const score = weekScore(off.marks, ws);
     if (week.settled) {
+      if (week.iron !== undefined && sendIron(state, week, score, ws, ctx.now)) changed = true;
       if (week.settled.piece || score < week.goal) continue;
       const lg = legendOf(state, rules, ctx.now);
       week.settled = { ...week.settled, score, piece: true, stage: lg.stage, need: lg.need, before: lg.pieces, lateAt: ctx.now };
@@ -2621,6 +2904,8 @@ export function syncOffline(state: GameState, ctx: LegendCtx): boolean {
     const piece = score >= week.goal;
     week.settled = { at: ctx.now, score, piece, stage: lg.stage, need: lg.need, before: lg.pieces };
     if (piece) addLegendPieces(state, 1, 'week', ctx, ws);
+    week.iron = 0;
+    sendIron(state, week, score, ws, ctx.now);
     changed = true;
   }
   return changed;

@@ -5,6 +5,7 @@
 import assets from './data/village-assets.json' with { type: 'json' };
 import { MAP_H, MAP_W, PLOTS } from './village.ts';
 import type { CraftKey } from './village.ts';
+import { GATHER_ROCKS, MAILBOX, WORKBENCH } from './village-craft.ts';
 
 export const TILE_PX = assets.tile;
 /** 마을을 걷는 아이 캐릭터 (2026-11-13 부모님: 포켓로그처럼 서준이가 마을에 있어야 함). 그림은 assets.players */
@@ -62,10 +63,13 @@ export const MAP_OBJECTS: MapObject[] = [
   { kind: 'treeRound', x: 0, y: 9 }, { kind: 'treeRound', x: 10, y: 9 },
   { kind: 'treePine', x: 0, y: 17 }, { kind: 'treeRound', x: 10, y: 17 },
   // 꾸밈 (지나갈 수 있음)
-  { kind: 'flowerWhite', x: 3, y: 4 }, { kind: 'flowerYellow', x: 9, y: 2 }, { kind: 'flowerPink', x: 2, y: 12 }, { kind: 'flowerBlue', x: 9, y: 9 },
-  { kind: 'flowerYellow', x: 4, y: 14 }, { kind: 'stump', x: 9, y: 17 }, { kind: 'flowerOrange', x: 3, y: 9 }, { kind: 'mushroom', x: 7, y: 12 },
+  { kind: 'flowerWhite', x: 2, y: 7 }, { kind: 'flowerYellow', x: 9, y: 2 }, { kind: 'flowerPink', x: 2, y: 12 }, { kind: 'flowerBlue', x: 9, y: 9 },
+  { kind: 'flowerYellow', x: 4, y: 14 }, { kind: 'stump', x: 11, y: 16 }, { kind: 'flowerOrange', x: 3, y: 9 }, { kind: 'mushroom', x: 7, y: 12 },
   { kind: 'rock', x: 11, y: 13 }, { kind: 'flowerRed', x: 7, y: 19 }, { kind: 'mushroomBrown', x: 2, y: 3 }, { kind: 'flowerWhite', x: 11, y: 3 },
   { kind: 'lily', x: 2, y: 16 }, { kind: 'bushRose', x: 4, y: 17 },
+  // 열매·제작대 (2026-11-14): 제작대·우편함, 돌멩이를 캘 바위 (자리는 lib/village-craft.ts)
+  { kind: 'workbench', x: WORKBENCH.x, y: WORKBENCH.y }, { kind: 'mailbox', x: MAILBOX.x, y: MAILBOX.y },
+  ...GATHER_ROCKS.filter(r => !(r.x === 11 && r.y === 13)).map((r): MapObject => ({ kind: 'rock', x: r.x, y: r.y })),
 ];
 
 const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;

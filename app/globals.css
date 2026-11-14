@@ -1136,7 +1136,7 @@ button.study-day:active { transform: scale(.94); }
 .vcanvas { display: block; image-rendering: pixelated; }
 .village-ground .vsprite, .village-entrance .vsprite { image-rendering: pixelated; }
 .vquad { display: block; }
-.village-ground { inset: 0; }
+.village-ground { inset: 0; pointer-events: none; }
 .village-tile { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; line-height: 1; image-rendering: pixelated; }
 .village-cell { position: absolute; z-index: 2; border: 2px dashed rgba(255,255,255,.6); background: transparent; padding: 0; display: grid; place-items: center; }
 .village-cell.filled { border-color: transparent; }
@@ -1229,3 +1229,33 @@ img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
 .village-make-tabs { display: flex; gap: 6px; }
 .village-make-tab { flex: 1; padding: 8px 4px; border: 2px solid #d9e4cb; border-radius: 12px; background: #fff; font: inherit; font-weight: 800; font-size: 14px; color: #3b5a3f; }
 .village-make-tab.on { border-color: #4f9a3d; background: #eaf7e2; color: #1f4a1a; }
+
+/* 포켓몬 마을 열매나무·제작대 (2026-11-14) */
+body:has(.village-screen) [data-slot="dialog-overlay"], body:has(.village-screen) [data-slot="dialog-content"] { z-index: 70; }
+.village-hit { position: absolute; z-index: 2; padding: 0; border: 0; background: transparent; border-radius: 8px; }
+.village-hit.ready { animation: village-ready 1.6s ease-in-out infinite; }
+@keyframes village-ready { 0%, 100% { box-shadow: none; } 50% { box-shadow: inset 0 0 0 3px rgba(255,236,120,.75); } }
+.village-cell.target.plant { z-index: 9; border-color: rgba(140,255,140,.95); background: rgba(160,255,160,.22); }
+.village-study { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+.craft-stock { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; font-size: 14px; margin-bottom: 6px; }
+.craft-stock span { display: inline-flex; align-items: center; gap: 4px; }
+.craft-berries { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 10px; }
+.craft-berry { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 10px; border: 2px solid #d9e4d0; background: #fff; color: #253; font-size: 12px; }
+.craft-berry.on { border-color: #f0a020; background: #fff6dc; box-shadow: 0 0 0 2px rgba(240,160,32,.35); }
+.craft-berry b { font-size: 13px; }
+.berry-icon { object-fit: contain; image-rendering: auto; }
+.village-cost .ok { color: #2a7a2a; }
+.village-cost .lack { color: #c0392b; font-weight: 700; }
+.village-recipe.short .village-recipe-icon { opacity: .5; }
+button.dim { opacity: .45; filter: grayscale(.6); }
+.craft-note { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: #fff3d6; color: #6b4300; font-size: 14px; font-weight: 600; }
+.craft-making { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0; }
+.craft-making img, .craft-made-pic img { image-rendering: auto; }
+.craft-hammer { font-size: 44px; display: inline-block; transform-origin: 80% 80%; animation: craft-hammer .3s ease-in-out infinite alternate; }
+@keyframes craft-hammer { from { transform: rotate(-35deg); } to { transform: rotate(15deg); } }
+.craft-made { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.craft-made-pic { animation: craft-pop .5s ease-out; }
+@keyframes craft-pop { 0% { transform: scale(.3); opacity: 0; } 70% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 1; } }
+.craft-balls { margin-top: 10px; }
+.craft-ball-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.craft-ball { display: flex; flex-direction: column; align-items: center; padding: 4px 6px; border-radius: 10px; border: 1px solid #d9e4d0; background: #fff; color: #253; }

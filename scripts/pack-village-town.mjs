@@ -48,6 +48,18 @@ const SOURCES = {
     license: 'CC0 1.0 (출처 표시 안 해도 됨)',
     url: 'https://wiki.tuxemon.org/index.php?title=File:Objects_by_ArMM1998.png',
   },
+  george: {
+    name: 'Tuxemon "Furniture and Fittings" (제작대 가게)',
+    by: 'George_',
+    license: 'CC BY 3.0',
+    url: 'https://wiki.tuxemon.org/index.php?title=File:Furniture_and_Fittings_by_George.png',
+  },
+  drawn: {
+    name: '직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림)',
+    by: '포켓몬 배움 탐험대',
+    license: '열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용',
+    url: '',
+  },
   isaiah: {
     name: 'Tuxemon "Outdoor odds and ends"',
     by: 'Isaiah658',
@@ -63,9 +75,12 @@ const SOURCES = {
 };
 const ODDS = 'Outdoor_odds_and_ends_by_Isaiah658.png';
 const ARMM = 'Objects_by_ArMM1998.png';
+const GEORGE = 'Furniture_and_Fittings_by_George.png';
+/** 직접 그린 그림 (file 자리에 넣는 표시) */
+const DRAWN = 'drawn';
 const OUT = 'core_outdoor.png', NATURE = 'core_outdoor_nature.png', BUILD = 'core_buildings.png';
 const fileOf = f => (f === 'ninja' ? path.join(root, 'public', 'assets', 'village', 'village.png') : path.join(dir, f));
-const sourceOf = f => (f === BUILD ? 'house' : f === 'ninja' ? 'ninja' : f === ODDS ? 'isaiah' : f === ARMM ? 'armm' : 'outdoor');
+const sourceOf = f => (f === BUILD ? 'house' : f === 'ninja' ? 'ninja' : f === ODDS ? 'isaiah' : f === ARMM ? 'armm' : f === GEORGE ? 'george' : f === DRAWN ? 'drawn' : 'outdoor');
 
 // ---------- 그림 고치기 도우미 (2026-11-14) ----------
 async function rawOf(file, [x, y, w, h]) {
@@ -106,6 +121,51 @@ async function restyle(setRect, texFile, texRect) {
     d[i + 3] = 255;
   }
   return png(set);
+}
+
+// ---------- 직접 그리기 (2026-11-14 열매·제작대) ----------
+const OUTLINE = [60, 40, 50];
+function canvas(w, h) { return { data: Buffer.alloc(w * h * 4), w, h }; }
+function dot(img, x, y, [r, g, b], a = 255) {
+  if (x < 0 || y < 0 || x >= img.w || y >= img.h) return;
+  const i = (y * img.w + x) * 4; img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b; img.data[i + 3] = a;
+}
+function rect(img, x0, y0, x1, y1, c) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) dot(img, x, y, c); }
+/** 열매 색 (열매 6종: lib/game-config.ts POTIONS) */
+const BERRY_COLORS = { apple: [214, 48, 56], blue: [80, 150, 230], fire: [240, 120, 40], thunder: [245, 205, 40], moon: [150, 90, 200], star: [245, 150, 190] };
+/** 마을 둥근 나무 위에 열매 6개를 그림 */
+async function fruitTree(color) {
+  const t = await rawOf(NATURE, [801, 8, 30, 38]);
+  for (const [x, y] of [[7, 8], [19, 6], [12, 15], [23, 14], [6, 19], [17, 21]]) {
+    rect(t, x - 1, y - 2, x + 1, y + 2, OUTLINE); rect(t, x - 2, y - 1, x + 2, y + 1, OUTLINE);
+    rect(t, x - 1, y - 1, x + 1, y + 1, color); dot(t, x - 1, y - 1, [255, 255, 255]);
+  }
+  return png(t);
+}
+function mailbox(flag) {
+  const m = canvas(16, 32);
+  rect(m, 7, 14, 8, 30, [110, 72, 48]); rect(m, 6, 14, 6, 30, OUTLINE); rect(m, 9, 14, 9, 30, OUTLINE);
+  rect(m, 3, 6, 12, 15, [206, 58, 58]); rect(m, 2, 7, 2, 14, OUTLINE); rect(m, 13, 7, 13, 14, OUTLINE); rect(m, 3, 5, 12, 5, OUTLINE); rect(m, 3, 16, 12, 16, OUTLINE);
+  rect(m, 3, 8, 12, 8, [236, 110, 100]); rect(m, 5, 11, 10, 12, OUTLINE);
+  if (flag) { rect(m, 13, 1, 13, 10, OUTLINE); rect(m, 14, 1, 15, 4, [250, 210, 60]); }
+  return png(m);
+}
+function ironIcon() {
+  const m = canvas(16, 16);
+  rect(m, 3, 9, 13, 13, [120, 128, 150]); rect(m, 4, 6, 11, 8, [190, 195, 210]);
+  rect(m, 3, 5, 12, 5, OUTLINE); rect(m, 2, 6, 2, 14, OUTLINE); rect(m, 14, 9, 14, 14, OUTLINE); rect(m, 3, 14, 13, 14, OUTLINE); rect(m, 12, 6, 13, 8, OUTLINE);
+  rect(m, 5, 7, 10, 7, [235, 238, 248]);
+  return png(m);
+}
+function sparkleIcon() {
+  const m = canvas(16, 16);
+  for (let y = 1; y <= 14; y++) {
+    const half = y <= 6 ? Math.round((y - 1) * 5 / 5) : Math.round((14 - y) * 5 / 8);
+    for (let x = 8 - half; x <= 8 + half; x++) dot(m, x, y, x <= 8 ? [190, 245, 255] : [120, 220, 240]);
+    dot(m, 8 - half - 1, y, OUTLINE); dot(m, 8 + half + 1, y, OUTLINE);
+  }
+  dot(m, 8, 0, OUTLINE); dot(m, 8, 15, OUTLINE); dot(m, 6, 4, [255, 255, 255]); dot(m, 13, 2, [255, 250, 200]); dot(m, 2, 12, [255, 250, 200]);
+  return png(m);
 }
 
 // ---------- 땅 ----------
@@ -153,6 +213,14 @@ const objects = [
   // 덤불 (2026-11-14 부모님: 큰 둥근 덤불은 서식지에, 작은 덤불은 꾸미기에)
   { name: 'bushBig', file: ARMM, rect: [256, 192, 32, 32], cells: [2, 2], foot: null, label: '큰 덤불 숲(초록 풀숲 서식지 완성)', make: async () => png(await greenBush([256, 192, 32, 32])) },
   { name: 'bushSmall', file: ARMM, rect: [256, 192, 16, 16], cells: [1, 1], foot: null, label: '작은 덤불(꾸미기)', make: async () => sharp(await png(await greenBush([256, 192, 32, 32]))).resize(16, 16, { kernel: 'nearest' }).png().toBuffer() },
+  // 열매나무 6종(열매 색 = 열매 종류), 제작대, 우편함 (2026-11-14 열매·제작대)
+  ...Object.entries(BERRY_COLORS).map(([k, c]) => ({ name: 'fruitTree_' + k, file: DRAWN, rect: [801, 8, 30, 38], cells: [2, 3], foot: [0, 1, 2, 2], label: '열매나무(' + k + ')', make: () => fruitTree(c) })),
+  { name: 'workbench', file: GEORGE, rect: [80, 48, 48, 32], cells: [3, 2], foot: [0, 1, 3, 1], label: '제작대(줄무늬 지붕 가게)' },
+  { name: 'mailbox', file: DRAWN, rect: [0, 0, 16, 32], cells: [1, 2], foot: [0, 1, 1, 1], label: '우편함', make: () => mailbox(false) },
+  { name: 'mailboxFlag', file: DRAWN, rect: [0, 0, 16, 32], cells: [1, 2], foot: [0, 1, 1, 1], label: '우편함(택배 옴)', make: () => mailbox(true) },
+  { name: 'matIron', file: DRAWN, rect: [0, 0, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 철 (훈련으로만)', make: () => ironIcon() },
+  { name: 'matSparkle', file: DRAWN, rect: [0, 0, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 반짝돌 (복습으로만)', make: () => sparkleIcon() },
+  { name: 'sapling', file: ARMM, rect: [256, 192, 16, 16], cells: [1, 1], foot: null, flat: true, label: '열매나무 묘목', make: async () => sharp(await png(await greenBush([256, 192, 32, 32]))).resize(12, 12, { kernel: 'nearest' }).extend({ top: 2, bottom: 2, left: 2, right: 2, background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer() },
   // 재료 그림 (마을에 떨어진 재료·가방)
   { name: 'matLeaf', file: NATURE, rect: [880, 256, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 풀잎' },
   { name: 'matTwig', file: NATURE, rect: [864, 320, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 나뭇가지' },

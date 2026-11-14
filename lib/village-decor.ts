@@ -6,6 +6,7 @@
 // 상태 변경은 lib/game-engine.ts (decorCraft·decorPlace·decorTake), 이 파일은 규칙과 계산만.
 import { baseGround, blockedCells, MAP_OBJECTS, objectInfo, plotCellAt, type ObjectKind, type TerrainCell, type TerrainGround } from './village-map.ts';
 import { MAP_H, MAP_W, MATERIALS, PICK_SPOTS, START_POS, type MaterialKey } from './village.ts';
+import { TREE_SPOTS } from './village-craft.ts';
 
 export const DECOR_ITEMS = ['flower', 'bush', 'bushRose', 'mushroom', 'lily', 'stump', 'fence', 'pot', 'flowerBox', 'bench', 'pineSmall', 'rock', 'pondTile', 'pathTile', 'stoneTile'] as const;
 export type DecorKey = typeof DECOR_ITEMS[number];
@@ -98,6 +99,8 @@ const MAP_BLOCKED = blockedCells(MAP_OBJECTS);
 /** 지도에 처음부터 있는 꽃·버섯 같은 작은 물건 자리 (그 위에 겹쳐 놓지 않게) */
 const MAP_TAKEN = new Set(MAP_OBJECTS.filter(o => o.y >= 0).flatMap(o => { const b = decorBase(o.kind); return decorCells({ kind: o.kind, x: o.x + b.dx, y: o.y + b.dy }); }).map(c => `${c.x},${c.y}`));
 const KEEP_FREE = new Set([START_POS, ...PICK_SPOTS].map(p => `${p.x},${p.y}`));
+/** 열매나무 자리 (2×3, 묘목을 심을 곳이라 비워 둠, 2026-11-14) */
+export const TREE_CELLS = new Set(TREE_SPOTS.flatMap(t => [0, 1].flatMap(dx => [0, 1, 2].map(dy => `${t.x + dx},${t.y + dy}`))));
 /**
  * 여기에 놓을 수 있는지 (안 되면 이유). 풀밭에만(연잎은 물 위에만), 길·밭·집·나무 자리와 다른 꾸미기 물건 위는 안 됨,
  * 처음 서는 자리·재료가 떨어지는 자리는 비워 둠. 땅 바꾸기는 원래 풀밭이고 아직 바꾸지 않은 칸에만 (한 칸).
@@ -121,6 +124,7 @@ export function decorSpotProblem(decor: DecorPlaced[], terrain: TerrainCell[], i
     if (!info.onWater && MAP_BLOCKED.has(k)) return '여기는 자리가 없어요.';
     if (used.has(k) || MAP_TAKEN.has(k)) return '여기에는 이미 놓여 있어요.';
     if (KEEP_FREE.has(k)) return '여기는 비워 두자! (재료가 떨어지는 자리예요)';
+    if (TREE_CELLS.has(k)) return '여기는 열매나무 자리예요.';
   }
   return null;
 }

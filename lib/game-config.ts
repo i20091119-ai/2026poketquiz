@@ -60,8 +60,11 @@ export const GROWTH_DEFAULT = {
   expExchangePerDay: 5,
   /** 열매·상처약을 먹이면 그 포켓몬 계열 💗 (2026-11-12 부모님 결정, 팀에 없어도) */
   feedHearts: 5,
-  /** 가진 열매(상처약 제외)가 이 수 이상이면 일일미션·훈련 상자·탐험 선물에서 열매 대신 볼 */
-  berryCap: 10,
+  /**
+   * 열매 보유 상한: 종류마다 이 수까지 (2026-11-14 부모님: 10 → 99, 11/12의 "10개 넘으면 볼" 규칙은 없앰).
+   * 가득 찬 종류의 열매가 상자·탐험 선물에서 나오면 대신 볼, 마을 열매나무·손님 열매는 안 들어오고 안내만.
+   */
+  berryCap: 99,
 };
 export type GrowthRules = typeof GROWTH_DEFAULT;
 export type GrowthKey = keyof GrowthRules;
@@ -78,7 +81,7 @@ export const GROWTH_FIELDS: { key: GrowthKey; label: string; min: number; max: n
   { key: 'ivMax', label: '★ 최대 (포켓로그 개체값, 16~31)', min: 16, max: 31 },
   { key: 'expExchangePerDay', label: '경험치 바꾸기 하루 한도', min: 1, max: 50 },
   { key: 'feedHearts', label: '열매·상처약 먹이면 그 포켓몬 💗', min: 0, max: 50 },
-  { key: 'berryCap', label: '열매가 이 수 이상이면 상자에서 열매 대신 볼', min: 1, max: 100 },
+  { key: 'berryCap', label: '열매 보유 상한 (종류마다, 다 차면 상자에서 볼)', min: 1, max: 999 },
 ];
 let growthOverrides: Partial<GrowthRules> = {};
 /** 보호자가 바꾼 성장 규칙을 맞춥니다 (서버는 요청마다, 아이·보호자 화면은 응답을 받을 때마다). 범위를 벗어난 값은 버림 */

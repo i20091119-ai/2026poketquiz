@@ -26,6 +26,8 @@ export type AnswerResult = {
   /** 레인보우 이벤트 진행 (탐험에서만): 연속 수, 조각을 얻었는지, 아이에게 보여 줄 말 */
   /** 포켓몬 마을 재료 (정답 확률 · 미션을 끝내면 확정) */
   village?: { mats: MaterialKey[]; mission: { mats: MaterialKey[]; opened: boolean } | null } | null;
+  /** 이틀 뒤 복습 문제 첫 시도 정답 → 반짝돌 (2026-11-14) */
+  sparkle?: number;
   rainbow?: { kind: 'progress' | 'reset' | 'piece' | 'complete'; stage?: 'rainbow' | 'gold'; subject: string; count: number; goal: number; pieces: number; total: number; message: string } | null;
 };
 
@@ -160,6 +162,7 @@ function QuizBody({ question, progress, chances, maxChances, busy, onAnswer, onN
               </>}
               {feedback.correct && feedback.hearts && <HeartLines hearts={feedback.hearts} />}
               {feedback.village && <VillageLine v={feedback.village} />}
+              {feedback.correct && !!feedback.sparkle && <p className="village-line">✨ 반짝돌 +{feedback.sparkle}! 복습 문제를 맞혔어. 마을 제작대에서 하이퍼볼을 만들 때 써</p>}
             </div>
           )}
           {feedback?.rainbow && (feedback.final !== false || feedback.correct) && <RainbowLine r={feedback.rainbow} />}

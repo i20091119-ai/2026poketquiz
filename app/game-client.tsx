@@ -13,7 +13,7 @@ import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
 import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
-import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
+import { BallDialog, RewardPicker, type CatchResult, type QueuedBall, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
 import { QUIZ_ATTEMPTS, setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
@@ -45,7 +45,7 @@ export default function Game() {
   const [notice, setNotice] = useState('');
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [reward, setReward] = useState<{ kind: RewardKind; subject?: Subject } | null>(null);
-  const [ballQueue, setBallQueue] = useState<Ball[]>([]);
+  const [ballQueue, setBallQueue] = useState<QueuedBall[]>([]);
   const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
   // 보호자 선물: 팝업 → 열기 → (볼 열기) → 답장
   const [giftPopup, setGiftPopup] = useState<PublicGift | null>(null);
@@ -388,7 +388,8 @@ export default function Game() {
         </footer>
       </div>
 
-      <VillageScreen open={villageOpen} view={view} busy={busy} act={act} onClose={() => setVillageOpen(false)} onSeconds={onVillageSeconds} />
+      <VillageScreen open={villageOpen} view={view} busy={busy} act={act} onClose={() => setVillageOpen(false)} onSeconds={onVillageSeconds}
+        onOpenBall={b => setBallQueue([{ id: b.id, kind: b.kind, crafted: true }])} />
 
       <QuizDialog
         question={quiz?.question ?? null}
@@ -429,7 +430,7 @@ export default function Game() {
         key={ballQueue[0]?.id ?? 'none'}
         ball={ballQueue[0] ?? null}
         busy={busy}
-        onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
+        onOpen={b => act<CatchResult>(b.crafted ? { type: 'openCraftedBall', id: b.id } : { type: 'openBall', ballId: b.id })}
         onClose={closeBall}
       />
 

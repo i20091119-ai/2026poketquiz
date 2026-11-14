@@ -83,13 +83,13 @@ function ObjectLayer({ objects, tile, y0 }: { objects: MapObject[]; tile: number
 }
 
 /** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 좌표는 위쪽 숲 줄(TOP_ROWS)을 포함한 그림 좌표 */
-export function VillageGround({ tile, cells, decor = [], terrain = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[]; terrain?: TerrainCell[] }) {
+export function VillageGround({ tile, cells, decor = [], terrain = [], extra = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[]; terrain?: TerrainCell[]; extra?: MapObject[] }) {
   const at = (x: number, y: number) => groundAt(x, y, cells, terrain);
   const version = cells.join(',') + '|' + terrain.map(t => `${t.x},${t.y},${t.ground}`).join(';');
   return (
     <div className="village-ground" aria-hidden>
       <GroundLayer x0={0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={version} />
-      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor)]} tile={tile} y0={-TOP_ROWS} />
+      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor), ...extra]} tile={tile} y0={-TOP_ROWS} />
     </div>
   );
 }

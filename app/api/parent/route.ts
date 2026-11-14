@@ -7,8 +7,9 @@ import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
 import { VILLAGE_DEFAULT, VILLAGE_FIELDS } from '@/lib/village';
 import { cleanDecorCosts, DECOR_INFO, DECOR_ITEMS, decorCostsNow } from '@/lib/village-decor';
+import { CRAFT_DEFAULT, CRAFT_FIELDS, craftRules } from '@/lib/village-craft';
 import { LEGEND_PER_STAGE, OFFLINE_DEFAULT, OFFLINE_FIELDS, offlineRulesOf, STAGE_NEED_MAX, stageNeed, type DayBoxKind, type DayMark } from '@/lib/offline';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, villageReport, simBankDone, simVillageMats, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, villageReport, simBankDone, simVillageMats, simVillageCraft, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -19,7 +20,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules, getDecorCosts, saveDecorCosts,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules, getDecorCosts, saveDecorCosts, getCraftRules, saveCraftRules,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -94,6 +95,8 @@ async function overview(request: Request) {
       rules: { now: { ...VILLAGE_DEFAULT, ...villageOverrides }, defaults: VILLAGE_DEFAULT, overrides: villageOverrides, fields: VILLAGE_FIELDS },
       /** 꾸미기 물건 재료 수: 지금 값·처음 값·바꾼 물건 */
       decor: { now: decorCostsNow(), defaults: Object.fromEntries(DECOR_ITEMS.map(k => [k, DECOR_INFO[k].cost])), changed: Object.keys(await getDecorCosts()) },
+      /** 열매나무·제작대 규칙 (2026-11-14): 지금 값·처음 값·바꾼 것·항목 */
+      craft: { now: craftRules(), defaults: CRAFT_DEFAULT, overrides: await getCraftRules(), fields: CRAFT_FIELDS },
     },
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
     shiny: {
@@ -436,6 +439,17 @@ export async function POST(request: Request) {
         await saveDecorCosts({ ...costs, ...next });
         return json({ message: `${DECOR_INFO[item as keyof typeof DECOR_INFO].name} 재료를 저장했어요.` });
       }
+      case 'setCraftRule': {
+        const field = CRAFT_FIELDS.find(f => f.key === String(body.key));
+        if (!field) throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+        const value = Number(body.value);
+        if (!(Number.isInteger(value) && value >= field.min && value <= field.max)) throw new ParentError(`${field.label}: ${field.min}~${field.max} 사이로 넣어 주세요.`);
+        await saveCraftRules({ ...(await getCraftRules()), [field.key]: value });
+        return json({ message: `${field.label}을(를) ${value}(으)로 저장했어요.` });
+      }
+      case 'resetCraftRules':
+        await saveCraftRules(null);
+        return json({ message: '열매나무·제작대 규칙을 처음 값으로 되돌렸어요.' });
       case 'resetDecorCosts':
         await saveDecorCosts(null);
         return json({ message: '꾸미기 물건 재료를 처음 값으로 되돌렸어요.' });
@@ -456,6 +470,12 @@ export async function POST(request: Request) {
         if (op === 'mats') {
           await mutateState(state => { simVillageMats(state, 10); return { result: null, changed: true }; }, SIM_PLAYER);
           return json({ message: '시험용 기록에 재료를 종류마다 10개씩 넣었어요. 아이 화면을 새로고침해 주세요.' });
+        }
+        if (['berries', 'berry99', 'study', 'stone', 'reviewDue', 'dexFull'].includes(op)) {
+          await loadGrowthRules();
+          const bank = op === 'reviewDue' ? await activeBank() : null;
+          const { result: msg } = await mutateState(state => ({ result: simVillageCraft(state, op, bank, today), changed: true }), SIM_PLAYER);
+          return json({ message: `${msg} 아이 화면을 새로고침해 주세요.` });
         }
         throw new ParentError('시험 항목을 다시 골라 주세요.');
       }

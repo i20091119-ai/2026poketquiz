@@ -5,6 +5,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { VillageScreen } from '@/components/game/village';
+import { BallDialog, type CatchResult, type QueuedBall } from '@/components/game/rewards';
 import { applyAction, childView, initialState, secureRandom, syncVillage, todayKorea, type Action, type GameState } from '@/lib/game-engine';
 
 const shiftDay = (date: string, days: number) => {
@@ -41,7 +42,16 @@ function demoState(today: string): GameState {
     cells: ['bush', 'bush', 'puddle', 'puddle', 'flowers', 'flowers', 'flowers', 'flowers', 'bush', 'bush', 'bush', 'bush'],
     habitats: [{ kind: 'shore', since: yesterday }, { kind: 'garden', since: yesterday }, { kind: 'green', since: yesterday }],
     picked: [],
+    // 열매나무·제작대 (2026-11-14): 첫 나무(파트너 계열) + 불꽃열매 나무, 묘목 1, 철·반짝돌, 우편함 택배, 만든 볼 하나
+    trees: [{ spot: 0, berry: 'apple', since: yesterday }, { spot: 1, berry: 'fire', since: yesterday }],
+    saplings: 1,
+    study: { iron: 2, sparkle: 1 },
+    mail: [{ id: 'k1', kind: 'iron', amount: 1, week: yesterday, at: now }],
+    craftedBalls: [{ id: 'c1', kind: 'poke', made: yesterday }],
   } as unknown as GameState['village'];
+  // 열매: 사과열매 32 · 불꽃열매 99(가득) · 별빛열매 40 · 얼음열매 12
+  const berries = { apple: 32, fire: 99, star: 40, blue: 12 } as const;
+  state.potions = Object.entries(berries).flatMap(([kind, n]) => Array.from({ length: n }, (_, i) => ({ id: `${kind}${i}`, kind: kind as keyof typeof berries })));
   syncVillage(state, today, secureRandom); // 어제 완성된 서식지 → 오늘 손님
   return state;
 }
@@ -71,12 +81,15 @@ export default function VillageDemo() {
     }
   }, [state, today]);
   const noop = useCallback(() => undefined, []);
+  const [ball, setBall] = useState<QueuedBall | null>(null);
 
   return (
     <>
       <div className="village-demo-band" role="note">🧪 시험용 마을이에요. 여기서 한 것은 저장되지 않아요 (새로고침하면 처음으로).</div>
       {notice && <div className="village-demo-band warn" role="status">{notice}</div>}
-      <VillageScreen open view={view} busy={busy} act={act} onClose={() => router.push('/')} onSeconds={noop} />
+      <VillageScreen open view={view} busy={busy} act={act} onClose={() => router.push('/')} onSeconds={noop}
+        onOpenBall={b => setBall({ id: b.id, kind: b.kind, crafted: true })} />
+      <BallDialog key={ball?.id ?? 'none'} ball={ball} busy={busy} onOpen={b => act<CatchResult>({ type: 'openCraftedBall', id: b.id })} onClose={() => setBall(null)} />
     </>
   );
 }

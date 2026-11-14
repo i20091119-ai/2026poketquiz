@@ -50,6 +50,18 @@
 | bench | 벤치 | 2×1 | 못 감: 2×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
 | bushBig | 큰 덤불 숲(초록 풀숲 서식지 완성) | 2×2 | 감 | Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) | ArMM1998 | CC0 1.0 (출처 표시 안 해도 됨) |
 | bushSmall | 작은 덤불(꾸미기) | 1×1 | 감 | Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) | ArMM1998 | CC0 1.0 (출처 표시 안 해도 됨) |
+| fruitTree_apple | 열매나무(apple) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| fruitTree_blue | 열매나무(blue) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| fruitTree_fire | 열매나무(fire) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| fruitTree_thunder | 열매나무(thunder) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| fruitTree_moon | 열매나무(moon) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| fruitTree_star | 열매나무(star) | 2×3 | 못 감: 2×2칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| workbench | 제작대(줄무늬 지붕 가게) | 3×2 | 못 감: 3×1칸 | Tuxemon "Furniture and Fittings" (제작대 가게) | George_ | CC BY 3.0 |
+| mailbox | 우편함 | 1×2 | 못 감: 1×1칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| mailboxFlag | 우편함(택배 옴) | 1×2 | 못 감: 1×1칸 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| matIron | 재료: 철 (훈련으로만) | 1×1 | 감 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| matSparkle | 재료: 반짝돌 (복습으로만) | 1×1 | 감 | 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) | 포켓몬 배움 탐험대 | 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 |
+| sapling | 열매나무 묘목 | 1×1 | 감 | Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) | ArMM1998 | CC0 1.0 (출처 표시 안 해도 됨) |
 | matLeaf | 재료: 풀잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matTwig | 재료: 나뭇가지 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matPetal | 재료: 꽃잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
@@ -69,5 +81,7 @@
 - Tuxemon "Core Buildings" 중 "Inspired 16x16 Tiles" — RedVoxel (지붕 고침: Jaskrendix) — CC BY-SA 4.0 — https://opengameart.org/content/pokemon-inspired-16x16-tiles
 - Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작) — Catch Challenger (색 고침: Sanglorian) — CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0) — https://github.com/alphaonex86/CatchChallenger-datapack
 - Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) — ArMM1998 — CC0 1.0 (출처 표시 안 해도 됨) — https://wiki.tuxemon.org/index.php?title=File:Objects_by_ArMM1998.png
+- Tuxemon "Furniture and Fittings" (제작대 가게) — George_ — CC BY 3.0 — https://wiki.tuxemon.org/index.php?title=File:Furniture_and_Fittings_by_George.png
+- 직접 그림 (열매나무 = 마을 둥근 나무 + 열매, 우편함·철·반짝돌은 새로 그림) — 포켓몬 배움 탐험대 — 열매나무는 원본(CC BY-SA 4.0)을 따름, 나머지는 자유롭게 사용 — 
 - Tuxemon "Outdoor odds and ends" — Isaiah658 — CC0 1.0 (출처 표시 안 해도 됨) — https://wiki.tuxemon.org/index.php?title=File:Outdoor_odds_and_ends_by_Isaiah658.png
 - Ninja Adventure Asset Pack — pixel-boy — CC0 1.0 — https://pixel-boy.itch.io/ninja-adventure-asset-pack

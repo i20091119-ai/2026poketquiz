@@ -9,6 +9,7 @@ import type { LogEntry } from '../activity-log.ts';
 import { cleanOutingRules, OUTING_DEFAULT, type OutingRules } from '../outing.ts';
 import { cleanVillageRules, setVillageRules, VILLAGE_DEFAULT, type VillageRules } from '../village.ts';
 import { cleanDecorCosts, setDecorCosts, type DecorCosts } from '../village-decor.ts';
+import { cleanCraftRules, setCraftRules, type CraftRules } from '../village-craft.ts';
 import { cleanOfflineRules, offlineRulesOf, type OfflineRules } from '../offline.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
@@ -431,11 +432,22 @@ export async function saveDecorCosts(costs: DecorCosts | null) {
   if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_decor_costs'").run(); return; }
   await db().prepare("INSERT INTO settings (key, value) VALUES ('village_decor_costs', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
 }
-/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules(), 꾸미기 재료 수 lib/village-decor.ts 의 decorCost()) */
+/** 보호자 설정: 열매나무·제작대 숫자 (settings.village_craft_rules, 바꾼 것만) */
+export async function getCraftRules(): Promise<Partial<CraftRules>> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'village_craft_rules'").first<{ value: string }>();
+  try { return cleanCraftRules(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveCraftRules(rules: Partial<CraftRules> | null) {
+  const clean = cleanCraftRules(rules);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_craft_rules'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('village_craft_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules(), 꾸미기 재료 수 decorCost(), 열매·제작대 craftRules()) */
 export async function loadVillageRules(): Promise<VillageRules> {
-  const [ov, decor] = await Promise.all([getVillageRules(), getDecorCosts()]);
+  const [ov, decor, craft] = await Promise.all([getVillageRules(), getDecorCosts(), getCraftRules()]);
   setVillageRules(ov);
   setDecorCosts(decor);
+  setCraftRules(craft);
   return { ...VILLAGE_DEFAULT, ...ov };
 }
 

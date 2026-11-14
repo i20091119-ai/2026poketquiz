@@ -8,11 +8,14 @@ import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import {
-  CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, GUEST_LINES, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
+  CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
   RESIDENT_LINES, START_POS, type CraftKey, type MaterialKey,
 } from '@/lib/village';
 import { AnimMon } from './anim-mon';
-import { blockedCells, PLAYER } from '@/lib/village-map';
+import { blockedCells, objectInfo, PLAYER, type MapObject } from '@/lib/village-map';
+import { GATHER_ROCKS, MAILBOX, TREE_SPOTS, WORKBENCH } from '@/lib/village-craft';
+import type { PotionKind } from '@/lib/game-config';
+import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
@@ -45,13 +48,15 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 }
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
-type Sheet = null | 'bag' | { cell: number } | { decorAt: { x: number; y: number } };
+type Sheet = null | 'bag' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
 type MakeTab = 'habitat' | DecorTab;
 type DecorPlacing = { item: DecorKey; variant: number };
 
 type ScreenProps = {
   view: ChildView; busy: boolean;
   act: <T>(action: Action) => Promise<T | null>;
+  /** 제작대에서 만든 볼 열기 (가방과 같은 볼 창) */
+  onOpenBall?: (b: CraftedBall) => void;
   onClose: () => void;
   /** 마을 안에 있는지 (마을 시간 세기용) */
   onSeconds: (inside: boolean) => void;
@@ -62,7 +67,7 @@ export function VillageScreen({ open, ...props }: ScreenProps & { open: boolean 
   return <VillageInner {...props} />;
 }
 /** 열려 있지 않으면 입구 그림 + 미션 진행 막대 */
-function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
+function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: ScreenProps) {
   const v = view.village;
   // 들어와 있는 동안은 자정이 지나 잠겨도 계속 놀 수 있음 (나가면 잠김)
   const [inside, setInside] = useState(false);
@@ -77,6 +82,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   const [placing, setPlacing] = useState<CraftKey | null>(null);
   // 꾸미기 놓기 모드: 놓을 수 있는 풀밭 칸이 반짝이고, 누르면 놓기
   const [decorPlacing, setDecorPlacing] = useState<DecorPlacing | null>(null);
+  // 묘목 심기 모드: 고른 열매 종류, 빈 나무 자리가 반짝이고 누르면 심기
+  const [planting, setPlanting] = useState<PotionKind | null>(null);
   // 만들기 창에서 마지막으로 본 칸 (서식지·꾸미기·땅 바꾸기)
   const [makeTab, setMakeTab] = useState<MakeTab>('habitat');
   const [toast, setToast] = useState('');
@@ -84,8 +91,17 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   const [timeUp, setTimeUp] = useState(false);
   const [enterFailed, setEnterFailed] = useState(false);
   const localSeconds = useRef(0);
-  // 걸을 수 없는 칸 = 지도(집·나무·물) + 꾸미기 물건(울타리·벤치 등)
-  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor, v.terrain)]), [v.decor, v.terrain]);
+  // 열매나무 (다 자란 나무: 열매가 있으면 열매나무 그림, 오늘 땄으면 보통 나무 / 오늘 심은 것: 묘목)
+  const craft = v.craft;
+  const treeObjects = useMemo<MapObject[]>(() => craft.trees.map(t => {
+    const s = TREE_SPOTS[t.spot];
+    if (!t.grown) return { kind: 'sapling', x: s.x, y: s.y + 2 };
+    return { kind: t.ready ? (`fruitTree_${t.berry}` as MapObject['kind']) : 'treeRound', x: s.x, y: s.y };
+  }), [craft.trees]);
+  const extraObjects = useMemo<MapObject[]>(() => [...treeObjects, ...(craft.mail > 0 ? [{ kind: 'mailboxFlag' as const, x: MAILBOX.x, y: MAILBOX.y }] : [])], [treeObjects, craft.mail]);
+  // 걸을 수 없는 칸 = 지도(집·나무·물) + 꾸미기 물건(울타리·벤치 등) + 다 자란 열매나무
+  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor, v.terrain), ...blockedCells(treeObjects.filter(o => o.kind !== 'sapling'))]), [v.decor, v.terrain, treeObjects]);
+  const [introOpen, closeIntro] = useCraftIntro(inside);
   const blockedRef = useRef(blocked);
   useEffect(() => { blockedRef.current = blocked; });
 
@@ -173,6 +189,36 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
     if (v.items[item] - 1 <= 0) setPlacing(null);
   }
   const close = () => { setInside(false); onClose(); };
+  // ---------- 열매나무·제작대 ----------
+  const lineNo = useRef(0);
+  const talk = async (r: { message: string } | null) => { if (r) setToast(r.message); };
+  async function harvest(t: (typeof craft.trees)[number]) {
+    if (busy) return;
+    if (!t.grown) { setToast('오늘 심은 나무야. 내일부터 열매가 열려!'); return; }
+    if (!t.ready) { setToast('이 나무는 오늘 다 땄어! 내일 또 열려.'); return; }
+    await talk(await act<{ message: string }>({ type: 'villageHarvest', spot: t.spot, stay: true }));
+  }
+  async function gather(rock: number) {
+    if (busy) return;
+    if (craft.stoneLeft <= 0) { setToast(`오늘은 돌멩이를 다 캤어! (하루 ${craft.rules.stoneDaily}개) 내일 또 캘 수 있어.`); return; }
+    await talk(await act<{ message: string }>({ type: 'villageGather', rock, stay: true }));
+  }
+  async function openMail() { if (!busy) await talk(await act<{ message: string }>({ type: 'villageMail', stay: true })); }
+  async function plantAt(spot: number) {
+    if (!planting || busy) return;
+    const r = await act<{ message: string }>({ type: 'villagePlant', spot, berry: planting, stay: true });
+    if (r) { setToast(r.message); setPlanting(null); }
+  }
+  const plantTargets = planting ? TREE_SPOTS.map((s, spot) => ({ ...s, spot })).filter(s => s.spot < craft.rules.treeMax && !craft.trees.some(t => t.spot === s.spot)) : [];
+  async function onMonTap(w: Walker) {
+    if (w.guest) {
+      const r = await act<{ message: string }>({ type: 'villageTalk', plot: w.guest.plot, stay: true });
+      if (r) setBubble({ id: w.id, text: r.message });
+      return;
+    }
+    lineNo.current += 1;
+    setBubble({ id: w.id, text: `${species(w.species).name}: ${RESIDENT_LINES[lineNo.current % RESIDENT_LINES.length]}` });
+  }
   // 꾸미기: 놓을 수 있는 칸 (서준이·파트너가 서 있는 칸은 빼고)
   const decorTargets = useMemo(() => {
     if (!decorPlacing) return [];
@@ -230,7 +276,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       </div>
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
-          <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} />
+          <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} extra={extraObjects} />
           <div className="village-world" style={{ top: TOP_ROWS * TILE, width: MAP_W * TILE, height: MAP_H * TILE }}>
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
@@ -253,6 +299,26 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
             <button key={'dp' + c.x + ',' + c.y} className="village-cell target decor" style={{ left: c.x * TILE, top: c.y * TILE, width: TILE, height: TILE }}
               aria-label="여기에 놓기" onClick={() => void placeDecorAt(c.x, c.y)} />
           ))}
+          {/* 열매나무·제작대·우편함·바위: 누르면 따기·만들기·택배·캐기 (놓기 중이 아닐 때) */}
+          {!placing && !decorPlacing && !planting && <>
+            {craft.trees.map(t => {
+              const s = TREE_SPOTS[t.spot];
+              return <button key={'t' + t.spot} className={'village-hit' + (t.ready ? ' ready' : '')}
+                style={{ left: s.x * TILE, top: (t.grown ? s.y : s.y + 2) * TILE, width: (t.grown ? 2 : 1) * TILE, height: (t.grown ? 3 : 1) * TILE }}
+                aria-label={t.ready ? '열매 따기' : '열매나무'} onClick={() => void harvest(t)} />;
+            })}
+            <button className="village-hit" style={{ left: WORKBENCH.x * TILE, top: WORKBENCH.y * TILE, width: objectInfo('workbench').cells[0] * TILE, height: objectInfo('workbench').cells[1] * TILE }}
+              aria-label="제작대" onClick={() => setSheet('workbench')} />
+            <button className={'village-hit' + (craft.mail > 0 ? ' ready' : '')} style={{ left: MAILBOX.x * TILE, top: MAILBOX.y * TILE, width: TILE, height: 2 * TILE }}
+              aria-label="우편함" onClick={() => void openMail()} />
+            {GATHER_ROCKS.map((r, i) => <button key={'rk' + i} className={'village-hit' + (craft.stoneLeft > 0 ? ' ready' : '')} style={{ left: r.x * TILE, top: r.y * TILE, width: TILE, height: TILE }}
+              aria-label="바위 (돌멩이 캐기)" onClick={() => void gather(i)} />)}
+          </>}
+          {/* 묘목 심기: 빈 나무 자리 */}
+          {plantTargets.map(s => (
+            <button key={'pl' + s.spot} className="village-cell target plant" style={{ left: s.x * TILE, top: s.y * TILE, width: 2 * TILE, height: 3 * TILE }}
+              aria-label="여기에 심기" onClick={() => void plantAt(s.spot)} />
+          ))}
           {/* 완성된 서식지 이름표 */}
           {v.habitats.map((h, i) => h && (
             <span key={'h' + i} className="village-habitat-tag" style={{ left: PLOTS[i].x * TILE - 8, top: PLOTS[i].y * TILE - 18 }}>{HABITAT_INFO[h.kind].emoji} {HABITAT_INFO[h.kind].name}</span>
@@ -265,7 +331,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           {walkers.map(w => (
             <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing || decorPlacing ? ' pass' : '')}
               style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: 11 + w.y }}
-              onClick={() => setBubble({ id: w.id, text: `${species(w.species).name}: ${(w.guest ? GUEST_LINES : RESIDENT_LINES)[Math.floor(Math.random() * (w.guest ? GUEST_LINES : RESIDENT_LINES).length)]}` })}
+              onClick={() => void onMonTap(w)}
               aria-label={species(w.species).name}>
               <span className="village-shadow" />
               <AnimMon species={w.species} shiny={w.shiny} scale={1.5} fallback={pixelSrc(w.species)} />
@@ -291,6 +357,10 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
           <span><CraftIcon kind={placing} scale={1} /> 반짝이는 점선 칸을 눌러 <b>{CRAFT_INFO[placing].name}</b> 놓기! (남은 {v.items[placing]}개)</span>
           <button className="secondary small" onClick={() => setPlacing(null)}>그만</button>
         </div>}
+        {planting && <div className="village-placing" role="status">
+          <span>🌱 마을을 걸어 다니며 반짝이는 자리를 찾아 눌러 줘! <b>열매나무</b>를 심어.</span>
+          <button className="secondary small" onClick={() => setPlanting(null)}>그만</button>
+        </div>}
         {decorPlacing && <div className="village-placing" role="status">
           <span>
             <DecorIcon item={decorPlacing.item} variant={decorPlacing.variant} scale={1} /> 반짝이는 칸을 눌러 <b>{DECOR_INFO[decorPlacing.item].name}</b> 놓기! (남은 {v.decorBag[decorPlacing.item]}개)
@@ -310,6 +380,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       <div className="village-controls" style={{ width: VIEW_COLS * TILE }}>
         <div className="village-mats" aria-label="재료">
           {MATERIALS.map(k => <span key={k} className="village-mat" title={MATERIAL_INFO[k].name}><MaterialIcon kind={k} /><b>{v.mats[k]}</b></span>)}
+          <span className="village-mat" title="철 (훈련으로 받아요)"><IronIcon /><b>{craft.iron}</b></span>
+          <span className="village-mat" title="반짝돌 (복습 문제를 맞히면 받아요)"><SparkleIcon /><b>{craft.sparkle}</b></span>
+          <button className="secondary small" onClick={() => setSheet('workbench')}>🔨 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
           <button className="secondary small" onClick={() => setSheet('bag')}>🔨 만들기{bagCount + decorBagCount ? ` · 가방 ${bagCount + decorBagCount}` : ''}</button>
         </div>
         <div className="village-pad" aria-label="움직이기">
@@ -326,9 +399,14 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
         <a className="village-credit" href="/assets/village/LICENSE.txt" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 포켓몬 그림: 포켓로그</a>
       </div>
 
+      <CraftIntro open={introOpen} view={view} onClose={closeIntro} />
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
-          {sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast}
+          {sheet === 'workbench' ? <WorkbenchSheet view={view} busy={busy} act={act} onToast={setToast}
+              onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined}
+              onPlant={() => setSheet('plant')} />
+            : sheet === 'plant' ? <PlantSheet onPick={k => { setSheet(null); setPlacing(null); setDecorPlacing(null); setPlanting(k); }} />
+            : sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast}
               onPlace={k => { setSheet(null); setDecorPlacing(null); setPlacing(k); }}
               onPlaceDecor={k => { setSheet(null); setPlacing(null); setDecorPlacing({ item: k, variant: 0 }); }} />
             : 'decorAt' in sheet ? <DecorTakeSheet view={view} at={sheet.decorAt} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
