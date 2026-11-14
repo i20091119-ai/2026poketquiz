@@ -231,7 +231,7 @@ export function CraftIntro({ open, view, onClose }: { open: boolean; view: Child
           {last
             ? <button className="primary glow big-button" onClick={close}>알았어!</button>
             : <button className="primary big-button" onClick={() => setPage(p => p + 1)}>다음 <ArrowRight size={22} /></button>}
-          {page > 0 && !last && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+          {page > 0 && !last && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
         </div>
       </DialogContent>
     </Dialog>

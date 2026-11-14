@@ -223,7 +223,7 @@ export function AdventureIntro({ view, open, busy, onClose, onSave }: {
           ? <button className="primary glow big-button" disabled={busy} onClick={async () => { if (await onSave(friends)) onClose(); }}>모험 떠나기!</button>
           : <div className="intro-buttons">
               <button className="primary big-button" onClick={() => setPage(p => p + 1)}>다음 <ArrowRight size={22} /></button>
-              {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+              {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
             </div>}
       </DialogContent>
     </Dialog>

@@ -57,7 +57,7 @@ export function FeedIntro({ open, view, onClose, onGoBag }: { open: boolean; vie
             </div>
           : <div className="intro-buttons">
               <button className="primary big-button" onClick={() => setPage(p => p + 1)}>다음 <ArrowRight size={22} /></button>
-              {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+              {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
             </div>}
       </DialogContent>
     </Dialog>
