@@ -6,6 +6,7 @@ import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStro
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
 import { VILLAGE_DEFAULT, VILLAGE_FIELDS } from '@/lib/village';
+import { cleanDecorCosts, DECOR_INFO, DECOR_ITEMS, decorCostsNow } from '@/lib/village-decor';
 import { LEGEND_PER_STAGE, OFFLINE_DEFAULT, OFFLINE_FIELDS, offlineRulesOf, STAGE_NEED_MAX, stageNeed, type DayBoxKind, type DayMark } from '@/lib/offline';
 import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, villageReport, simBankDone, simVillageMats, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
@@ -18,7 +19,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules, getDecorCosts, saveDecorCosts,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -91,6 +92,8 @@ async function overview(request: Request) {
     village: {
       ...villageReport(state, today),
       rules: { now: { ...VILLAGE_DEFAULT, ...villageOverrides }, defaults: VILLAGE_DEFAULT, overrides: villageOverrides, fields: VILLAGE_FIELDS },
+      /** 꾸미기 물건 재료 수: 지금 값·처음 값·바꾼 물건 */
+      decor: { now: decorCostsNow(), defaults: Object.fromEntries(DECOR_ITEMS.map(k => [k, DECOR_INFO[k].cost])), changed: Object.keys(await getDecorCosts()) },
     },
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
     shiny: {
@@ -423,6 +426,19 @@ export async function POST(request: Request) {
         await saveVillageRules(rules);
         return json({ message: '포켓몬 마을 규칙을 저장했어요.' });
       }
+      case 'setDecorCost': {
+        // 꾸미기 물건 하나의 재료 수 (재료 4가지 0~20, 하나 이상은 1 이상)
+        const item = String(body.item);
+        if (!(DECOR_ITEMS as readonly string[]).includes(item)) throw new ParentError('바꿀 물건을 다시 골라 주세요.');
+        const costs = await getDecorCosts();
+        const next = cleanDecorCosts({ [item]: body.cost });
+        if (!next[item as keyof typeof next]) throw new ParentError('재료는 0~20개, 하나 이상은 1개 넘게 넣어 주세요.');
+        await saveDecorCosts({ ...costs, ...next });
+        return json({ message: `${DECOR_INFO[item as keyof typeof DECOR_INFO].name} 재료를 저장했어요.` });
+      }
+      case 'resetDecorCosts':
+        await saveDecorCosts(null);
+        return json({ message: '꾸미기 물건 재료를 처음 값으로 되돌렸어요.' });
       case 'resetVillageRules':
         await saveVillageRules(null);
         return json({ message: '포켓몬 마을 규칙을 처음 값으로 되돌렸어요.' });

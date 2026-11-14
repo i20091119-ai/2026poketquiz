@@ -43,6 +43,9 @@
 | fenceBL | 나무 울타리 BL | 1×1 | 못 감: 1×1칸 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | fenceB | 나무 울타리 B | 1×1 | 못 감: 1×1칸 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | fenceBR | 나무 울타리 BR | 1×1 | 못 감: 1×1칸 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
+| pot | 꽃 화분 | 1×1 | 못 감: 1×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
+| flowerBox | 꽃 상자 | 2×1 | 못 감: 2×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
+| bench | 벤치 | 2×1 | 못 감: 2×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
 | matLeaf | 재료: 풀잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matTwig | 재료: 나뭇가지 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matPetal | 재료: 꽃잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
@@ -59,4 +62,5 @@
 - Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" — rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) — CC BY-SA 4.0 — https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
 - Tuxemon "Core Buildings" 중 "Inspired 16x16 Tiles" — RedVoxel (지붕 고침: Jaskrendix) — CC BY-SA 4.0 — https://opengameart.org/content/pokemon-inspired-16x16-tiles
 - Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작) — Catch Challenger (색 고침: Sanglorian) — CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0) — https://github.com/alphaonex86/CatchChallenger-datapack
+- Tuxemon "Outdoor odds and ends" — Isaiah658 — CC0 1.0 (출처 표시 안 해도 됨) — https://wiki.tuxemon.org/index.php?title=File:Outdoor_odds_and_ends_by_Isaiah658.png
 - Ninja Adventure Asset Pack — pixel-boy — CC0 1.0 — https://pixel-boy.itch.io/ninja-adventure-asset-pack

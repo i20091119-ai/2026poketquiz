@@ -8,6 +8,7 @@ import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
 import type { LogEntry } from '../activity-log.ts';
 import { cleanOutingRules, OUTING_DEFAULT, type OutingRules } from '../outing.ts';
 import { cleanVillageRules, setVillageRules, VILLAGE_DEFAULT, type VillageRules } from '../village.ts';
+import { cleanDecorCosts, setDecorCosts, type DecorCosts } from '../village-decor.ts';
 import { cleanOfflineRules, offlineRulesOf, type OfflineRules } from '../offline.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
@@ -420,10 +421,21 @@ export async function saveVillageRules(rules: Partial<VillageRules> | null) {
   if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_rules'").run(); return; }
   await db().prepare("INSERT INTO settings (key, value) VALUES ('village_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
 }
-/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules()) */
+/** 보호자 설정: 마을 꾸미기 물건 재료 수 (settings.village_decor_costs, 바꾼 것만) */
+export async function getDecorCosts(): Promise<DecorCosts> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'village_decor_costs'").first<{ value: string }>();
+  try { return cleanDecorCosts(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveDecorCosts(costs: DecorCosts | null) {
+  const clean = cleanDecorCosts(costs);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_decor_costs'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('village_decor_costs', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules(), 꾸미기 재료 수 lib/village-decor.ts 의 decorCost()) */
 export async function loadVillageRules(): Promise<VillageRules> {
-  const ov = await getVillageRules();
+  const [ov, decor] = await Promise.all([getVillageRules(), getDecorCosts()]);
   setVillageRules(ov);
+  setDecorCosts(decor);
   return { ...VILLAGE_DEFAULT, ...ov };
 }
 

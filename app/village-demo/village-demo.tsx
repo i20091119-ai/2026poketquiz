@@ -13,7 +13,7 @@ const shiftDay = (date: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-/** 오늘 미션을 다 끝낸 시험용 기록: 나오하 파트너 + 뜨아거·피카츄 친구, 재료 조금, 서식지 2개(손님이 와 있음) */
+/** 오늘 미션을 다 끝낸 시험용 기록: 나오하 파트너 + 뜨아거·피카츄 친구, 재료 넉넉히, 서식지 2개(손님이 와 있음), 꾸미기 몇 개 */
 function demoState(today: string): GameState {
   const now = new Date().toISOString();
   const state = initialState();
@@ -27,8 +27,15 @@ function demoState(today: string): GameState {
   state.daily = { date: today, bankId: 0, questionIds: [1], correct: [1], wrong: [], tries: {}, box: null, claimed: true };
   const yesterday = shiftDay(today, -1);
   state.village = {
-    mats: { leaf: 6, drop: 6, petal: 4, twig: 2 },
+    mats: { leaf: 12, drop: 12, petal: 12, twig: 12 },
     items: { bush: 1, puddle: 2, flowers: 1 },
+    // 꾸미기: 가방에 몇 개 + 이미 놓은 울타리·꽃·벤치
+    decorBag: { flower: 3, fence: 3, bench: 1, pot: 1, lily: 1 },
+    decor: [
+      { item: 'fence', kind: 'fenceT', x: 7, y: 15 }, { item: 'fence', kind: 'fenceT', x: 8, y: 15 }, { item: 'fence', kind: 'fenceT', x: 9, y: 15 },
+      { item: 'flower', kind: 'flowerPink', x: 8, y: 16 }, { item: 'flower', kind: 'flowerYellow', x: 9, y: 16 },
+      { item: 'bench', kind: 'bench', x: 8, y: 11 },
+    ],
     cells: ['bush', 'bush', 'puddle', 'puddle', 'flowers', 'flowers', 'flowers', 'flowers', null, null, null, null],
     habitats: [{ kind: 'shore', since: yesterday }, { kind: 'garden', since: yesterday }, null],
     picked: [],

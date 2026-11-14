@@ -42,6 +42,12 @@ const SOURCES = {
     license: 'CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0)',
     url: 'https://github.com/alphaonex86/CatchChallenger-datapack',
   },
+  isaiah: {
+    name: 'Tuxemon "Outdoor odds and ends"',
+    by: 'Isaiah658',
+    license: 'CC0 1.0 (출처 표시 안 해도 됨)',
+    url: 'https://wiki.tuxemon.org/index.php?title=File:Outdoor_odds_and_ends_by_Isaiah658.png',
+  },
   ninja: {
     name: 'Ninja Adventure Asset Pack',
     by: 'pixel-boy',
@@ -49,9 +55,10 @@ const SOURCES = {
     url: 'https://pixel-boy.itch.io/ninja-adventure-asset-pack',
   },
 };
+const ODDS = 'Outdoor_odds_and_ends_by_Isaiah658.png';
 const OUT = 'core_outdoor.png', NATURE = 'core_outdoor_nature.png', BUILD = 'core_buildings.png';
 const fileOf = f => (f === 'ninja' ? path.join(root, 'public', 'assets', 'village', 'village.png') : path.join(dir, f));
-const sourceOf = f => (f === BUILD ? 'house' : f === 'ninja' ? 'ninja' : 'outdoor');
+const sourceOf = f => (f === BUILD ? 'house' : f === 'ninja' ? 'ninja' : f === ODDS ? 'isaiah' : 'outdoor');
 
 // ---------- 땅 ----------
 // kind: tile = 한 칸 그대로, set = 8px 조각 4×4 (가운데가 땅 안쪽, 가장자리가 테두리), inner = 안쪽(꺾인) 모서리 4조각
@@ -88,6 +95,10 @@ const objects = [
   // 나무 울타리 9조각 (3×3 틀: 모서리 4·가로·세로·기둥 하나)
   ...[['TL', 0, 0], ['T', 1, 0], ['TR', 2, 0], ['L', 0, 1], ['Post', 1, 1], ['R', 2, 1], ['BL', 0, 2], ['B', 1, 2], ['BR', 2, 2]].map(([k, cx, cy]) => (
     { name: 'fence' + k, file: OUT, rect: [256 + cx * 16, 416 + cy * 16, 16, 16], cells: [1, 1], foot: [0, 0, 1, 1], label: '나무 울타리 ' + k })),
+  // 꾸미기 물건 (2026-11-14, 외곽선이 조금 더 진한 그림)
+  { name: 'pot', file: ODDS, rect: [148, 2, 8, 13], cells: [1, 1], foot: [0, 0, 1, 1], label: '꽃 화분' },
+  { name: 'flowerBox', file: ODDS, rect: [113, 35, 30, 12], cells: [2, 1], foot: [0, 0, 2, 1], label: '꽃 상자' },
+  { name: 'bench', file: ODDS, rect: [115, 0, 26, 15], cells: [2, 1], foot: [0, 0, 2, 1], label: '벤치' },
   // 재료 그림 (마을에 떨어진 재료·가방)
   { name: 'matLeaf', file: NATURE, rect: [880, 256, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 풀잎' },
   { name: 'matTwig', file: NATURE, rect: [864, 320, 16, 16], cells: [1, 1], foot: null, flat: true, label: '재료: 나뭇가지' },

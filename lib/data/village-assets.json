@@ -9,7 +9,7 @@
   "objects": {
    "file": "/assets/village/objects.png",
    "width": 160,
-   "height": 144
+   "height": 160
   }
  },
  "ground": {
@@ -547,9 +547,69 @@
    "source": "outdoor",
    "label": "나무 울타리 BR"
   },
-  "matLeaf": {
+  "pot": {
    "rect": [
     32,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "source": "isaiah",
+   "label": "꽃 화분"
+  },
+  "flowerBox": {
+   "rect": [
+    48,
+    128,
+    32,
+    16
+   ],
+   "cells": [
+    2,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    2,
+    1
+   ],
+   "source": "isaiah",
+   "label": "꽃 상자"
+  },
+  "bench": {
+   "rect": [
+    80,
+    128,
+    32,
+    16
+   ],
+   "cells": [
+    2,
+    1
+   ],
+   "foot": [
+    0,
+    0,
+    2,
+    1
+   ],
+   "source": "isaiah",
+   "label": "벤치"
+  },
+  "matLeaf": {
+   "rect": [
+    112,
     128,
     16,
     16
@@ -565,7 +625,7 @@
   },
   "matTwig": {
    "rect": [
-    48,
+    128,
     128,
     16,
     16
@@ -581,7 +641,7 @@
   },
   "matPetal": {
    "rect": [
-    64,
+    144,
     128,
     16,
     16
@@ -597,8 +657,8 @@
   },
   "matDrop": {
    "rect": [
-    80,
-    128,
+    0,
+    144,
     16,
     16
    ],
@@ -659,6 +719,12 @@
    "by": "Catch Challenger (색 고침: Sanglorian)",
    "license": "CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0)",
    "url": "https://github.com/alphaonex86/CatchChallenger-datapack"
+  },
+  "isaiah": {
+   "name": "Tuxemon \"Outdoor odds and ends\"",
+   "by": "Isaiah658",
+   "license": "CC0 1.0 (출처 표시 안 해도 됨)",
+   "url": "https://wiki.tuxemon.org/index.php?title=File:Outdoor_odds_and_ends_by_Isaiah658.png"
   },
   "ninja": {
    "name": "Ninja Adventure Asset Pack",

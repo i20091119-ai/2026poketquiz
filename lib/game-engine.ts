@@ -11,6 +11,7 @@ import { CATCH_POOLS, evolutionRequirement, evolutionsOf, heartGoalOf, isFinalFo
 import { RARE_POKEMON } from './rare-pokemon.ts';
 import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMessage, stageCandidates, stageNeed, weekDates, weekScore, weekStartOf, type DayBoxKind, type DayMark, type OfflineRules } from './offline.ts';
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
+import { DECOR_BAG_MAX, DECOR_INFO, DECOR_ITEMS, DECOR_MAX, decorCost, decorCostsNow, decorIndexAt, decorSpotProblem, type DecorKey, type DecorPlaced } from './village-decor.ts';
 import { CELL_COUNT, CRAFT_INFO, CRAFTS, dayPickups, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
@@ -155,6 +156,10 @@ export type VillageState = {
   enteredDate?: string;
   /** 지금까지 받은 재료 수 (보호자 화면) */
   gained?: number;
+  /** 꾸미기(2026-11-14): 가방에 있는 꾸미기 물건 (없으면 빈 가방) */
+  decorBag?: Partial<Record<DecorKey, number>>;
+  /** 꾸미기: 마을에 놓은 꾸미기 물건 (없으면 아무것도 안 놓음) */
+  decor?: DecorPlaced[];
 };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
@@ -958,6 +963,9 @@ export type Action =
   | { type: 'villageCraft'; item: CraftKey; stay?: boolean }
   | { type: 'villagePlace'; cell: number; item: CraftKey; stay?: boolean }
   | { type: 'villageTake'; cell: number; stay?: boolean }
+  | { type: 'decorCraft'; item: DecorKey; stay?: boolean }
+  | { type: 'decorPlace'; item: DecorKey; x: number; y: number; variant?: number; stay?: boolean }
+  | { type: 'decorTake'; x: number; y: number; stay?: boolean }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1228,6 +1236,46 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       v.items[item] = (v.items[item] ?? 0) + 1;
       updateHabitats(v, ctx.today);
       return { message: `${eulReul(CRAFT_INFO[item].name)} 가방에 다시 넣었어.` };
+    }
+    case 'decorCraft': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!DECOR_ITEMS.includes(action.item)) fail('만들 것을 다시 골라 주세요.');
+      const info = DECOR_INFO[action.item];
+      const bag = v.decorBag ??= {};
+      if ((bag[action.item] ?? 0) >= DECOR_BAG_MAX) fail(`${iGa(info.name)} 가방에 가득 찼어! 먼저 마을에 놓아 보자.`);
+      const cost = Object.entries(decorCost(action.item)) as [MaterialKey, number][];
+      const short = cost.find(([k, n]) => (v.mats[k] ?? 0) < n);
+      if (short) fail(`${iGa(MATERIAL_INFO[short[0]].name)} ${short[1] - (v.mats[short[0]] ?? 0)}개 더 필요해!`);
+      for (const [k, n] of cost) v.mats[k] = (v.mats[k] ?? 0) - n;
+      bag[action.item] = (bag[action.item] ?? 0) + 1;
+      return { item: action.item, message: `${eulReul(info.name)} 만들었어! 🎨 꾸미기에서 마을에 놓아 보자.` };
+    }
+    case 'decorPlace': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!DECOR_ITEMS.includes(action.item)) fail('놓을 것을 다시 골라 주세요.');
+      const info = DECOR_INFO[action.item];
+      const bag = v.decorBag ??= {};
+      const decor = v.decor ??= [];
+      if ((bag[action.item] ?? 0) < 1) fail(`${iGa(info.name)} 가방에 없어요. 먼저 만들어 보자!`);
+      if (decor.length >= DECOR_MAX) fail(`마을에는 ${DECOR_MAX}개까지 놓을 수 있어요. 하나를 가방에 넣고 다시 놓아 보자.`);
+      const variant = Number.isInteger(action.variant) && action.variant! >= 0 && action.variant! < info.variants.length ? action.variant! : 0;
+      const x = Number(action.x), y = Number(action.y);
+      if (!Number.isInteger(x) || !Number.isInteger(y)) fail('놓을 자리를 다시 골라 주세요.');
+      const problem = decorSpotProblem(decor, action.item, info.variants[variant], x, y);
+      if (problem) fail(problem);
+      decor.push({ item: action.item, kind: info.variants[variant], x, y });
+      bag[action.item] = (bag[action.item] ?? 0) - 1;
+      return { message: `${eulReul(info.name)} 놓았어!` };
+    }
+    case 'decorTake': {
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const decor = v.decor ??= [];
+      const i = decorIndexAt(decor, Number(action.x), Number(action.y));
+      if (i < 0) fail('여기에는 꾸미기 물건이 없어요.');
+      const [d] = decor.splice(i, 1);
+      const bag = v.decorBag ??= {};
+      bag[d.item] = (bag[d.item] ?? 0) + 1;
+      return { message: `${eulReul(DECOR_INFO[d.item].name)} 가방에 다시 넣었어.` };
     }
     case 'quizTime': {
       // 아이 화면이 1분마다 보내는 "그동안 화면을 본 초" (보호자 화면의 하루 앱 사용 시간)
@@ -2063,6 +2111,10 @@ export function villageView(state: GameState, today: string) {
     entered: v?.enteredDate === today,
     time: { allowedMinutes: villageMinutesToday(state, today), usedSeconds: villageSecondsToday(state, today) },
     rules,
+    /** 꾸미기: 가방·놓은 물건·지금 재료 수 */
+    decorBag: Object.fromEntries(DECOR_ITEMS.map(k => [k, v?.decorBag?.[k] ?? 0])) as Record<DecorKey, number>,
+    decor: (v?.decor ?? []).filter(d => DECOR_ITEMS.includes(d.item)),
+    decorCosts: decorCostsNow(),
   };
 }
 export type VillageView = ReturnType<typeof villageView>;
@@ -2074,6 +2126,7 @@ export function villageReport(state: GameState, today: string) {
     habitats: view.habitats.filter(Boolean).map(h => ({ kind: h!.kind, name: HABITAT_INFO[h!.kind].name, since: h!.since })),
     guests: view.guests.map(g => ({ species: g.species, name: species(g.species).name, habitat: HABITAT_INFO[g.habitat].name })),
     met: (state.met ?? []).length, open: view.open, time: view.time,
+    decorPlaced: view.decor.length, decorBag: view.decorBag,
   };
 }
 /** 시뮬레이션: 문제은행을 다 푼 상태로 (복습 모드 확인용, 시험용 기록에만) */

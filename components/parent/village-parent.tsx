@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PokemonImage } from '@/components/game/common';
 import { CRAFT_INFO, CRAFTS, MATERIAL_INFO, MATERIALS, type CraftKey, type MaterialKey, type VillageRules, type VillageTimeMode } from '@/lib/village';
+import { DECOR_INFO, DECOR_ITEMS, type DecorKey } from '@/lib/village-decor';
 
 type Call = <T extends { message?: string }>(body: Record<string, unknown>) => Promise<T | null>;
 type Field = { key: Exclude<keyof VillageRules, 'timeMode'>; label: string; min: number; max: number };
@@ -12,6 +13,9 @@ export type VillageOverview = {
   guests: { species: number; name: string; habitat: string }[];
   met: number; open: boolean; time: { allowedMinutes: number | null; usedSeconds: number };
   rules: { now: VillageRules; defaults: VillageRules; overrides: Partial<VillageRules>; fields: Field[] };
+  /** 꾸미기: 놓은 물건 수·가방, 재료 수(지금·처음·바꾼 물건) */
+  decorPlaced: number; decorBag: Record<DecorKey, number>;
+  decor: { now: Record<DecorKey, Partial<Record<MaterialKey, number>>>; defaults: Record<string, Partial<Record<MaterialKey, number>>>; changed: string[] };
 };
 
 const TIME_LABEL: Record<VillageTimeMode, string> = { off: '제한 없음', daily: '하루 ○분', perQuiz: '퀴즈 ○문제당 ○분' };
@@ -32,6 +36,7 @@ export function VillageReport({ village }: { village: VillageOverview }) {
       {!village.started ? <p className="muted">아직 마을에 들어간 적이 없어요.</p> : <>
         <p>재료: {MATERIALS.map(k => `${MATERIAL_INFO[k].name} ${village.mats[k]}`).join(' · ')}</p>
         <p>가방: {CRAFTS.map(k => `${CRAFT_INFO[k].name} ${village.items[k]}`).join(' · ')}</p>
+        <p>꾸미기: 마을에 놓은 물건 {village.decorPlaced}개 · 가방 {DECOR_ITEMS.filter(k => village.decorBag[k] > 0).map(k => `${DECOR_INFO[k].name} ${village.decorBag[k]}`).join(' · ') || '없음'}</p>
         <p>서식지: {village.habitats.length ? village.habitats.map(h => `${h.name}(${h.since}~)`).join(', ') : '아직 없음'}</p>
         {village.guests.length > 0 && <div className="village-guests-parent">오늘 손님:
           {village.guests.map(g => <span key={g.species}><PokemonImage id={g.species} size={40} /> {g.name} <small className="muted">({g.habitat})</small></span>)}</div>}
@@ -74,7 +79,41 @@ export function VillageRulesEditor({ village, busy, call, reload }: { village: V
           if (await call({ action: 'resetVillageRules' })) { setDraft({}); await reload(); }
         }}>처음 값으로</button>
       </div>
+      <DecorCostEditor village={village} busy={busy} call={call} reload={reload} />
     </section>
+  );
+}
+
+/** 꾸미기 물건 재료 수 (물건마다 재료 4가지 0~20, 하나 이상은 1 이상) */
+function DecorCostEditor({ village, busy, call, reload }: { village: VillageOverview; busy: boolean; call: Call; reload: () => Promise<void> }) {
+  const { now, defaults, changed } = village.decor;
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const val = (k: DecorKey, m: MaterialKey) => draft[`${k}|${m}`] ?? String(now[k][m] ?? 0);
+  const rowDirty = (k: DecorKey) => MATERIALS.some(m => draft[`${k}|${m}`] !== undefined && Number(draft[`${k}|${m}`]) !== (now[k][m] ?? 0));
+  const costText = (c: Partial<Record<MaterialKey, number>>) => MATERIALS.filter(m => (c[m] ?? 0) > 0).map(m => `${MATERIAL_INFO[m].name} ${c[m]}`).join(' + ');
+  return (
+    <div className="decor-costs">
+      <h3>🎨 꾸미기 물건 재료</h3>
+      <p className="muted">물건 하나를 만드는 데 드는 재료 수예요. 0~20개, 적어도 한 가지는 1개 이상이어야 해요. 이미 만든 물건은 그대로예요.</p>
+      <div className="table-wrap"><table className="decor-cost-table">
+        <thead><tr><th>물건</th>{MATERIALS.map(m => <th key={m}>{MATERIAL_INFO[m].name}</th>)}<th /></tr></thead>
+        <tbody>{DECOR_ITEMS.map(k => (
+          <tr key={k}>
+            <td>{DECOR_INFO[k].name}{changed.includes(k) && <small className="muted"><br />(처음: {costText(defaults[k])})</small>}</td>
+            {MATERIALS.map(m => <td key={m}><input type="number" min={0} max={20} aria-label={`${DECOR_INFO[k].name} ${MATERIAL_INFO[m].name}`} value={val(k, m)}
+              onChange={e => setDraft(d => ({ ...d, [`${k}|${m}`]: e.target.value }))} /></td>)}
+            <td><button className="primary small" disabled={busy || !rowDirty(k)} onClick={async () => {
+              const cost = Object.fromEntries(MATERIALS.map(m => [m, Number(val(k, m))]));
+              if (await call({ action: 'setDecorCost', item: k, cost })) { setDraft(d => Object.fromEntries(Object.entries(d).filter(([key]) => !key.startsWith(k + '|')))); await reload(); }
+            }}>저장</button></td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+      <button className="secondary small" disabled={busy || changed.length === 0} onClick={async () => {
+        if (!window.confirm('꾸미기 물건 재료를 모두 처음 값으로 되돌릴까요?')) return;
+        if (await call({ action: 'resetDecorCosts' })) { setDraft({}); await reload(); }
+      }}>재료 처음 값으로</button>
+    </div>
   );
 }
 

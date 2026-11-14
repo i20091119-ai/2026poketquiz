@@ -6,6 +6,7 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 import assets from '@/lib/data/village-assets.json' with { type: 'json' };
 import { autotileQuarters, groundAt, MAP_OBJECTS, objectInfo, placedObject, type GroundKind, type MapObject, type ObjectKind } from '@/lib/village-map';
+import { decorImageAt, fenceKind, type DecorPlaced } from '@/lib/village-decor';
 import { cellPos, CRAFT_INFO, MAP_H, MAP_W, type CraftKey, type MaterialKey } from '@/lib/village';
 
 const T = assets.tile;
@@ -82,7 +83,7 @@ function ObjectLayer({ objects, tile, y0 }: { objects: MapObject[]; tile: number
 }
 
 /** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 좌표는 위쪽 숲 줄(TOP_ROWS)을 포함한 그림 좌표 */
-export function VillageGround({ tile, cells }: { tile: number; cells: (CraftKey | null)[] }) {
+export function VillageGround({ tile, cells, decor = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[] }) {
   const at = (x: number, y: number) => groundAt(x, y, cells);
   const placed: MapObject[] = [];
   cells.forEach((item, cell) => {
@@ -93,9 +94,14 @@ export function VillageGround({ tile, cells }: { tile: number; cells: (CraftKey 
   return (
     <div className="village-ground" aria-hidden>
       <GroundLayer x0={0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={cells.join(',')} />
-      <ObjectLayer objects={[...MAP_OBJECTS, ...placed]} tile={tile} y0={-TOP_ROWS} />
+      <ObjectLayer objects={[...MAP_OBJECTS, ...placed, ...decorObjects(decor)]} tile={tile} y0={-TOP_ROWS} />
     </div>
   );
+}
+
+/** 꾸미기 물건 → 물건 층 (울타리는 이웃을 보고 모양을 고름) */
+export function decorObjects(decor: DecorPlaced[]): MapObject[] {
+  return decor.map(d => ({ kind: d.item === 'fence' ? fenceKind(decor, d.x, d.y) : d.kind, ...decorImageAt(d) }));
 }
 
 // ---------- 재료·만든 물건 아이콘 ----------
