@@ -108,8 +108,8 @@ function CatchInner({ tool, onDone, onClose }: { tool: ToolKey; onDone: (hit: bo
       <DialogDescription>{phase === 'sending' ? '…' : [hint, result?.message].filter(Boolean).join(' ')}</DialogDescription>
       {result?.hit && result.mat && <div className="catch-got"><MaterialIcon kind={result.mat} scale={4} /></div>}
       {met && <div className="catch-met">
-        <AnimMon species={met.species} scale={2} fallback={`/assets/pokemon/pixel/${met.species}.png`} />
-        <p><b>{species(met.species).name}</b>{met.fresh ? '를 처음 만났어! 📖 방명록에 남겼어 (🏠 마을점수 +)' : '를 또 만났어! 📖 방명록에 발자국 도장 🐾'}</p>
+        <span className="catch-met-mon"><AnimMon species={met.species} scale={2} fallback={`/assets/pokemon/pixel/${met.species}.png`} /></span>
+        <p><b>{species(met.species).name}</b>{met.fresh ? '를 처음 만났어! 📖 방명록에 남겼어. 🏠 마을점수도 받았어!' : '를 또 만났어! 📖 방명록에 발자국 도장 🐾'}</p>
       </div>}
       {result && result.left > 0 && <p className="catch-left">{info.name} {result.left}번 더 쓸 수 있어</p>}
       <button className="primary big-button" disabled={phase === 'sending'} onClick={onClose}>좋아!</button>
@@ -190,7 +190,7 @@ export function FunIntro({ open, view, onClose }: { open: boolean; view: ChildVi
         <div className="intro-buttons">
           {last ? <button className="primary glow big-button" onClick={close}>알았어!</button>
             : <button className="primary big-button" onClick={() => setPage(p => p + 1)}>다음 <ArrowRight size={22} /></button>}
-          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
         </div>
       </DialogContent>
     </Dialog>

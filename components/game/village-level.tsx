@@ -14,7 +14,7 @@ type Level = ChildView['village']['level'];
 type RegionView = Level['regions'][number];
 
 /** 위쪽: 🏡 Lv.N 🏠 마을점수 지금/다음 · 🔑 · ❓ (2026-11-14: 별 ⭐은 배틀 힘 ★과 헷갈려서 🏠 마을점수로) */
-export function VillageLevelBar({ level, width, onKeys, onHelp }: { level: Level; width: number; onKeys: () => void; onHelp: () => void }) {
+export function VillageLevelBar({ level, width, onKeys, onHelp, onGuide }: { level: Level; width: number; onKeys: () => void; onHelp: () => void; onGuide?: () => void }) {
   const pct = level.next ? Math.min(100, Math.round((level.into / level.next) * 100)) : 100;
   return (
     <div className="village-level" style={{ width }} aria-label={`마을 레벨 ${level.level}`}>
@@ -23,6 +23,7 @@ export function VillageLevelBar({ level, width, onKeys, onHelp }: { level: Level
       <small>{level.next ? `🏠 ${level.into}/${level.next}` : '🏠 최고 레벨!'}</small>
       {level.keys > 0 && <button className="village-key-btn" onClick={onKeys} aria-label={`열쇠 ${level.keys}개, 눌러서 땅 열기`}>🔑 {level.keys}</button>}
       <button className="village-help-btn" onClick={onHelp} aria-label="마을 레벨 안내">❓</button>
+      {onGuide && <button className="village-help-btn village-guide-btn" onClick={onGuide} aria-label="마을 설명서 보기">📘 설명서</button>}
     </div>
   );
 }
@@ -143,7 +144,7 @@ export function LevelGuide({ open, level, onClose }: { open: boolean; level: Lev
           {last
             ? <button className="primary glow big-button" onClick={close}>{level.keys > 0 ? '🔑 땅 열러 가기' : '알았어!'}</button>
             : <button className="primary big-button" onClick={() => setPage(p => p + 1)}>다음 <ArrowRight size={22} /></button>}
-          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
         </div>
       </DialogContent>
     </Dialog>

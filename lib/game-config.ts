@@ -300,7 +300,8 @@ export const BALLS = {
   shiny: { label: '이로치 볼', odds: [0, 0, 0, 0] },
 } as const;
 export type BallKind = keyof typeof BALLS;
-export const TIER_LABELS = ['흔함', '조금 드묾', '희귀', '전설'];
+/** 볼을 열 때 보이는 등급 이름 (2026-11-14 부모님: 아이용·부모용·화면 모두 "보통 / 조금 드문 / 드문"으로 통일) */
+export const TIER_LABELS = ['보통', '조금 드문', '드문', '전설'];
 
 /**
  * 볼을 열 때 이로치(색이 다른 포켓몬)가 나올 확률(%). 이로치는 퀴즈에서만 얻습니다(포켓로그에서는 안 줌).
