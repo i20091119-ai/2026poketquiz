@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SUBJECTS, SUBJECT_TYPES } from './game-config.ts';
-import { applyAction, childView, ensureDaily, initialState, simVillageCraft, villageLevel, villageStars, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
+import { applyAction, childView, ensureDaily, initialState, simVillageCraft, villageKeys, villageLevel, villageOpen, villageStars, type ActiveBank, type Context, type GameState, type Question } from './game-engine.ts';
 import { GROUND_ROWS } from './village-map.ts';
 import { decorSpotProblem } from './village-decor.ts';
-import { GATHER_ROCKS, setCraftRules, TREE_SPOTS, treeSpotsOpen } from './village-craft.ts';
-import { isOpenCell, levelAt, levelOfStars, MAX_LEVEL, REGIONS } from './village-level.ts';
+import { GATHER_ROCKS, levelNeeds, setCraftRules, TREE_SPOTS, treeSpotsOpen } from './village-craft.ts';
+import { choosableRegions, isOpenCell, levelOfStars, MAX_LEVEL, regionAt, REGIONS } from './village-level.ts';
 import { dayPickups, MAP_H, MAP_W, MAP_X0, PICK_SPOTS, PLOTS, setVillageRules } from './village.ts';
 
 const TODAY = '2026-11-14';
@@ -29,82 +29,97 @@ function ready(): { state: GameState; bank: ActiveBank } {
   return { state, bank };
 }
 
-test('구역은 지도를 빈틈·겹침 없이 나누고, 처음 마을(12×20)은 예전 지도 그대로', () => {
+test('구역은 지도를 빈틈·겹침 없이 나누고(5×3), 처음 마을(12×20)은 위쪽 가운데에 예전 지도 그대로', () => {
   const seen = new Set<string>();
   for (const r of REGIONS) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
     assert.ok(!seen.has(`${x},${y}`), `겹침 ${x},${y}`);
     seen.add(`${x},${y}`);
   }
   assert.equal(seen.size, MAP_W * MAP_H);
+  assert.equal(REGIONS.length, 15);
+  const home = REGIONS.find(r => r.id === 'C1')!;
+  assert.deepEqual([home.x, home.y, home.w, home.h], [0, 0, 12, 20]);
+  assert.equal(-MAP_X0, MAP_X0 + MAP_W - 12, '처음 마을 왼쪽·오른쪽 폭이 같음');
   const old = ['............', '............', '............', '............', '.....==.....', '.ss..==..ss.', '.ss..==..ss.', '.....==.....', '============', '.....==.....',
     '.....==.....', '.....==.....', '.....==.....', '.....==.ss..', '.....==.ss..', '.~~~.==.....', '.~~~.==.....', '.~~~.==.....', '.....==.....', '.....==.....'];
   old.forEach((row, y) => assert.equal(GROUND_ROWS[y].slice(-MAP_X0, -MAP_X0 + 12), row, `처음 마을 ${y}줄이 바뀜`));
-  // 처음 마을은 위쪽 가운데 (왼쪽·오른쪽에 같은 폭)
-  assert.equal(-MAP_X0, MAP_W - 12 + MAP_X0);
-  REGIONS.forEach((r, i) => assert.equal(r.level, i + 1));
 });
 
-test('새 밭·나무 자리·바위·줍는 자리는 넓어진 구역에 하나씩, 처음 것들은 레벨 1 구역', () => {
-  assert.deepEqual(PLOTS.slice(0, 3).map(p => levelAt(p.x, p.y)), [1, 1, 1]);
-  assert.deepEqual(PLOTS.slice(3).map(p => levelAt(p.x, p.y)), [2, 3, 4, 5]);
-  assert.deepEqual(TREE_SPOTS.slice(3).map(p => levelAt(p.x, p.y)), [2, 3, 4, 5]);
-  assert.ok(PICK_SPOTS.slice(0, 10).every(p => levelAt(p.x, p.y) === 1));
-  assert.ok(GATHER_ROCKS.slice(0, 3).every(p => levelAt(p.x, p.y) === 1));
-  for (let level = 2; level <= MAX_LEVEL; level++) assert.ok(PICK_SPOTS.some(p => levelAt(p.x, p.y) === level), `레벨 ${level} 줍는 자리 없음`);
-  // 레벨 1이면 줍는 자리는 예전 10곳 안에서만
-  for (const d of ['2026-11-14', '2026-11-15', '2026-12-01']) assert.ok(dayPickups(d, 3, 1).every(p => p.spot < 10));
-  assert.deepEqual(treeSpotsOpen(1), [0, 1, 2]);
-  assert.deepEqual(treeSpotsOpen(4), [0, 1, 2, 3, 4, 5]);
+test('새 구역마다 줍는 자리·바위가 있고, 처음 마을 자리는 그대로', () => {
+  const at = (p: { x: number; y: number }) => regionAt(p.x, p.y)!.id;
+  assert.deepEqual(PLOTS.slice(0, 3).map(at), ['C1', 'C1', 'C1']);
+  assert.ok(PICK_SPOTS.slice(0, 10).every(p => at(p) === 'C1'));
+  assert.ok(GATHER_ROCKS.slice(0, 3).every(p => at(p) === 'C1'));
+  assert.ok(TREE_SPOTS.slice(0, 3).every(p => at(p) === 'C1'));
+  for (const r of REGIONS.filter(q => q.id !== 'C1')) {
+    assert.ok(PICK_SPOTS.some(p => at(p) === r.id), `${r.name}: 줍는 자리 없음`);
+    assert.ok(GATHER_ROCKS.some(p => at(p) === r.id), `${r.name}: 바위 없음`);
+  }
+  for (const p of [...PLOTS, ...TREE_SPOTS, ...PICK_SPOTS, ...GATHER_ROCKS]) assert.ok(regionAt(p.x, p.y), `지도 밖 ${p.x},${p.y}`);
+  // 처음 마을만 열려 있으면 줍는 자리는 예전 10곳 안에서만
+  for (const d of ['2026-11-14', '2026-11-15', '2026-12-01']) assert.ok(dayPickups(d, 3).every(p => p.spot < 10));
+  assert.deepEqual(treeSpotsOpen(['C1']), [0, 1, 2]);
+  assert.deepEqual(treeSpotsOpen(['C1', 'D1', 'B1']), [0, 1, 2, 3, 4]);
 });
 
-test('별 → 레벨: 50 · +120 · +200 · +300 · +400, 최고 6', () => {
-  assert.equal(MAX_LEVEL, 6);
-  const needs = [50, 120, 200, 300, 400];
+test('열 수 있는 땅 = 열린 땅에 붙은 곳 (왼쪽·오른쪽·아래), 열수록 바깥으로', () => {
+  const ids = (open: string[]) => choosableRegions(open).map(r => `${r.id}:${r.dir}`).sort();
+  assert.deepEqual(ids(['C1']), ['B1:left', 'C2:down', 'D1:right']);
+  assert.deepEqual(ids(['C1', 'B1']), ['A1:left', 'B2:down', 'C2:down', 'D1:right']);
+  assert.deepEqual(ids(['C1', 'C2']), ['B1:left', 'B2:left', 'C3:down', 'D1:right', 'D2:right']);
+  assert.deepEqual(ids(REGIONS.map(r => r.id)), []);
+});
+
+test('별 → 레벨: 50 · 120 · 160 · 200 … (레벨마다 40씩 더), 최고 15', () => {
+  setCraftRules(null);
+  assert.equal(MAX_LEVEL, 15);
+  const needs = levelNeeds();
+  assert.deepEqual(needs.slice(0, 4), [50, 120, 160, 200]);
+  assert.equal(needs.length, 14);
   assert.deepEqual(levelOfStars(0, needs), { level: 1, into: 0, next: 50 });
-  assert.deepEqual(levelOfStars(49, needs), { level: 1, into: 49, next: 50 });
   assert.deepEqual(levelOfStars(50, needs), { level: 2, into: 0, next: 120 });
-  assert.deepEqual(levelOfStars(170, needs), { level: 3, into: 0, next: 200 });
-  assert.equal(levelOfStars(669, needs).level, 4);
-  assert.equal(levelOfStars(1069, needs).level, 5);
-  assert.deepEqual(levelOfStars(9999, needs), { level: 6, into: 9999 - 1070, next: null });
+  assert.deepEqual(levelOfStars(170, needs), { level: 3, into: 0, next: 160 });
+  const all = needs.reduce((a, b) => a + b, 0);
+  assert.deepEqual(levelOfStars(all + 5, needs), { level: 15, into: 5, next: null });
 });
 
-test('안 열린 땅: 꾸미기·밭·나무·바위 막힘, 레벨이 오르면 열림', () => {
+test('열쇠: 레벨이 오르면 1개 → 아이가 붙은 땅 하나를 골라 엶, 잠긴 땅은 막힘', () => {
   const { state, bank } = ready();
   const v = state.village!;
   v.stars = 0;
-  assert.equal(villageLevel(state), 1);
-  assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', 14, 6, 1) ?? '', /레벨 2에 열려/);
-  assert.equal(decorSpotProblem([], [], 'flower', 'flowerRed', 14, 6, 2), null);
+  assert.equal(villageKeys(state), 0);
+  assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', 14, 6) ?? '', /오른쪽 풀밭은 아직 잠겨/);
   v.decorBag = { flower: 2 };
-  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank)), /레벨 2에 열려/);
-  v.items = { bush: 1 };
-  assert.throws(() => applyAction(state, { type: 'villagePlace', cell: 12, item: 'bush', stay: true }, ctx(bank)), /레벨 2에 열려/);
-  assert.throws(() => applyAction(state, { type: 'villageGather', rock: 3, stay: true }, ctx(bank)), /레벨 2에 열려/);
-  v.saplings = 1;
-  assert.throws(() => applyAction(state, { type: 'villagePlant', spot: 3, berry: 'apple', stay: true }, ctx(bank)), /레벨 2에 열려/);
-  // 레벨 2로
+  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank)), /잠겨/);
+  assert.throws(() => applyAction(state, { type: 'villageUnlock', region: 'D1' }, ctx(bank)), /열쇠가 없어/);
+  // 레벨 2 → 열쇠 1개
   simVillageCraft(state, 'levelUp', null, TODAY);
   assert.equal(villageLevel(state), 2);
-  applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank));
-  applyAction(state, { type: 'villagePlace', cell: 12, item: 'bush', stay: true }, ctx(bank));
-  applyAction(state, { type: 'villagePlant', spot: 3, berry: 'apple', stay: true }, ctx(bank));
-  assert.equal(childView(state, bank, TODAY).village.craft.treeMax, 4);
-  // 레벨 3 구역은 아직
-  assert.throws(() => applyAction(state, { type: 'villagePlace', cell: 16, item: 'bush', stay: true }, ctx(bank)), /레벨 3에 열려/);
-  // 축하 팝업: 본 레벨 1 → 2
-  const lv = childView(state, bank, TODAY).village.level;
-  assert.equal(lv.level, 2);
-  assert.equal(lv.seen, 1);
-  assert.deepEqual(lv.regions.filter(r => r.open).map(r => r.name), ['처음 마을', '오른쪽 풀밭']);
-  applyAction(state, { type: 'villageLevelSeen' }, ctx(bank));
-  assert.equal(childView(state, bank, TODAY).village.level.seen, 2);
-  assert.ok(isOpenCell(15, 4, 2) && !isOpenCell(2, 22, 2) && !isOpenCell(-3, 5, 2));
-  // 레벨 3 = 왼쪽 숲 (x가 음수)
-  simVillageCraft(state, 'levelUp', null, TODAY);
-  assert.equal(decorSpotProblem([], [], 'flower', 'flowerRed', -4, 9, 3), null);
+  assert.equal(villageKeys(state), 1);
+  assert.equal(childView(state, bank, TODAY).village.level.keys, 1);
+  // 붙어 있지 않은 땅은 못 엶
+  assert.throws(() => applyAction(state, { type: 'villageUnlock', region: 'A1' }, ctx(bank)), /바로 옆/);
+  // 왼쪽 숲을 고름 → 오른쪽은 아직 잠김
+  applyAction(state, { type: 'villageUnlock', region: 'B1' }, ctx(bank));
+  assert.deepEqual(villageOpen(state), ['C1', 'B1']);
+  assert.equal(villageKeys(state), 0);
+  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank)), /잠겨/);
   applyAction(state, { type: 'decorPlace', item: 'flower', x: -4, y: 9, stay: true }, ctx(bank));
-  assert.ok(state.village!.decor!.some(d => d.x === -4 && d.y === 9));
+  v.items = { bush: 1 };
+  applyAction(state, { type: 'villagePlace', cell: 16, item: 'bush', stay: true }, ctx(bank)); // 밭 4 = 왼쪽 숲
+  assert.throws(() => applyAction(state, { type: 'villagePlace', cell: 12, item: 'bush', stay: true }, ctx(bank)), /잠겨/); // 밭 3 = 오른쪽 풀밭
+  assert.equal(childView(state, bank, TODAY).village.craft.treeMax, 4);
+  assert.throws(() => applyAction(state, { type: 'villageUnlock', region: 'D1' }, ctx(bank)), /열쇠가 없어/);
+  // 레벨 3 → 이제 꽃 들판(A1)도 고를 수 있음
+  simVillageCraft(state, 'levelUp', null, TODAY);
+  const lv = childView(state, bank, TODAY).village.level;
+  assert.deepEqual(lv.regions.filter(r => r.status === 'choose').map(r => r.id).sort(), ['A1', 'B2', 'C2', 'D1']);
+  applyAction(state, { type: 'villageUnlock', region: 'A1' }, ctx(bank));
+  assert.throws(() => applyAction(state, { type: 'villageUnlock', region: 'A1' }, ctx(bank)), /열쇠가 없어|이미/);
+  assert.ok(isOpenCell(-12, 5, villageOpen(state)));
+  // 모르는 땅 이름은 무시하고 읽음
+  v.opened!.push('Z9');
+  assert.deepEqual(villageOpen(state), ['C1', 'B1', 'A1']);
 });
 
 test('별은 마을에서 한 일로: 만들기·열매 따기·볼 만들기, 손님 온 날은 하루 한 번', () => {

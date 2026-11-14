@@ -13,7 +13,7 @@ import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMess
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { DECOR_BAG_MAX, DECOR_INFO, DECOR_ITEMS, DECOR_MAX, decorCells, decorCost, decorCostsNow, decorIndexAt, decorSpotProblem, TERRAIN_MAX, terrainIndexAt, type DecorKey, type DecorPlaced } from './village-decor.ts';
 import type { TerrainCell } from './village-map.ts';
-import { isOpenCell, levelOfStars, lockedText, MAX_LEVEL, REGIONS } from './village-level.ts';
+import { choosableRegions, DIR_TEXT, isOpenCell, levelOfStars, lockedText, MAX_LEVEL, openRegions, REGIONS } from './village-level.ts';
 import { BERRY_KINDS, berryOfType, craftRules, ironForWeek, levelNeeds, treeSpotsOpen, RECIPE_INFO, RECIPES, recipeCost, GATHER_ROCKS, STUDY_MAT_INFO, TREE_SPOTS, type RecipeKey } from './village-craft.ts';
 import { CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, dayPickups, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
@@ -191,6 +191,8 @@ export type VillageState = {
   stars?: number;
   /** 축하 팝업을 본 레벨 (없으면 1) */
   levelSeen?: number;
+  /** 아이가 열쇠로 연 구역 (처음 마을 C1 빼고, 연 순서). 없으면 처음 마을만 */
+  opened?: string[];
   /** 서식지 손님 별을 받은 날 (하루 한 번) */
   guestStarDate?: string;
 };
@@ -1024,6 +1026,7 @@ export type Action =
   | { type: 'villagePlant'; spot: number; berry: PotionKind; stay?: boolean }
   | { type: 'openCraftedBall'; id: string }
   | { type: 'villageLevelSeen' }
+  | { type: 'villageUnlock'; region: string }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1257,7 +1260,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villagePick': {
       const v = villageAccess(state, ctx.today, action.stay, random);
       const rules = villageRules();
-      const spots = dayPickups(ctx.today, rules.pickPerDay, villageLevel(state));
+      const spots = dayPickups(ctx.today, rules.pickPerDay, villageOpen(state));
       const found = spots.find(p => p.spot === action.spot);
       if (!found) fail('여기에는 재료가 없어요.');
       if (v.picked?.date !== ctx.today) v.picked = { date: ctx.today, spots: [] };
@@ -1286,7 +1289,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!Number.isInteger(action.cell) || action.cell < 0 || action.cell >= CELL_COUNT) fail('놓을 칸을 다시 골라 주세요.');
       if (!CRAFTS.includes(action.item)) fail('놓을 것을 다시 골라 주세요.');
       if (v.cells[action.cell]) fail('이미 놓여 있어요.');
-      { const p = cellPos(action.cell); if (!isOpenCell(p.x, p.y, villageLevel(state))) fail(lockedText(p.x, p.y)); }
+      { const p = cellPos(action.cell); if (!isOpenCell(p.x, p.y, villageOpen(state))) fail(lockedText(p.x, p.y)); }
       if ((v.items[action.item] ?? 0) < 1) fail(`${iGa(CRAFT_INFO[action.item].name)} 가방에 없어요. 먼저 만들어 보자!`);
       v.items[action.item] = (v.items[action.item] ?? 0) - 1;
       v.cells[action.cell] = action.item;
@@ -1329,13 +1332,13 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (info.ground) {
         // 땅 바꾸기: 그 칸의 땅을 바꿈
         if (terrain.length >= TERRAIN_MAX) fail(`땅은 ${TERRAIN_MAX}칸까지 바꿀 수 있어요. 한 칸을 되돌리고 다시 해 보자.`);
-        const problem = decorSpotProblem(decor, terrain, action.item, null, x, y, villageLevel(state));
+        const problem = decorSpotProblem(decor, terrain, action.item, null, x, y, villageOpen(state));
         if (problem) fail(problem);
         terrain.push({ x, y, ground: info.ground });
       } else {
         if (decor.length >= DECOR_MAX) fail(`마을에는 ${DECOR_MAX}개까지 놓을 수 있어요. 하나를 가방에 넣고 다시 놓아 보자.`);
         const variant = Number.isInteger(action.variant) && action.variant! >= 0 && action.variant! < info.variants.length ? action.variant! : 0;
-        const problem = decorSpotProblem(decor, terrain, action.item, info.variants[variant], x, y, villageLevel(state));
+        const problem = decorSpotProblem(decor, terrain, action.item, info.variants[variant], x, y, villageOpen(state));
         if (problem) fail(problem);
         decor.push({ item: action.item, kind: info.variants[variant], x, y });
       }
@@ -1383,7 +1386,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villageGather': {
       const v = villageAccess(state, ctx.today, action.stay, random);
       if (!Number.isInteger(action.rock) || !GATHER_ROCKS[action.rock]) fail('여기에는 바위가 없어요.');
-      if (!isOpenCell(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y, villageLevel(state))) fail(lockedText(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y));
+      if (!isOpenCell(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y, villageOpen(state))) fail(lockedText(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y));
       const limit = craftRules().stoneDaily;
       if (v.gathered?.date !== ctx.today) v.gathered = { date: ctx.today, n: 0 };
       if (v.gathered.n >= limit) fail(`오늘은 돌멩이를 다 캤어! (하루 ${limit}개) 내일 또 캘 수 있어.`);
@@ -1424,8 +1427,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!BERRY_KINDS.includes(action.berry)) fail('어떤 열매를 쓸지 골라 줘.');
       const info = RECIPE_INFO[action.recipe];
       const cost = recipeCost(action.recipe);
-      const treeMax = treeSpotsOpen(villageLevel(state)).length;
-      if (action.recipe === 'sapling' && ensureTrees(state, v, ctx.today).length + (v.saplings ?? 0) >= treeMax) fail(`지금은 열매나무를 ${treeMax}그루까지 키울 수 있어!${villageLevel(state) < MAX_LEVEL ? ' 마을 레벨이 오르면 자리가 늘어나.' : ''}`);
+      const treeMax = treeSpotsOpen(villageOpen(state)).length;
+      if (action.recipe === 'sapling' && ensureTrees(state, v, ctx.today).length + (v.saplings ?? 0) >= treeMax) fail(`지금은 열매나무를 ${treeMax}그루까지 키울 수 있어!${villageOpen(state).length < MAX_LEVEL ? ' 열쇠로 새 땅을 열면 자리가 늘어나.' : ''}`);
       const short = craftShortage(state, v, action.berry, cost);
       if (short) fail(short);
       // 재료 빼기: 고른 종류 열매 → 돌멩이 → 철 → 반짝돌
@@ -1451,11 +1454,22 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if (!BERRY_KINDS.includes(action.berry)) fail('어떤 열매나무로 키울지 골라 줘.');
       const trees = ensureTrees(state, v, ctx.today);
       if (!Number.isInteger(action.spot) || !TREE_SPOTS[action.spot]) fail('여기에는 심을 수 없어요.');
-      if (!treeSpotsOpen(villageLevel(state)).includes(action.spot)) fail(isOpenCell(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y, villageLevel(state)) ? '여기에는 심을 수 없어요.' : lockedText(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y));
+      if (!treeSpotsOpen(villageOpen(state)).includes(action.spot)) fail(isOpenCell(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y, villageOpen(state)) ? '여기에는 심을 수 없어요.' : lockedText(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y));
       if (trees.some(t => t.spot === action.spot)) fail('여기에는 벌써 나무가 있어.');
       trees.push({ spot: action.spot, berry: action.berry, since: ctx.today });
       v.saplings = (v.saplings ?? 0) - 1;
       return { message: `${POTIONS[action.berry].label} 나무를 심었어! 🌳 내일부터 열매가 열려.` };
+    }
+    case 'villageUnlock': {
+      // 열쇠 1개로 잠긴 땅 하나 열기: 열린 땅에 붙어 있는 곳만 (마을이 열려 있을 때)
+      const v = villageAccess(state, ctx.today, true, random);
+      const open = villageOpen(state);
+      if (villageKeys(state) < 1) fail('열쇠가 없어. 마을에서 별을 모아 레벨을 올리면 열쇠가 생겨!');
+      const r = choosableRegions(open).find(q => q.id === action.region);
+      if (!r) fail(REGIONS.some(q => q.id === action.region && open.includes(q.id)) ? '이미 열린 땅이야.' : '여기는 아직 열 수 없어. 열린 땅 바로 옆에 있는 곳을 골라 줘!');
+      (v.opened ??= []).push(r.id);
+      v.levelSeen = villageLevel(state);
+      return { region: r.id, message: `🔓 ${r.emoji} ${eulReul(r.name)} 열었어! ${DIR_TEXT[r.dir]}으로 가 보자!` };
     }
     case 'villageLevelSeen': {
       // 마을 레벨 축하 팝업을 봄 (보기 기록만)
@@ -2219,7 +2233,11 @@ export function villageStars(state: GameState): number {
 }
 /** 마을 레벨 (1~MAX_LEVEL) */
 export const villageLevel = (state: GameState) => levelOfStars(villageStars(state), levelNeeds()).level;
-/** 별 더하기 (레벨이 오르면 화면이 축하 팝업) */
+/** 열린 구역 (처음 마을 + 열쇠로 연 곳) */
+export const villageOpen = (state: GameState) => openRegions(state.village?.opened);
+/** 남은 열쇠 = (레벨 - 1) - 연 구역 수 */
+export const villageKeys = (state: GameState) => Math.max(0, villageLevel(state) - villageOpen(state).length);
+/** 별 더하기 (레벨이 오르면 열쇠가 생김) */
 function addStars(state: GameState, n: number) {
   if (!(n > 0)) return;
   const v = village(state);
@@ -2401,7 +2419,7 @@ export function villageView(state: GameState, today: string) {
     items: Object.fromEntries(CRAFTS.map(k => [k, v?.items?.[k] ?? 0])) as Record<CraftKey, number>,
     cells: Array.from({ length: CELL_COUNT }, (_, i) => v?.cells?.[i] ?? null),
     habitats: PLOTS.map((_, i) => v?.habitats?.[i] ?? null),
-    pickups: dayPickups(today, rules.pickPerDay, villageLevel(state)).filter(p => !picked.includes(p.spot)),
+    pickups: dayPickups(today, rules.pickPerDay, villageOpen(state)).filter(p => !picked.includes(p.spot)),
     pickLeft: Math.max(0, rules.pickPerDay - picked.length),
     guests: v?.guests?.date === today ? v.guests.list : [],
     residents,
@@ -2424,10 +2442,21 @@ export type VillageView = ReturnType<typeof villageView>;
 function levelView(state: GameState) {
   const stars = villageStars(state);
   const l = levelOfStars(stars, levelNeeds());
+  const open = villageOpen(state);
+  const choose = choosableRegions(open);
   return {
     stars, level: l.level, into: l.into, next: l.next, max: MAX_LEVEL,
     seen: Math.min(state.village?.levelSeen ?? 1, l.level),
-    regions: REGIONS.map(r => ({ level: r.level, name: r.name, x: r.x, y: r.y, w: r.w, h: r.h, open: r.level <= l.level })),
+    /** 남은 열쇠 (레벨이 오를 때마다 1개, 땅을 열면 줄어듦) */
+    keys: villageKeys(state),
+    /** 구역마다: open 열림 / choose 열쇠로 열 수 있음(열린 땅에 붙어 있음) / locked 아직 멀어서 못 엶 */
+    regions: REGIONS.map(r => {
+      const c = choose.find(q => q.id === r.id);
+      return { id: r.id, col: r.col, row: r.row, name: r.name, emoji: r.emoji, about: r.about, x: r.x, y: r.y, w: r.w, h: r.h,
+        status: (open.includes(r.id) ? 'open' : c ? 'choose' : 'locked') as 'open' | 'choose' | 'locked', dir: c?.dir ?? null };
+    }),
+    /** 별 받는 일 (아이 안내 화면) */
+    starRules: { guest: craftRules().starGuest, habitat: craftRules().starHabitat, make: craftRules().starMake, ball: craftRules().starBall, harvest: craftRules().starHarvest },
   };
 }
 /** 마을 화면의 열매나무·제작대 정보 (보기만, 기록은 바꾸지 않음) */
@@ -2435,7 +2464,7 @@ function craftView(state: GameState, today: string) {
   const v = state.village;
   const rules = craftRules();
   const harvested = v?.harvested?.date === today ? v.harvested.spots : [];
-  const spots = treeSpotsOpen(villageLevel(state));
+  const spots = treeSpotsOpen(villageOpen(state));
   return {
     rules,
     /** 지금 키울 수 있는 나무 수·심을 수 있는 자리 (마을 레벨로 늘어남) */
@@ -2465,7 +2494,7 @@ export function villageReport(state: GameState, today: string) {
     craft: { trees: view.craft.trees.length, iron: view.craft.iron, sparkle: view.craft.sparkle, mail: view.craft.mail, balls: view.craft.balls.length, made: state.village?.craftLog?.length ?? 0 },
     berrySources: state.berrySources ?? {},
     /** 마을 레벨·별·다음 레벨까지 */
-    level: { level: view.level.level, stars: view.level.stars, into: view.level.into, next: view.level.next, region: REGIONS.filter(r => r.level <= view.level.level).map(r => r.name) },
+    level: { level: view.level.level, stars: view.level.stars, into: view.level.into, next: view.level.next, region: view.level.regions.filter(r => r.status === 'open').map(r => r.name), keys: view.level.keys },
   };
 }
 /** 시뮬레이션: 문제은행을 다 푼 상태로 (복습 모드 확인용, 시험용 기록에만) */
@@ -2505,9 +2534,9 @@ export function simVillageCraft(state: GameState, op: string, bank: ActiveBank |
       const l = levelOfStars(villageStars(state), levelNeeds());
       if (!l.next) return '이미 마을 최고 레벨이에요.';
       v.stars = villageStars(state) + (l.next - l.into);
-      return `마을 별을 채워 레벨 ${l.level + 1}로 올렸어요. 아이 화면에서 마을에 들어가면 "마을이 넓어졌어!"가 떠요.`;
+      return `마을 별을 채워 레벨 ${l.level + 1}로 올렸어요. 아이 화면에서 마을에 들어가면 🔑 열쇠로 열 땅을 고르는 창이 떠요.`;
     }
-    case 'levelReset': { v.stars = 0; v.levelSeen = 1; return '마을 별을 0으로(레벨 1) 되돌렸어요(시험용).'; }
+    case 'levelReset': { v.stars = 0; v.levelSeen = 1; v.opened = []; return '마을 별을 0으로(레벨 1) 되돌리고 연 땅도 처음 마을만 남겼어요(시험용).'; }
     case 'dexFull': {
       for (const t of [0, 1, 2]) for (const id of CATCH_POOLS[t]) if (!state.dex.includes(id)) state.dex.push(id);
       return '흔함·조금 드묾·희귀 포켓몬을 모두 도감에 넣었어요(시험용). 제작 볼을 열면 이로치나 열매 돌려받기가 나와요.';

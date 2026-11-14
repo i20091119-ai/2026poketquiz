@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { applyAction, childView, GameError, initialState, type Context, type GameState } from './game-engine.ts';
 import { cleanDecorCosts, DECOR_INFO, DECOR_ITEMS, decorCost, decorSpotProblem, fenceKind, setDecorCosts, type DecorPlaced } from './village-decor.ts';
 import { baseGround, objectInfo } from './village-map.ts';
-import { MAP_H, MAP_W, PICK_SPOTS, setVillageRules, START_POS } from './village.ts';
+import { MAP_H, MAP_W, MAP_X0, PICK_SPOTS, setVillageRules, START_POS } from './village.ts';
+import { REGIONS } from './village-level.ts';
 import assets from './data/village-assets.json' with { type: 'json' };
 
 const TODAY = '2026-11-14';
@@ -68,7 +69,7 @@ test('놓을 수 있는 곳: 풀밭만, 길·밭·물·집·다른 물건·처�
   assert.match(decorSpotProblem(none, [], 'lily', 'lily', 8, 11) ?? '', /물 위/);
   const placed: DecorPlaced[] = [{ item: 'bench', kind: 'bench', x: 8, y: 11 }];
   assert.match(decorSpotProblem(placed, [], 'flower', 'flowerRed', 9, 11) ?? '', /이미/);
-  assert.match(decorSpotProblem(none, [], 'bench', 'bench', MAP_W - 1, 14, 5) ?? '', /밖/); // 2칸짜리가 지도 밖으로
+  assert.match(decorSpotProblem(none, [], 'bench', 'bench', MAP_X0 + MAP_W - 1, 14, REGIONS.map(r => r.id)) ?? '', /밖/); // 2칸짜리가 지도 밖으로
   // 어디에도 놓을 곳이 있는지 (지도 전체에 풀밭 자리가 넉넉한지)
   let ok = 0;
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (!decorSpotProblem(none, [], 'flower', 'flowerRed', x, y)) ok++;

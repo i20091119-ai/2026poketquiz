@@ -105,7 +105,7 @@ test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손�
   const plan = ['bush', 'bush', 'bush', 'bush', 'bush', 'puddle', 'puddle', 'bush', 'flowers', 'flowers', 'flowers', 'flowers'] as const;
   plan.forEach((item, cell) => applyAction(state, { type: 'villagePlace', cell, item }, ctx(bank)));
   assert.equal(plan.length, 12); // 처음 마을 밭 3개 (넓어진 구역 밭은 레벨로 열림)
-  assert.equal(CELL_COUNT, 28);
+  assert.equal(CELL_COUNT, 48);
   assert.deepEqual(state.village!.habitats.slice(0, 3).map(h => h?.kind), ['green', 'shore', 'garden']);
   assert.ok(state.village!.habitats.slice(3).every(h => !h));
   // 오늘은 손님 없음

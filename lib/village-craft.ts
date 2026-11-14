@@ -7,7 +7,7 @@
 // - 제작 볼은 일반 볼과 따로 보관, 열면 아직 도감에 없는 포켓몬만(전설·환상 제외). 마스터볼·전설 조각은 만들 수 없음.
 // 숫자는 모두 보호자 전체 설정에서 바꿈 (settings.village_craft_rules, 바꾼 것만). 상태 변경은 lib/game-engine.ts.
 import { POTIONS, SUBJECT_BERRY, SUBJECT_TYPES, SUBJECTS, type PotionKind, type Subject, type TypeKey } from './game-config.ts';
-import { isOpenCell } from './village-level.ts';
+import { isOpenCell, MAX_LEVEL } from './village-level.ts';
 
 /** 열매 6종 (상처약 제외) */
 export const BERRY_KINDS: readonly PotionKind[] = (Object.keys(POTIONS) as PotionKind[]).filter(k => k !== 'potion');
@@ -51,8 +51,8 @@ export const CRAFT_DEFAULT = {
   greatBerry: 30, greatStone: 5, greatIron: 2,
   ultraBerry: 99, ultraSparkle: 1,
   saplingBerry: 5, saplingStone: 2,
-  /** 마을 레벨 (2026-11-14, lib/village-level.ts): 다음 레벨까지 필요한 별 (레벨2는 약 일주일, 그 뒤 2~3주씩) */
-  levelNeed2: 50, levelNeed3: 120, levelNeed4: 200, levelNeed5: 300, levelNeed6: 400,
+  /** 마을 레벨 (2026-11-14, lib/village-level.ts): 레벨2까지 별 levelNeed2(약 일주일), 레벨3은 levelNeedStep, 그 뒤 레벨마다 levelNeedGrow씩 더 (2~3주부터 점점 길게) */
+  levelNeed2: 50, levelNeedStep: 120, levelNeedGrow: 40,
   /** 별 받는 일: 새 손님 만남 · 서식지에 손님이 온 날(서식지마다, 들어갔을 때 하루 한 번) · 서식지·꾸미기 물건 만들기 · 볼·묘목 만들기 · 열매 따기 */
   starGuest: 3, starHabitat: 2, starMake: 1, starBall: 2, starHarvest: 1,
 };
@@ -77,10 +77,8 @@ export const CRAFT_FIELDS: Field[] = [
   { key: 'saplingBerry', label: '묘목: 열매', min: 1, max: 999, group: '레시피' },
   { key: 'saplingStone', label: '묘목: 돌멩이', min: 0, max: 20, group: '레시피' },
   { key: 'levelNeed2', label: '레벨 2까지 별', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeed3', label: '레벨 3까지 별 (레벨 2에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeed4', label: '레벨 4까지 별 (레벨 3에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeed5', label: '레벨 5까지 별 (레벨 4에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
-  { key: 'levelNeed6', label: '레벨 6까지 별 (레벨 5에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'levelNeedStep', label: '레벨 3까지 별 (레벨 2에서 더)', min: 1, max: 999, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'levelNeedGrow', label: '그 뒤 레벨마다 더 늘어나는 별', min: 0, max: 200, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'starGuest', label: '별: 새 손님 만남', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'starHabitat', label: '별: 서식지에 손님 온 날', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'starMake', label: '별: 서식지·꾸미기 물건 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
@@ -109,11 +107,11 @@ export function recipeCost(key: RecipeKey, r: CraftRules = current): RecipeCost 
     case 'sapling': return { berry: r.saplingBerry, stone: r.saplingStone, iron: 0, sparkle: 0 };
   }
 }
-/** 레벨마다 더 필요한 별 [2, 3, 4, 5, 6] */
-export const levelNeeds = (r: CraftRules = current) => [r.levelNeed2, r.levelNeed3, r.levelNeed4, r.levelNeed5, r.levelNeed6];
-/** 지금 레벨에서 나무를 심을 수 있는 자리 (처음 마을 3곳 중 treeMax까지 + 열린 구역마다 1곳) */
-export function treeSpotsOpen(level: number, r: CraftRules = current): number[] {
-  return TREE_SPOTS.map((_, i) => i).filter(i => (i < 3 ? i < r.treeMax : isOpenCell(TREE_SPOTS[i].x, TREE_SPOTS[i].y, level)));
+/** 레벨마다 더 필요한 별 [레벨2, 레벨3, ...]: 50, 120, 160, 200, … (레벨 4부터 levelNeedGrow씩 늘어남) */
+export const levelNeeds = (r: CraftRules = current) => [r.levelNeed2, ...Array.from({ length: MAX_LEVEL - 2 }, (_, i) => r.levelNeedStep + i * r.levelNeedGrow)];
+/** 나무를 심을 수 있는 자리 (처음 마을 3곳 중 treeMax까지 + 열린 구역의 자리). open = 열린 구역 id 목록 */
+export function treeSpotsOpen(open: readonly string[], r: CraftRules = current): number[] {
+  return TREE_SPOTS.map((_, i) => i).filter(i => (i < 3 ? i < r.treeMax : isOpenCell(TREE_SPOTS[i].x, TREE_SPOTS[i].y, open)));
 }
 /** 이번 주 훈련 합계로 받는 철 개수 */
 export function ironForWeek(score: number, r: CraftRules = current): number {
@@ -125,12 +123,14 @@ export function ironForWeek(score: number, r: CraftRules = current): number {
 // ---------- 지도 자리 (lib/village-map.ts 지도 기준, 테스트가 빈자리인지 검사) ----------
 /** 열매나무 자리 3곳 (그림 왼쪽 위 칸, 2×3, 아래 2줄이 막힘). 첫 자리는 처음부터 있는 나무 */
 export const TREE_SPOTS: { x: number; y: number }[] = [{ x: 0, y: 2 }, { x: 7, y: 4 }, { x: 8, y: 15 },
-  // 넓어진 구역마다 1곳 (레벨 2·3·4·5, 열리면 나무 최대 수 +1)
-  { x: 17, y: 11 }, { x: -8, y: 4 }, { x: 8, y: 24 }, { x: 17, y: 20 }];
+  // 넓어진 구역에 1곳씩 (열리면 나무 최대 수 +1)
+  { x: 17, y: 11 }, { x: -8, y: 4 }, { x: 8, y: 24 }, { x: 17, y: 20 },
+  { x: -16, y: 3 }, { x: 25, y: 13 }, { x: -10, y: 25 }, { x: -12, y: 37 }, { x: 8, y: 36 }, { x: 23, y: 36 }];
 /** 제작대 (그림 왼쪽 위 칸, 3×2) · 우편함 (1×2) */
 export const WORKBENCH = { x: 0, y: 13 };
 export const MAILBOX = { x: 3, y: 3 };
 /** 돌멩이를 캘 수 있는 바위 (지도 꾸밈 바위 자리) */
 export const GATHER_ROCKS: { x: number; y: number }[] = [{ x: 11, y: 13 }, { x: 0, y: 7 }, { x: 11, y: 4 },
   // 넓어진 구역 (열린 구역 바위만 캘 수 있음, 하루 돌멩이 수는 그대로)
-  { x: 13, y: 15 }, { x: -2, y: 13 }, { x: 3, y: 28 }, { x: 19, y: 22 }, { x: -6, y: 26 }, { x: -2, y: 25 }];
+  { x: 13, y: 15 }, { x: -2, y: 13 }, { x: 3, y: 28 }, { x: 19, y: 22 }, { x: -6, y: 26 }, { x: -2, y: 25 },
+  { x: -10, y: 17 }, { x: 21, y: 16 }, { x: -10, y: 21 }, { x: 22, y: 27 }, { x: 26, y: 21 }, { x: -9, y: 32 }, { x: -1, y: 36 }, { x: 11, y: 38 }, { x: 18, y: 32 }, { x: 27, y: 34 }];

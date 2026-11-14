@@ -23,7 +23,7 @@ export type VillageOverview = {
     now: CraftRules; defaults: CraftRules; overrides: Partial<CraftRules>; fields: { key: keyof CraftRules; label: string; min: number; max: number; group: string }[] };
   berrySources?: Partial<Record<string, number>>;
   /** 마을 레벨 (2026-11-14) */
-  level?: { level: number; stars: number; into: number; next: number | null; region: string[] };
+  level?: { level: number; stars: number; into: number; next: number | null; region: string[]; keys?: number };
 };
 const SOURCE_LABEL: Record<string, string> = { box: '상자·선물 고르기', gift: '보호자 작은 선물', tree: '마을 열매나무', guest: '마을 손님', returned: '제작 볼 돌려받기' };
 
@@ -47,7 +47,7 @@ export function VillageReport({ village }: { village: VillageOverview }) {
         <p>재료: {MATERIALS.map(k => `${MATERIAL_INFO[k].name} ${village.mats[k]}`).join(' · ')}</p>
         <p>가방: {CRAFTS.map(k => `${CRAFT_INFO[k].name} ${village.items[k]}`).join(' · ')}</p>
         <p>꾸미기: 마을에 놓은 물건 {village.decorPlaced}개 · 가방 {DECOR_ITEMS.filter(k => village.decorBag[k] > 0).map(k => `${DECOR_INFO[k].name} ${village.decorBag[k]}`).join(' · ') || '없음'}</p>
-        {village.level && <p>열린 땅: {village.level.region.join(' · ')}</p>}
+        {village.level && <p>열린 땅({village.level.region.length}/15): {village.level.region.join(' · ')}{village.level.keys ? ` · 아직 안 쓴 열쇠 🔑 ${village.level.keys}개` : ''}</p>}
         {village.craft && <p>열매나무 {village.craft.trees}그루 · 철 {village.craft.iron} · 반짝돌 {village.craft.sparkle}{village.craft.mail ? ` · 우편함에 철 소포 ${village.craft.mail}개` : ''} · 안 연 제작 볼 {village.craft.balls}개 · 지금까지 만든 것 {village.craft.made}번</p>}
         {village.berrySources && Object.keys(village.berrySources).length > 0 && <p>열매 들어온 곳: {Object.entries(village.berrySources).map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(' · ')}</p>}
         <p>서식지: {village.habitats.length ? village.habitats.map(h => `${h.name}(${h.since}~)`).join(', ') : '아직 없음'}</p>
@@ -184,7 +184,7 @@ export function VillageSimTools({ busy, call, reload }: { busy: boolean; call: C
         <button className="secondary small" disabled={busy} onClick={() => void run('dexFull')}>보통~희귀 포켓몬 도감 다 채우기(볼 대체 확인)</button>
       </div>
       <b>🏡 마을 레벨 시험</b>
-      <p className="muted">별을 채워 다음 레벨로 올리면 땅이 한 구역 넓어지고, 아이 화면 마을에 &ldquo;마을이 넓어졌어!&rdquo;가 떠요.</p>
+      <p className="muted">별을 채워 다음 레벨로 올리면 🔑 열쇠가 1개 생기고, 아이 화면 마을에서 열 땅을 고르는 창이 떠요(지금 열린 땅에 붙은 왼쪽·오른쪽·아래 중 하나).</p>
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('levelUp')}>다음 레벨로</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('levelReset')}>레벨 1로 되돌리기</button>

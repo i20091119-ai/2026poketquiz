@@ -1270,3 +1270,26 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .village-fog-sign small { font-weight: 600; font-size: 12px; }
 .village-levelup-list { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
 .village-levelup-note { font-size: 14px; opacity: .85; }
+/* 마을 열쇠로 땅 고르기 (2026-11-14) */
+.village-fog.choose { border-color: rgba(255, 215, 80, .95); background: rgba(40, 52, 30, .5); }
+.village-fog-sign.can { pointer-events: auto; cursor: pointer; background: #c98a1e; border-color: #7a4f0e; animation: village-sign 1.4s ease-in-out infinite; font-family: inherit; }
+@keyframes village-sign { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.village-key-btn, .village-help-btn { flex: none; border: 0; border-radius: 999px; padding: 3px 9px; font-weight: 800; font-size: 14px; }
+.village-key-btn { background: #ffd34d; color: #5a3a00; animation: village-sign 1.2s ease-in-out infinite; }
+.village-help-btn { background: rgba(255,255,255,.2); color: #fff; }
+.village-minimap { display: grid; gap: 4px; margin: 6px 0; }
+.village-mini { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px; padding: 4px 2px; border-radius: 8px; border: 2px solid transparent; font-size: 20px; line-height: 1.1; color: #253; background: #dfe7da; }
+.village-mini small { font-size: 10px; font-weight: 700; }
+.village-mini.open { background: #9fdc8a; }
+.village-mini.home { box-shadow: inset 0 0 0 2px #2a7a2a; }
+.village-mini.choose { background: #fff1b8; border-color: #f0a020; border-style: dashed; }
+.village-mini.choose:not(:disabled) { cursor: pointer; }
+.village-mini.locked { background: #5b6658; color: #fff; opacity: .7; }
+.village-mini.picked { background: #ffd34d; border-style: solid; transform: scale(1.06); }
+.village-key-list { display: flex; flex-direction: column; gap: 6px; }
+.village-key-choice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 16px; }
+.village-key-choice small { width: 100%; font-size: 12px; opacity: .75; }
+.village-key-choice.on { border-color: #f0a020; background: #fff1b8; }
+.village-key-note { font-size: 12px; opacity: .75; margin: 0; }
+.village-guide-list { text-align: left; margin: 6px auto; padding-left: 0; list-style: none; font-size: 16px; display: flex; flex-direction: column; gap: 6px; }
+.intro-text.small { font-size: 13px; opacity: .85; }

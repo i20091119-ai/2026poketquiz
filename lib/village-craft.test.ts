@@ -8,6 +8,7 @@ import { baseGround, blockedCells, MAP_OBJECTS, plotCellAt } from './village-map
 import { decorSpotProblem } from './village-decor.ts';
 import { BERRY_KINDS, berryOfType, CRAFT_DEFAULT, GATHER_ROCKS, ironForWeek, MAILBOX, recipeCost, setCraftRules, TREE_SPOTS, WORKBENCH } from './village-craft.ts';
 import { setVillageRules } from './village.ts';
+import { REGIONS } from './village-level.ts';
 
 const TODAY = '2026-11-14';
 const TOMORROW = '2026-11-15';
@@ -46,7 +47,7 @@ test('지도: 열매나무·제작대·우편함·바위 자리는 풀밭이고 
     assert.equal(baseGround(x, y), 'grass', `나무 자리 ${x},${y}`);
     assert.equal(plotCellAt(x, y), -1);
     if (dy > 0) assert.ok(!blocked.has(`${x},${y}`), `나무 밑동 자리가 막혀 있음 ${x},${y}`);
-    assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', x, y, 5) ?? '', /자리/);
+    assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', x, y, REGIONS.map(r => r.id)) ?? '', /자리/);
   }
   assert.ok(MAP_OBJECTS.some(o => o.kind === 'workbench' && o.x === WORKBENCH.x && o.y === WORKBENCH.y));
   assert.ok(MAP_OBJECTS.some(o => o.kind === 'mailbox' && o.x === MAILBOX.x && o.y === MAILBOX.y));
