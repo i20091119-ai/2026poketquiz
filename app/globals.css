@@ -1259,3 +1259,14 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .craft-balls { margin-top: 10px; }
 .craft-ball-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .craft-ball { display: flex; flex-direction: column; align-items: center; padding: 4px 6px; border-radius: 10px; border: 1px solid #d9e4d0; background: #fff; color: #253; }
+/* 포켓몬 마을 레벨·넓어지는 땅 (2026-11-14) */
+.village-level { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-bottom: 6px; font-size: 13px; }
+.village-level b { white-space: nowrap; }
+.village-level small { white-space: nowrap; opacity: .9; }
+.village-level-bar { flex: 1; height: 10px; border-radius: 6px; background: rgba(255,255,255,.18); overflow: hidden; min-width: 40px; }
+.village-level-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffd34d, #ffb020); border-radius: 6px; transition: width .4s; }
+.village-fog { position: absolute; z-index: 50; background: rgba(28, 40, 30, .62); backdrop-filter: grayscale(.7); border: 3px dashed rgba(255, 230, 150, .55); box-sizing: border-box; display: grid; place-items: center; pointer-events: none; }
+.village-fog-sign { background: #8a5a2b; color: #fff6dc; border: 3px solid #5a3a1a; border-radius: 10px; padding: 6px 12px; font-weight: 700; text-align: center; font-size: 16px; box-shadow: 0 3px 0 #3a2410; }
+.village-fog-sign small { font-weight: 600; font-size: 12px; }
+.village-levelup-list { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
+.village-levelup-note { font-size: 14px; opacity: .85; }

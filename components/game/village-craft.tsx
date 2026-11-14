@@ -52,7 +52,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
   const [note, setNote] = useState('');
   const [making, setMaking] = useState<RecipeKey | null>(null);
   const [made, setMade] = useState<{ recipe: RecipeKey; ballId?: string } | null>(null);
-  const treesFull = craft.trees.length + craft.saplings >= craft.rules.treeMax;
+  const treesFull = craft.trees.length + craft.saplings >= craft.treeMax;
 
   async function make(recipe: RecipeKey) {
     setNote('');
@@ -99,7 +99,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       {RECIPES.map(k => {
         const cost = craft.recipes[k];
         const short = shortageText(craft, stone, berry, cost);
-        const blocked = k === 'sapling' && treesFull ? `열매나무는 ${craft.rules.treeMax}그루까지 키울 수 있어!` : null;
+        const blocked = k === 'sapling' && treesFull ? `지금은 열매나무를 ${craft.treeMax}그루까지 키울 수 있어! 마을 레벨이 오르면 자리가 늘어나.` : null;
         const parts: { key: string; icon: React.ReactNode; have: number; need: number }[] = [
           { key: 'berry', icon: <BerryIcon kind={berry} size={20} />, have: craft.berries[berry] ?? 0, need: cost.berry },
           { key: 'stone', icon: <MaterialIcon kind="stone" scale={1} />, have: stone, need: cost.stone },
@@ -111,7 +111,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
             <span className="village-recipe-icon"><RecipeIcon recipe={k} /></span>
             <span><b>{RECIPE_INFO[k].name}</b>
               <small className="village-cost">{parts.map(p => <span key={p.key} className={p.have >= p.need ? 'ok' : 'lack'}>{p.icon} {p.have}/{p.need}</span>)}</small>
-              <small>{k === 'sapling' ? `열매나무 ${craft.trees.length}그루${craft.saplings ? ` · 묘목 ${craft.saplings}개` : ''} (최대 ${craft.rules.treeMax})` : RECIPE_INFO[k].note}</small></span>
+              <small>{k === 'sapling' ? `열매나무 ${craft.trees.length}그루${craft.saplings ? ` · 묘목 ${craft.saplings}개` : ''} (최대 ${craft.treeMax})` : RECIPE_INFO[k].note}</small></span>
             <span className="village-recipe-btns">
               <button className={'primary small' + (short || blocked ? ' dim' : '')} disabled={busy} aria-disabled={!!(short || blocked)}
                 onClick={() => { if (short || blocked) setNote(blocked ?? short!); else void make(k); }}>만들기</button>

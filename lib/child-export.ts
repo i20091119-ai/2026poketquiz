@@ -1,7 +1,7 @@
 import { LOG_KINDS } from './activity-log.ts';
 import { battleIvFromFeeds, POTIONS, TYPE_INFO, type TypeKey } from './game-config.ts';
 import { RECIPE_INFO } from './village-craft.ts';
-import type { GameState } from './game-engine.ts';
+import { villageLevel, villageStars, type GameState } from './game-engine.ts';
 import { isSpecies, shinyName, species } from './pokedex.ts';
 
 type Row = { seq: number; at: string; date: string; kind: string; data: Record<string, unknown> };
@@ -138,7 +138,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       이벤트: { 지금: state.events ?? null, 부활권: state.reviveTickets ?? 0, 진행기록: of('event').map(plain) },
       기간한정이벤트: { 지금: state.limited ?? null, 진행기록: of('limited').map(plain) },
       나들이체험보고서: { 지금: state.outings ?? [], 진행기록: of('outing').map(plain) },
-      포켓몬마을: { 마을지금: state.village ?? null, 만난손님: state.met ?? [] },
+      포켓몬마을: { 마을지금: state.village ?? null, 만난손님: state.met ?? [], 마을레벨: villageLevel(state), 마을별: villageStars(state) },
       // 열매·제작대 (2026-11-14): 열매가 들어온 곳별 개수(이날부터 셈)·제작 기록(날짜·레시피·쓴 열매·나온 포켓몬)
       열매들어온곳: Object.fromEntries(Object.entries(state.berrySources ?? {}).map(([k, n]) => [({ box: '상자', gift: '보호자선물', tree: '마을열매나무', guest: '손님', returned: '제작볼대신돌려받음' } as Record<string, string>)[k] ?? k, n])),
       제작기록: (state.village?.craftLog ?? []).map(l => ({ 날짜: l.date, 레시피: RECIPE_INFO[l.recipe].name, 쓴열매: POTIONS[l.berry].label,

@@ -14,6 +14,10 @@ const shiftDay = (date: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 시험용 마을 별 (주소 ?stars=숫자, 없으면 33: 들어가면 손님 별을 받아 레벨 2 바로 앞) */
+function demoStars(): number {
+  try { const n = Number(new URLSearchParams(window.location.search).get('stars')); return Number.isFinite(n) && n > 0 ? n : 33; } catch { return 33; }
+}
 /** 오늘 미션을 다 끝낸 시험용 기록: 나오하 파트너 + 뜨아거·피카츄 친구, 재료 넉넉히, 서식지 2개(손님이 와 있음), 꾸미기 몇 개 */
 function demoState(today: string): GameState {
   const now = new Date().toISOString();
@@ -48,6 +52,8 @@ function demoState(today: string): GameState {
     study: { iron: 2, sparkle: 1 },
     mail: [{ id: 'k1', kind: 'iron', amount: 1, week: yesterday, at: now }],
     craftedBalls: [{ id: 'c1', kind: 'poke', made: yesterday }],
+    // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=700 처럼 붙이면 그만큼으로
+    stars: demoStars(),
   } as unknown as GameState['village'];
   // 열매: 사과열매 32 · 불꽃열매 99(가득) · 별빛열매 40 · 얼음열매 12
   const berries = { apple: 32, fire: 99, star: 40, blue: 12 } as const;

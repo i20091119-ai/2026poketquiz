@@ -68,7 +68,7 @@ test('놓을 수 있는 곳: 풀밭만, 길·밭·물·집·다른 물건·처�
   assert.match(decorSpotProblem(none, [], 'lily', 'lily', 8, 11) ?? '', /물 위/);
   const placed: DecorPlaced[] = [{ item: 'bench', kind: 'bench', x: 8, y: 11 }];
   assert.match(decorSpotProblem(placed, [], 'flower', 'flowerRed', 9, 11) ?? '', /이미/);
-  assert.match(decorSpotProblem(none, [], 'bench', 'bench', MAP_W - 1, 14) ?? '', /밖/); // 2칸짜리가 지도 밖으로
+  assert.match(decorSpotProblem(none, [], 'bench', 'bench', MAP_W - 1, 14, 5) ?? '', /밖/); // 2칸짜리가 지도 밖으로
   // 어디에도 놓을 곳이 있는지 (지도 전체에 풀밭 자리가 넉넉한지)
   let ok = 0;
   for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (!decorSpotProblem(none, [], 'flower', 'flowerRed', x, y)) ok++;

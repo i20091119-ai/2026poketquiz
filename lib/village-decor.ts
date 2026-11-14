@@ -7,6 +7,7 @@
 import { baseGround, blockedCells, MAP_OBJECTS, objectInfo, plotCellAt, type ObjectKind, type TerrainCell, type TerrainGround } from './village-map.ts';
 import { MAP_H, MAP_W, MATERIALS, PICK_SPOTS, START_POS, type MaterialKey } from './village.ts';
 import { TREE_SPOTS } from './village-craft.ts';
+import { isOpenCell, lockedText } from './village-level.ts';
 
 export const DECOR_ITEMS = ['flower', 'bush', 'bushRose', 'mushroom', 'lily', 'stump', 'fence', 'pot', 'flowerBox', 'bench', 'pineSmall', 'rock', 'pondTile', 'pathTile', 'stoneTile'] as const;
 export type DecorKey = typeof DECOR_ITEMS[number];
@@ -105,13 +106,14 @@ export const TREE_CELLS = new Set(TREE_SPOTS.flatMap(t => [0, 1].flatMap(dx => [
  * 여기에 놓을 수 있는지 (안 되면 이유). 풀밭에만(연잎은 물 위에만), 길·밭·집·나무 자리와 다른 꾸미기 물건 위는 안 됨,
  * 처음 서는 자리·재료가 떨어지는 자리는 비워 둠. 땅 바꾸기는 원래 풀밭이고 아직 바꾸지 않은 칸에만 (한 칸).
  */
-export function decorSpotProblem(decor: DecorPlaced[], terrain: TerrainCell[], item: DecorKey, kind: ObjectKind | null, x: number, y: number): string | null {
+export function decorSpotProblem(decor: DecorPlaced[], terrain: TerrainCell[], item: DecorKey, kind: ObjectKind | null, x: number, y: number, level = 1): string | null {
   const used = new Set(decor.flatMap(d => decorCells(d).map(c => `${c.x},${c.y}`)));
   const changed = new Map(terrain.map(t => [`${t.x},${t.y}`, t.ground]));
   const info = DECOR_INFO[item];
   const cells = info.ground || !kind ? [{ x, y }] : decorCells({ kind, x, y });
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= MAP_W || c.y >= MAP_H) return '마을 밖에는 놓을 수 없어요.';
+    if (!isOpenCell(c.x, c.y, level)) return lockedText(c.x, c.y);
     const k = `${c.x},${c.y}`;
     const base = baseGround(c.x, c.y);
     if (info.ground) {

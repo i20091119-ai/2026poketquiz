@@ -4,6 +4,7 @@
 // 상태 변경은 lib/game-engine.ts, 이 파일은 규칙과 계산만.
 import { SPECIES } from './pokedex.ts';
 import type { TypeKey } from './game-config.ts';
+import { isOpenCell } from './village-level.ts';
 
 /** 재료 4종 */
 /** 재료 6종 (돌멩이·진흙은 2026-11-14 땅 바꾸기와 함께) */
@@ -38,10 +39,11 @@ export const HABITAT_INFO: Record<HabitatKey, { name: string; emoji: string; nee
 
 // ---------- 지도 ----------
 /** 마을 크기 (타일 16×16 기준 칸 수) */
-export const MAP_W = 12;
-export const MAP_H = 20;
-/** 서식지를 만드는 밭 3개 (왼쪽 위 칸, 2×2). 칸 번호 = 밭 번호 × 4 + (0 왼위, 1 오위, 2 왼아래, 3 오아래) */
-export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }];
+/** 지도 전체 크기. 처음 마을은 왼쪽 위 12×20이고, 마을 레벨이 오르면 오른쪽·아래쪽 구역이 열림 (lib/village-level.ts REGIONS) */
+export const MAP_W = 28;
+export const MAP_H = 30;
+/** 서식지를 만드는 밭 (왼쪽 위 칸, 2×2). 칸 번호 = 밭 번호 × 4 + (0 왼위, 1 오위, 2 왼아래, 3 오아래). 처음 3개 + 넓어진 구역마다 1개(뒤에만 붙임) */
+export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }, { x: 15, y: 4 }, { x: 2, y: 22 }, { x: 13, y: 20 }];
 export const CELL_COUNT = PLOTS.length * 4;
 export const cellPos = (cell: number) => {
   const p = PLOTS[Math.floor(cell / 4)];
@@ -53,6 +55,11 @@ export const cellPos = (cell: number) => {
 export const PICK_SPOTS: { x: number; y: number }[] = [
   { x: 3, y: 2 }, { x: 9, y: 3 }, { x: 3, y: 6 }, { x: 8, y: 10 }, { x: 4, y: 12 },
   { x: 2, y: 10 }, { x: 7, y: 16 }, { x: 10, y: 15 }, { x: 4, y: 19 }, { x: 8, y: 18 },
+  // 넓어진 구역 (레벨 2~5, 열린 구역 자리만 씀)
+  { x: 14, y: 2 }, { x: 18, y: 7 }, { x: 13, y: 11 }, { x: 16, y: 16 },
+  { x: 3, y: 25 }, { x: 10, y: 21 }, { x: 4, y: 29 },
+  { x: 12, y: 22 }, { x: 18, y: 23 },
+  { x: 23, y: 5 }, { x: 22, y: 16 }, { x: 26, y: 22 },
 ];
 /** 집 문 앞: 처음 서는 자리 */
 export const START_POS = { x: 5, y: 4 };
@@ -125,10 +132,10 @@ export function seeded(seed: string) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-/** 오늘 땅에 떨어진 재료: 자리 번호와 종류 (하루 줍기 수만큼, 날짜로 정해짐) */
-export function dayPickups(date: string, count: number): { spot: number; kind: MaterialKey }[] {
+/** 오늘 땅에 떨어진 재료: 자리 번호와 종류 (하루 줍기 수만큼, 날짜로 정해짐). level = 마을 레벨(열린 구역 자리만) */
+export function dayPickups(date: string, count: number, level = 1): { spot: number; kind: MaterialKey }[] {
   const r = seeded('pick:' + date);
-  const spots = PICK_SPOTS.map((_, i) => i);
+  const spots = PICK_SPOTS.map((_, i) => i).filter(i => isOpenCell(PICK_SPOTS[i].x, PICK_SPOTS[i].y, level));
   for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
   return spots.slice(0, Math.max(0, count)).sort((a, b) => a - b).map(spot => ({ spot, kind: MATERIALS[Math.floor(r() * MATERIALS.length)] }));
 }

@@ -15,6 +15,8 @@ import { AnimMon } from './anim-mon';
 import { blockedCells, objectInfo, PLAYER, type MapObject } from '@/lib/village-map';
 import { GATHER_ROCKS, MAILBOX, TREE_SPOTS, WORKBENCH } from '@/lib/village-craft';
 import type { PotionKind } from '@/lib/game-config';
+import { LevelUpDialog, LockedRegions, VillageLevelBar } from './village-level';
+import { isOpenCell, lockedText } from '@/lib/village-level';
 import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
@@ -100,7 +102,10 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   }), [craft.trees]);
   const extraObjects = useMemo<MapObject[]>(() => [...treeObjects, ...(craft.mail > 0 ? [{ kind: 'mailboxFlag' as const, x: MAILBOX.x, y: MAILBOX.y }] : [])], [treeObjects, craft.mail]);
   // 걸을 수 없는 칸 = 지도(집·나무·물) + 꾸미기 물건(울타리·벤치 등) + 다 자란 열매나무
-  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor, v.terrain), ...blockedCells(treeObjects.filter(o => o.kind !== 'sapling'))]), [v.decor, v.terrain, treeObjects]);
+  // 마을 레벨: 안 열린 구역은 걸을 수 없음 (안개 + 🔒 팻말)
+  const level = v.level.level;
+  const lockedCells = useMemo(() => v.level.regions.filter(r => !r.open).flatMap(r => Array.from({ length: r.w * r.h }, (_, i) => key(r.x + (i % r.w), r.y + Math.floor(i / r.w)))), [v.level.regions]);
+  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor, v.terrain), ...blockedCells(treeObjects.filter(o => o.kind !== 'sapling')), ...lockedCells]), [v.decor, v.terrain, treeObjects, lockedCells]);
   const [introOpen, closeIntro] = useCraftIntro(inside);
   const blockedRef = useRef(blocked);
   useEffect(() => { blockedRef.current = blocked; });
@@ -161,6 +166,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     if (busy || sheet) return;
     const x = pos.x + dx, y = pos.y + dy;
     setDir(dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up');
+    if (inMap(x, y) && !isOpenCell(x, y, level)) { setToast(lockedText(x, y)); return; }
     if (!inMap(x, y) || blocked.has(key(x, y))) return;
     setStep(s => s + 1);
     setFollow({ x: pos.x, y: pos.y, dir: x > pos.x ? 'right' : x < pos.x ? 'left' : y > pos.y ? 'down' : 'up' });
@@ -209,7 +215,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     const r = await act<{ message: string }>({ type: 'villagePlant', spot, berry: planting, stay: true });
     if (r) { setToast(r.message); setPlanting(null); }
   }
-  const plantTargets = planting ? TREE_SPOTS.map((s, spot) => ({ ...s, spot })).filter(s => s.spot < craft.rules.treeMax && !craft.trees.some(t => t.spot === s.spot)) : [];
+  const plantTargets = planting ? craft.treeSpots.map(spot => ({ ...TREE_SPOTS[spot], spot })).filter(s => !craft.trees.some(t => t.spot === s.spot)) : [];
   async function onMonTap(w: Walker) {
     if (w.guest) {
       const r = await act<{ message: string }>({ type: 'villageTalk', plot: w.guest.plot, stay: true });
@@ -226,14 +232,14 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     const kind = info.ground ? null : info.variants[decorPlacing.variant];
     const out: { x: number; y: number }[] = [];
     for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
-      if (decorSpotProblem(v.decor, v.terrain, decorPlacing.item, kind, x, y)) continue;
+      if (decorSpotProblem(v.decor, v.terrain, decorPlacing.item, kind, x, y, level)) continue;
       // 서준이·파트너가 서 있는 칸은 빼고 (물 칸이나 막히는 물건이 발밑에 생기지 않게)
       const cells = kind ? decorCells({ kind, x, y }) : [{ x, y }];
       if (cells.some(c => (c.x === pos.x && c.y === pos.y) || (c.x === follow.x && c.y === follow.y))) continue;
       out.push({ x, y });
     }
     return out;
-  }, [decorPlacing, v.decor, v.terrain, pos, follow]);
+  }, [decorPlacing, v.decor, v.terrain, pos, follow, level]);
   async function placeDecorAt(x: number, y: number) {
     if (!decorPlacing || busy) return;
     const { item, variant } = decorPlacing;
@@ -274,6 +280,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
         <span className="village-picks">줍기 {v.pickLeft}개 남음</span>
         <button className="secondary small" onClick={close}>나가기</button>
       </div>
+      <VillageLevelBar level={v.level} width={VIEW_COLS * TILE} />
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
           <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} extra={extraObjects} />
@@ -281,6 +288,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
             const p = cellPos(cell);
+            if (!isOpenCell(p.x, p.y, level)) return null;
             const item = v.cells[cell];
             const target = !!placing && !item;
             return (
@@ -311,7 +319,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
               aria-label="제작대" onClick={() => setSheet('workbench')} />
             <button className={'village-hit' + (craft.mail > 0 ? ' ready' : '')} style={{ left: MAILBOX.x * TILE, top: MAILBOX.y * TILE, width: TILE, height: 2 * TILE }}
               aria-label="우편함" onClick={() => void openMail()} />
-            {GATHER_ROCKS.map((r, i) => <button key={'rk' + i} className={'village-hit' + (craft.stoneLeft > 0 ? ' ready' : '')} style={{ left: r.x * TILE, top: r.y * TILE, width: TILE, height: TILE }}
+            {GATHER_ROCKS.map((r, i) => isOpenCell(r.x, r.y, level) && <button key={'rk' + i} className={'village-hit' + (craft.stoneLeft > 0 ? ' ready' : '')} style={{ left: r.x * TILE, top: r.y * TILE, width: TILE, height: TILE }}
               aria-label="바위 (돌멩이 캐기)" onClick={() => void gather(i)} />)}
           </>}
           {/* 묘목 심기: 빈 나무 자리 */}
@@ -319,6 +327,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
             <button key={'pl' + s.spot} className="village-cell target plant" style={{ left: s.x * TILE, top: s.y * TILE, width: 2 * TILE, height: 3 * TILE }}
               aria-label="여기에 심기" onClick={() => void plantAt(s.spot)} />
           ))}
+          {/* 안 열린 구역: 안개 + 🔒 팻말 */}
+          <LockedRegions regions={v.level.regions} tile={TILE} />
           {/* 완성된 서식지 이름표 */}
           {v.habitats.map((h, i) => h && (
             <span key={'h' + i} className="village-habitat-tag" style={{ left: PLOTS[i].x * TILE - 8, top: PLOTS[i].y * TILE - 18 }}>{HABITAT_INFO[h.kind].emoji} {HABITAT_INFO[h.kind].name}</span>
@@ -400,6 +410,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
       </div>
 
       <CraftIntro open={introOpen} view={view} onClose={closeIntro} />
+      <LevelUpDialog level={v.level} open={!introOpen && v.level.level > v.level.seen} busy={busy} onClose={() => void act({ type: 'villageLevelSeen' })} />
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
           {sheet === 'workbench' ? <WorkbenchSheet view={view} busy={busy} act={act} onToast={setToast}

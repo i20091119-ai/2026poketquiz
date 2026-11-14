@@ -46,7 +46,7 @@ test('지도: 열매나무·제작대·우편함·바위 자리는 풀밭이고 
     assert.equal(baseGround(x, y), 'grass', `나무 자리 ${x},${y}`);
     assert.equal(plotCellAt(x, y), -1);
     if (dy > 0) assert.ok(!blocked.has(`${x},${y}`), `나무 밑동 자리가 막혀 있음 ${x},${y}`);
-    assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', x, y) ?? '', /자리/);
+    assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', x, y, 5) ?? '', /자리/);
   }
   assert.ok(MAP_OBJECTS.some(o => o.kind === 'workbench' && o.x === WORKBENCH.x && o.y === WORKBENCH.y));
   assert.ok(MAP_OBJECTS.some(o => o.kind === 'mailbox' && o.x === MAILBOX.x && o.y === MAILBOX.y));
@@ -100,7 +100,7 @@ test('바위 채집: 하루 5개까지, 다음 날 다시 (보호자가 바꿀 �
   finishDaily(state, bank);
   state.village!.mats.stone = 0;
   const stone0 = 0;
-  for (let i = 0; i < 5; i++) applyAction(state, { type: 'villageGather', rock: i % GATHER_ROCKS.length }, ctx(bank));
+  for (let i = 0; i < 5; i++) applyAction(state, { type: 'villageGather', rock: i % 3 }, ctx(bank));
   assert.throws(() => applyAction(state, { type: 'villageGather', rock: 0 }, ctx(bank)), /다 캤어/);
   assert.equal(state.village!.mats.stone, stone0 + 5);
   assert.equal(childView(state, bank, TODAY).village.craft.stoneLeft, 0);
