@@ -5,8 +5,11 @@ import { GROWTH_DEFAULT, GROWTH_FIELDS, growth, setGrowthRules, type GrowthKey, 
 import { defaultStrong, defaultThird, isSpecies, isStrong, isValidThird, setStrongOverrides, species, subjectOf, thirdTypeOf } from '@/lib/pokedex';
 import { LIMITED_EVENTS, limitedById } from '@/lib/limited-events';
 import { OUTING_CANDIDATES, OUTING_DEFAULT, OUTING_FIELDS, type OutingRules } from '@/lib/outing';
+import { VILLAGE_DEFAULT, VILLAGE_FIELDS } from '@/lib/village';
+import { cleanDecorCosts, DECOR_INFO, DECOR_ITEMS, decorCostsNow } from '@/lib/village-decor';
+import { CRAFT_DEFAULT, CRAFT_FIELDS, craftRules } from '@/lib/village-craft';
 import { LEGEND_PER_STAGE, OFFLINE_DEFAULT, OFFLINE_FIELDS, offlineRulesOf, STAGE_NEED_MAX, stageNeed, type DayBoxKind, type DayMark } from '@/lib/offline';
-import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
+import { activityList, areaReport, battleLogList, eventsReport, limitedReport, resetLimitedIntro, simLimited, simGiveBalls, simGiveShinies, simGivePotions, simBattlePower, simHearts, simExpExchange, simEnergy, expExchangeToday, teamOf, heartsOf, battleIvOf, createOuting, deleteOuting, reviewOuting, outingReport, simOutingFill, setOfflineMark, setOfflineCheer, simOffline, offlineReport, villageReport, simBankDone, simVillageMats, simVillageCraft, simSetStreak, openRetryToday, lockedToday, battleStartsLeft, battleTickets, candySummary, GameError, giftCounts, giftList, initialState, markRepliesSeen, sendGift, shiftDate, todayKorea, unseenReplies, type GiftInput } from '@/lib/game-engine';
 import { battleGate } from '@/lib/server/battle-gate';
 import { importPreparedBanks, PREPARED_BANKS } from '@/lib/server/prepared-banks';
 import { normalizeQuestion, parseCsv, rowsToQuestions, sheetCsvUrls, type QuestionInput } from '@/lib/question-import';
@@ -17,7 +20,7 @@ import {
   activeBank, addQuestions, getBattlePasswordHash, setBattlePasswordHash, bankQuestions, createBank, deleteBank, deleteQuestion, getBank, getGrade,
   getBattleEvolutionAllowed, getBattleLimitMinutes, getBattleRest, getGiftLimits, getRestOpenDate, getSimDayOffset, json, listBanks, mutateState, overwriteState, publishBank, readState, resetGame,
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
-  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns,
+  getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules, getDecorCosts, saveDecorCosts, getCraftRules, saveCraftRules,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
 } from '@/lib/server/store';
 import { env } from 'cloudflare:workers';
@@ -48,10 +51,11 @@ async function simulationInfo(request: Request) {
 async function overview(request: Request) {
   // 시뮬레이션 중인 브라우저에서는 아이 현황·영역·활동도 시험용 기록 기준으로 보여 줍니다 (진짜 기록은 그대로).
   const player = await playerOf(request);
-  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides, battleRuns] = await Promise.all([
-    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(), recentBattleRuns(player.id),
+  const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides, battleRuns, villageOverrides] = await Promise.all([
+    getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(), recentBattleRuns(player.id), getVillageRules(),
   ]);
   const today = player.today;
+  await loadVillageRules();
   const gate = await battleGate(player, state);
   const progress = bank ? state.banks[bank.id] : undefined;
   const solved = new Set(progress?.solved ?? []);
@@ -84,6 +88,15 @@ async function overview(request: Request) {
     offline: {
       ...offlineReport(state, today, offlineOverrides),
       rules: { now: offlineRulesOf(offlineOverrides), defaults: OFFLINE_DEFAULT, overrides: offlineOverrides, fields: OFFLINE_FIELDS },
+    },
+    /** 포켓몬 마을: 재료·서식지·손님·오늘 마을 시간, 규칙 */
+    village: {
+      ...villageReport(state, today),
+      rules: { now: { ...VILLAGE_DEFAULT, ...villageOverrides }, defaults: VILLAGE_DEFAULT, overrides: villageOverrides, fields: VILLAGE_FIELDS },
+      /** 꾸미기 물건 재료 수: 지금 값·처음 값·바꾼 물건 */
+      decor: { now: decorCostsNow(), defaults: Object.fromEntries(DECOR_ITEMS.map(k => [k, DECOR_INFO[k].cost])), changed: Object.keys(await getDecorCosts()) },
+      /** 열매나무·제작대 규칙 (2026-11-14): 지금 값·처음 값·바꾼 것·항목 */
+      craft: { now: craftRules(), defaults: CRAFT_DEFAULT, overrides: await getCraftRules(), fields: CRAFT_FIELDS },
     },
     /** 볼별 이로치 확률(%), 기본값, 시뮬레이션 100% 여부 */
     shiny: {
@@ -399,6 +412,72 @@ export async function POST(request: Request) {
         rules.gemSalt = { ...(rules.gemSalt ?? {}), [stage]: salt };
         await saveOfflineRules(rules);
         return json({ message: `${stage}단계 보석을 새 모양으로 바꿨어요.` });
+      }
+      case 'setVillageRule': {
+        const key = String(body.key);
+        const rules = await getVillageRules();
+        if (key === 'timeMode') {
+          if (!['off', 'daily', 'perQuiz'].includes(String(body.value))) throw new ParentError('시간 제한을 다시 골라 주세요.');
+          rules.timeMode = String(body.value) as typeof rules.timeMode;
+        } else {
+          const field = VILLAGE_FIELDS.find(f => f.key === key);
+          if (!field) throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+          const value = Number(body.value);
+          if (!(Number.isInteger(value) && value >= field.min && value <= field.max)) throw new ParentError(`${field.label}: ${field.min}~${field.max} 사이로 넣어 주세요.`);
+          rules[field.key] = value;
+        }
+        await saveVillageRules(rules);
+        return json({ message: '포켓몬 마을 규칙을 저장했어요.' });
+      }
+      case 'setDecorCost': {
+        // 꾸미기 물건 하나의 재료 수 (재료 4가지 0~20, 하나 이상은 1 이상)
+        const item = String(body.item);
+        if (!(DECOR_ITEMS as readonly string[]).includes(item)) throw new ParentError('바꿀 물건을 다시 골라 주세요.');
+        const costs = await getDecorCosts();
+        const next = cleanDecorCosts({ [item]: body.cost });
+        if (!next[item as keyof typeof next]) throw new ParentError('재료는 0~20개, 하나 이상은 1개 넘게 넣어 주세요.');
+        await saveDecorCosts({ ...costs, ...next });
+        return json({ message: `${DECOR_INFO[item as keyof typeof DECOR_INFO].name} 재료를 저장했어요.` });
+      }
+      case 'setCraftRule': {
+        const field = CRAFT_FIELDS.find(f => f.key === String(body.key));
+        if (!field) throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+        const value = Number(body.value);
+        if (!(Number.isInteger(value) && value >= field.min && value <= field.max)) throw new ParentError(`${field.label}: ${field.min}~${field.max} 사이로 넣어 주세요.`);
+        await saveCraftRules({ ...(await getCraftRules()), [field.key]: value });
+        return json({ message: `${field.label}을(를) ${value}(으)로 저장했어요.` });
+      }
+      case 'resetCraftRules':
+        await saveCraftRules(null);
+        return json({ message: '열매나무·제작대 규칙을 처음 값으로 되돌렸어요.' });
+      case 'resetDecorCosts':
+        await saveDecorCosts(null);
+        return json({ message: '꾸미기 물건 재료를 처음 값으로 되돌렸어요.' });
+      case 'resetVillageRules':
+        await saveVillageRules(null);
+        return json({ message: '포켓몬 마을 규칙을 처음 값으로 되돌렸어요.' });
+      case 'simVillage': {
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const { today } = await simClock();
+        const op = String(body.op ?? '');
+        await loadVillageRules();
+        if (op === 'bankDone') {
+          const bank = await activeBank();
+          if (!bank) throw new ParentError('공개한 문제은행이 없어요.');
+          await mutateState(state => { simBankDone(state, bank, today, Math.random); return { result: null, changed: true }; }, SIM_PLAYER);
+          return json({ message: '시험용 기록에서 문제은행을 모두 맞힌 상태로 만들었어요. 오늘의 미션이 "복습하는 날"로 바뀌어요. 아이 화면을 새로고침해 주세요.' });
+        }
+        if (op === 'mats') {
+          await mutateState(state => { simVillageMats(state, 10); return { result: null, changed: true }; }, SIM_PLAYER);
+          return json({ message: '시험용 기록에 재료를 종류마다 10개씩 넣었어요. 아이 화면을 새로고침해 주세요.' });
+        }
+        if (['berries', 'berry99', 'study', 'stone', 'reviewDue', 'dexFull', 'levelUp', 'levelReset'].includes(op)) {
+          await loadGrowthRules();
+          const bank = op === 'reviewDue' ? await activeBank() : null;
+          const { result: msg } = await mutateState(state => ({ result: simVillageCraft(state, op, bank, today), changed: true }), SIM_PLAYER);
+          return json({ message: `${msg} 아이 화면을 새로고침해 주세요.` });
+        }
+        throw new ParentError('시험 항목을 다시 골라 주세요.');
       }
       case 'resetOfflineRules':
         await saveOfflineRules(null);

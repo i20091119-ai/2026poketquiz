@@ -1117,3 +1117,179 @@ button.study-day:active { transform: scale(.94); }
 .read-aloud-tip { margin: 6px 0 4px; font-weight: 900; color: #b45309; font-size: 17px; }
 .feed-intro-pics { display: flex; justify-content: center; align-items: center; gap: 10px; }
 .feed-intro-pics img { width: 64px; height: 64px; object-fit: contain; }
+
+/* ---------- 포켓몬 마을 (2026-11-13) ---------- */
+.village-strip { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; margin: 0 0 10px; padding: 8px 12px; border: 2px solid #d9e4cb; border-radius: 14px; background: #f4f6f2; color: #5a6b60; text-align: left; font: inherit; }
+.village-strip.open { border-color: #6cbf4a; background: #effae6; color: #26352d; animation: glow 1.6s ease-in-out infinite; }
+.village-strip-icon { font-size: 28px; }
+.village-strip-text { display: flex; flex-direction: column; }
+.village-strip-text b { font-size: 16px; }
+.village-strip-text small { font-size: 13px; }
+.village-screen { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; background: #24331f; color: #fff; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); overflow-y: auto; }
+.village-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 336px; max-width: 100%; margin-bottom: 6px; }
+.village-top b { font-size: 17px; }
+.village-picks { font-size: 13px; opacity: .85; }
+.village-view { position: relative; overflow: hidden; border-radius: 12px; border: 3px solid #4d6b3c; flex: none; touch-action: manipulation; background: #40b080; }
+.village-map { position: absolute; left: 0; top: 0; transition: transform .18s ease-out; }
+.village-ground, .village-tile, .village-world { position: absolute; }
+.village-world { left: 0; }
+.vcanvas { display: block; image-rendering: pixelated; }
+.village-ground .vsprite, .village-entrance .vsprite { image-rendering: pixelated; }
+.vquad { display: block; }
+.village-ground { inset: 0; pointer-events: none; }
+.village-tile { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; line-height: 1; image-rendering: pixelated; }
+.village-cell { position: absolute; z-index: 2; border: 2px dashed rgba(255,255,255,.6); background: transparent; padding: 0; display: grid; place-items: center; }
+.village-cell.filled { border-color: transparent; }
+.village-item { font-size: 24px; line-height: 1; }
+.village-habitat-tag { position: absolute; z-index: 40; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
+.village-pickup { position: absolute; display: grid; place-items: center; font-size: 20px; filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 2px #ffe066); animation: village-bob 1.2s ease-in-out infinite; z-index: 2; }
+@keyframes village-bob { 50% { transform: translateY(-4px); } }
+.village-mon, .village-me { position: absolute; width: 48px; height: 48px; padding: 0; border: 0; background: transparent; z-index: 4; transition: left .5s linear, top .5s linear; }
+.village-me { z-index: 5; transition: left .15s linear, top .15s linear; }
+.anim-mon { position: absolute; left: 50%; bottom: 4px; max-width: none; image-rendering: pixelated; pointer-events: none; }
+img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
+.village-shadow, .village-me-ring { position: absolute; left: 50%; bottom: 2px; width: 34px; height: 12px; transform: translateX(-50%); border-radius: 50%; background: rgba(20,40,30,.25); pointer-events: none; }
+.village-me-ring { width: 44px; height: 16px; background: rgba(160,235,255,.25); border: 3px solid rgba(160,235,255,.9); animation: village-ring 1.4s ease-in-out infinite; }
+@keyframes village-ring { 50% { transform: translateX(-50%) scale(1.12); } }
+.village-me-body { position: absolute; left: 0; bottom: 2px; line-height: 0; }
+.village-me-body .vsprite { display: block; image-rendering: pixelated; }
+.village-credit { font-size: 10px; color: rgba(255,255,255,.55); text-decoration: none; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .village-me-ring { animation: none; } }
+.village-me-mark, .village-guest-mark { position: absolute; left: 50%; top: -34px; transform: translateX(-50%); font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #2563eb; color: #fff; white-space: nowrap; }
+.village-guest-mark { background: #e5a100; }
+.village-shiny { position: absolute; right: -8px; top: -24px; font-size: 16px; }
+.village-bubble { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 9; width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 12px; background: #fff; color: #26352d; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.village-toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 10; width: max-content; max-width: 320px; padding: 8px 14px; border-radius: 14px; background: rgba(20,30,20,.88); font-weight: 800; font-size: 14px; text-align: center; }
+.village-timeup { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(20,30,20,.85); text-align: center; font-size: 18px; font-weight: 800; }
+.village-controls { width: 336px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
+.village-mats { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 18px; }
+.village-mats b { font-size: 14px; margin-left: 2px; }
+.village-pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 50px); gap: 4px; }
+.village-pad button { border: 0; border-radius: 12px; background: #fff; color: #26352d; font-size: 22px; box-shadow: 0 3px 0 #9fb59a; touch-action: manipulation; user-select: none; }
+.village-pad button:active { transform: translateY(2px); box-shadow: 0 1px 0 #9fb59a; }
+.village-sheet-back { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; }
+.village-sheet { width: 100%; max-width: 420px; max-height: 80vh; overflow-y: auto; background: #fff; color: #26352d; border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; }
+.village-sheet h3 { margin: 0; font-size: 19px; }
+.village-sheet-note { margin: 0; font-size: 14px; color: #4d5d52; }
+.village-recipes { display: flex; flex-direction: column; gap: 8px; }
+.village-recipe { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 8px; padding: 8px; border: 2px solid #e2e8e0; border-radius: 12px; }
+.village-recipe > span:nth-child(2) { display: flex; flex-direction: column; }
+.village-recipe small { font-size: 12px; color: #5a6b60; }
+.village-recipe-icon { font-size: 30px; text-align: center; }
+.village-habitat-help { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 12px; background: #f4f8ef; font-size: 13px; }
+.village-place-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.village-place-btn { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border: 2px solid #d9e4cb; border-radius: 14px; background: #fff; font: inherit; }
+.village-place-btn span { font-size: 30px; }
+.village-locked { width: 352px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; text-align: center; }
+.village-entrance { position: relative; max-width: 100%; overflow: hidden; border-radius: 14px; border: 3px solid #4d6b3c; }
+.village-entrance:not(.open) { filter: saturate(.7) brightness(.92); }
+.village-entrance-gate { font-size: 90px; line-height: 1; }
+.village-entrance-trees { font-size: 32px; }
+.village-lock-text { margin: 0; font-size: 20px; font-weight: 800; }
+.village-lock-sub { margin: 0; font-size: 14px; }
+.village-lock-bar { width: 100%; display: flex; align-items: center; gap: 10px; font-weight: 800; }
+.village-lock-bar > :first-child { flex: 1; }
+.review-day { margin: 6px 0; padding: 8px 12px; border-radius: 12px; background: #fff4d6; color: #7a5200; font-weight: 800; }
+.village-line { margin: 4px 0 0; font-weight: 800; color: #3b6d1f; }
+.dex-met { position: absolute; left: 4px; top: 4px; font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #e5a100; color: #fff; }
+.dex-buttons { display: flex; flex-direction: column; gap: 6px; }
+.vsprite { display: inline-block; flex: none; image-rendering: pixelated; background-repeat: no-repeat; vertical-align: middle; }
+.village-mon.partner { pointer-events: none; transition: left .15s linear, top .15s linear; }
+.village-mat { display: inline-flex; align-items: center; gap: 2px; }
+.village-cost { display: flex; flex-wrap: wrap; gap: 6px; }
+.village-cost > span { display: inline-flex; align-items: center; gap: 2px; }
+.village-entrance { position: relative; overflow: hidden; border-radius: 14px; background: none !important; height: auto; filter: saturate(.7); max-width: 100%; }
+.village-entrance.open { filter: none; }
+.village-entrance-lock { position: absolute; z-index: 50; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.village-guests-parent { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; } .village-guests-parent span { display: inline-flex; align-items: center; gap: 4px; }
+.village-me, .village-mon.partner, .village-mon.pass { pointer-events: none; }
+.village-cell.target { border: 3px solid #ffe066; background: rgba(255,224,102,.35); animation: village-target 1s ease-in-out infinite; z-index: 6; }
+@keyframes village-target { 50% { background: rgba(255,224,102,.7); } }
+.village-placing { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(20,30,20,.9); font-size: 13px; font-weight: 700; }
+.village-placing > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.village-recipe-btns { display: flex; flex-direction: column; gap: 6px; }
+/* 시험용 마을 (/village-demo) 안내 띠 */
+.village-demo-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; padding: 4px 10px calc(4px + env(safe-area-inset-bottom)); background: #6d28d9; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+.village-demo-band.warn { bottom: 26px; background: #b45309; }
+/* 꾸미기 (2026-11-14) */
+.village-decor-hit { position: absolute; z-index: 2; padding: 0; border: 0; background: transparent; }
+.village-cell.target.decor { z-index: 9; border-color: rgba(255,230,90,.95); background: rgba(255,240,140,.18); }
+.village-variants { display: inline-flex; gap: 3px; margin-left: 4px; }
+.village-variant { padding: 2px; border: 2px solid transparent; border-radius: 6px; background: rgba(255,255,255,.15); line-height: 0; }
+.village-variant.on { border-color: #ffd84d; background: rgba(255,255,255,.35); }
+.village-recipe-icon .vsprite { image-rendering: pixelated; }
+.decor-costs { margin-top: 14px; display: grid; gap: 8px; }
+.decor-costs h3 { margin: 0; font-size: 16px; }
+.decor-cost-table { border-collapse: collapse; font-size: 13px; }
+.decor-cost-table th, .decor-cost-table td { padding: 4px 6px; border-bottom: 1px solid #e2e8e0; text-align: left; vertical-align: middle; }
+.decor-cost-table input { width: 52px; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+.village-placing > button { flex: none; white-space: nowrap; }
+/* 만들기 창 세 칸 (2026-11-14) */
+.village-make-tabs { display: flex; gap: 6px; }
+.village-make-tab { flex: 1; padding: 8px 4px; border: 2px solid #d9e4cb; border-radius: 12px; background: #fff; font: inherit; font-weight: 800; font-size: 14px; color: #3b5a3f; }
+.village-make-tab.on { border-color: #4f9a3d; background: #eaf7e2; color: #1f4a1a; }
+
+/* 포켓몬 마을 열매나무·제작대 (2026-11-14) */
+body:has(.village-screen) [data-slot="dialog-overlay"], body:has(.village-screen) [data-slot="dialog-content"] { z-index: 70; }
+.village-hit { position: absolute; z-index: 2; padding: 0; border: 0; background: transparent; border-radius: 8px; }
+.village-hit.ready { animation: village-ready 1.6s ease-in-out infinite; }
+@keyframes village-ready { 0%, 100% { box-shadow: none; } 50% { box-shadow: inset 0 0 0 3px rgba(255,236,120,.75); } }
+.village-cell.target.plant { z-index: 9; border-color: rgba(140,255,140,.95); background: rgba(160,255,160,.22); }
+.village-study { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+.craft-stock { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; font-size: 14px; margin-bottom: 6px; }
+.craft-stock span { display: inline-flex; align-items: center; gap: 4px; }
+.craft-berries { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 10px; }
+.craft-berry { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 10px; border: 2px solid #d9e4d0; background: #fff; color: #253; font-size: 12px; }
+.craft-berry.on { border-color: #f0a020; background: #fff6dc; box-shadow: 0 0 0 2px rgba(240,160,32,.35); }
+.craft-berry b { font-size: 13px; }
+.berry-icon { object-fit: contain; image-rendering: auto; }
+.village-cost .ok { color: #2a7a2a; }
+.village-cost .lack { color: #c0392b; font-weight: 700; }
+.village-recipe.short .village-recipe-icon { opacity: .5; }
+button.dim { opacity: .45; filter: grayscale(.6); }
+.craft-note { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: #fff3d6; color: #6b4300; font-size: 14px; font-weight: 600; }
+.craft-making { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0; }
+.craft-making img, .craft-made-pic img { image-rendering: auto; }
+.craft-hammer { font-size: 44px; display: inline-block; transform-origin: 80% 80%; animation: craft-hammer .3s ease-in-out infinite alternate; }
+@keyframes craft-hammer { from { transform: rotate(-35deg); } to { transform: rotate(15deg); } }
+.craft-made { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.craft-made-pic { animation: craft-pop .5s ease-out; }
+@keyframes craft-pop { 0% { transform: scale(.3); opacity: 0; } 70% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 1; } }
+.craft-balls { margin-top: 10px; }
+.craft-ball-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.craft-ball { display: flex; flex-direction: column; align-items: center; padding: 4px 6px; border-radius: 10px; border: 1px solid #d9e4d0; background: #fff; color: #253; }
+/* 포켓몬 마을 레벨·넓어지는 땅 (2026-11-14) */
+.village-level { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-bottom: 6px; font-size: 13px; }
+.village-level b { white-space: nowrap; }
+.village-level small { white-space: nowrap; opacity: .9; }
+.village-level-bar { flex: 1; height: 10px; border-radius: 6px; background: rgba(255,255,255,.18); overflow: hidden; min-width: 40px; }
+.village-level-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffd34d, #ffb020); border-radius: 6px; transition: width .4s; }
+.village-fog { position: absolute; z-index: 50; background: rgba(28, 40, 30, .62); backdrop-filter: grayscale(.7); border: 3px dashed rgba(255, 230, 150, .55); box-sizing: border-box; display: grid; place-items: center; pointer-events: none; }
+.village-fog-sign { background: #8a5a2b; color: #fff6dc; border: 3px solid #5a3a1a; border-radius: 10px; padding: 6px 12px; font-weight: 700; text-align: center; font-size: 16px; box-shadow: 0 3px 0 #3a2410; }
+.village-fog-sign small { font-weight: 600; font-size: 12px; }
+.village-levelup-list { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
+.village-levelup-note { font-size: 14px; opacity: .85; }
+/* 마을 열쇠로 땅 고르기 (2026-11-14) */
+.village-fog.choose { border-color: rgba(255, 215, 80, .95); background: rgba(40, 52, 30, .5); }
+.village-fog-sign.can { pointer-events: auto; cursor: pointer; background: #c98a1e; border-color: #7a4f0e; animation: village-sign 1.4s ease-in-out infinite; font-family: inherit; }
+@keyframes village-sign { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.village-key-btn, .village-help-btn { flex: none; border: 0; border-radius: 999px; padding: 3px 9px; font-weight: 800; font-size: 14px; }
+.village-key-btn { background: #ffd34d; color: #5a3a00; animation: village-sign 1.2s ease-in-out infinite; }
+.village-help-btn { background: rgba(255,255,255,.2); color: #fff; }
+.village-minimap { display: grid; gap: 4px; margin: 6px 0; }
+.village-mini { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px; padding: 4px 2px; border-radius: 8px; border: 2px solid transparent; font-size: 20px; line-height: 1.1; color: #253; background: #dfe7da; }
+.village-mini small { font-size: 10px; font-weight: 700; }
+.village-mini.open { background: #9fdc8a; }
+.village-mini.home { box-shadow: inset 0 0 0 2px #2a7a2a; }
+.village-mini.choose { background: #fff1b8; border-color: #f0a020; border-style: dashed; }
+.village-mini.choose:not(:disabled) { cursor: pointer; }
+.village-mini.locked { background: #5b6658; color: #fff; opacity: .7; }
+.village-mini.picked { background: #ffd34d; border-style: solid; transform: scale(1.06); }
+.village-key-list { display: flex; flex-direction: column; gap: 6px; }
+.village-key-choice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 16px; }
+.village-key-choice small { width: 100%; font-size: 12px; opacity: .75; }
+.village-key-choice.on { border-color: #f0a020; background: #fff1b8; }
+.village-key-note { font-size: 12px; opacity: .75; margin: 0; }
+.village-guide-list { text-align: left; margin: 6px auto; padding-left: 0; list-style: none; font-size: 16px; display: flex; flex-direction: column; gap: 6px; }
+.intro-text.small { font-size: 13px; opacity: .85; }

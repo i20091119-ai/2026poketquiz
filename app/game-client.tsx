@@ -13,12 +13,13 @@ import { DailyTab, ExploreTab } from '@/components/game/missions';
 import { PokedexTab } from '@/components/game/pokedex-tab';
 import { BagTab } from '@/components/game/bag-tab';
 import { QuizDialog, type AnswerResult } from '@/components/game/quiz-dialog';
-import { BallDialog, RewardPicker, type CatchResult, type RewardKind, type RewardResult } from '@/components/game/rewards';
+import { BallDialog, RewardPicker, type CatchResult, type QueuedBall, type RewardKind, type RewardResult } from '@/components/game/rewards';
 import { ASSETS } from '@/lib/assets';
 import { QUIZ_ATTEMPTS, setGrowthRules, type GrowthRules, type Subject } from '@/lib/game-config';
 import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/components/game/adventure';
 import { FeedIntro, feedIntroSeen, markFeedIntroSeen } from '@/components/game/feed-intro';
 import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
+import { VillageScreen, VillageStrip } from '@/components/game/village';
 import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
 import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter, type OutingPieceResult } from '@/components/game/outing';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
@@ -44,7 +45,7 @@ export default function Game() {
   const [notice, setNotice] = useState('');
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [reward, setReward] = useState<{ kind: RewardKind; subject?: Subject } | null>(null);
-  const [ballQueue, setBallQueue] = useState<Ball[]>([]);
+  const [ballQueue, setBallQueue] = useState<QueuedBall[]>([]);
   const [evolved, setEvolved] = useState<{ id: number; message: string } | null>(null);
   // 보호자 선물: 팝업 → 열기 → (볼 열기) → 답장
   const [giftPopup, setGiftPopup] = useState<PublicGift | null>(null);
@@ -140,19 +141,30 @@ export default function Game() {
   // 1분마다(그리고 화면을 벗어날 때) 서버에 보냅니다.
   const quizOpenRef = useRef(false);
   const solveRef = useRef(0);
+  // 포켓몬 마을 안에 있는 동안의 초 (보호자 화면 "마을 시간", 2026-11-13)
+  const villageInsideRef = useRef(false);
+  const villageRef = useRef(0);
+  const [villageOpen, setVillageOpen] = useState(false);
+  const onVillageSeconds = useCallback((inside: boolean) => { villageInsideRef.current = inside; }, []);
   useEffect(() => { quizOpenRef.current = !!quiz; }, [quiz]);
   useEffect(() => {
     let lastTick = Date.now();
     // 문제 창이 열려 있고 화면이 보이는 동안 1초씩
-    const solveTimer = window.setInterval(() => { if (quizOpenRef.current && document.visibilityState === 'visible') solveRef.current += 1; }, 1000);
+    const solveTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (quizOpenRef.current) solveRef.current += 1;
+      if (villageInsideRef.current) villageRef.current += 1;
+    }, 1000);
     const send = (useBeacon = false) => {
       if (document.visibilityState !== 'visible' && !useBeacon) { lastTick = Date.now(); return; }
       const seconds = Math.round((Date.now() - lastTick) / 1000);
       lastTick = Date.now();
       const solveSeconds = solveRef.current;
       solveRef.current = 0;
-      if (seconds <= 0 && solveSeconds <= 0) return;
-      const body = JSON.stringify({ type: 'quizTime', seconds, solveSeconds });
+      const villageSeconds = villageRef.current;
+      villageRef.current = 0;
+      if (seconds <= 0 && solveSeconds <= 0 && villageSeconds <= 0) return;
+      const body = JSON.stringify({ type: 'quizTime', seconds, solveSeconds, villageSeconds });
       if (useBeacon && navigator.sendBeacon) { navigator.sendBeacon('/api/game', new Blob([body], { type: 'application/json' })); return; }
       fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
     };
@@ -309,6 +321,7 @@ export default function Game() {
             onSaveTeam={saveTeam} onIntro={() => setIntroOpen(true)}
             onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
           <StudyStrip view={view} onCalendar={() => setStudyOpen(true)} onMap={() => setMapOpen(true)} />
+          <VillageStrip view={view} onOpen={() => setVillageOpen(true)} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
@@ -375,6 +388,9 @@ export default function Game() {
         </footer>
       </div>
 
+      <VillageScreen open={villageOpen} view={view} busy={busy} act={act} onClose={() => setVillageOpen(false)} onSeconds={onVillageSeconds}
+        onOpenBall={b => setBallQueue([{ id: b.id, kind: b.kind, crafted: true }])} />
+
       <QuizDialog
         question={quiz?.question ?? null}
         progress={quiz?.mode === 'daily' ? dailyProgress() : exploreProgress()}
@@ -414,7 +430,7 @@ export default function Game() {
         key={ballQueue[0]?.id ?? 'none'}
         ball={ballQueue[0] ?? null}
         busy={busy}
-        onOpen={b => act<CatchResult>({ type: 'openBall', ballId: b.id })}
+        onOpen={b => act<CatchResult>(b.crafted ? { type: 'openCraftedBall', id: b.id } : { type: 'openBall', ballId: b.id })}
         onClose={closeBall}
       />
 
