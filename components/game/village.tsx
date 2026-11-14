@@ -20,7 +20,8 @@ import { isOpenCell, lockedText } from '@/lib/village-level';
 import { CatchGame, FunIntro, funIntroSeen, ToolsTab, type CatchResult } from './village-fun';
 import { TOOL_INFO, TOOLS, type ToolKey } from '@/lib/village-tools';
 import { ASSETS } from '@/lib/assets';
-import { BALLS } from '@/lib/game-config';
+import { BALLS, POTIONS } from '@/lib/game-config';
+import { BERRY_KINDS } from '@/lib/village-craft';
 import { groundAt } from '@/lib/village-map';
 import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
@@ -443,9 +444,6 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
 
       <div className="village-controls" style={{ width: VIEW_COLS * TILE }}>
         <div className="village-mats" aria-label="재료">
-          {MATERIALS.map(k => <span key={k} className="village-mat" title={MATERIAL_INFO[k].name}><MaterialIcon kind={k} /><b>{v.mats[k]}</b></span>)}
-          <span className="village-mat" title="철 (훈련으로 받아요)"><IronIcon /><b>{craft.iron}</b></span>
-          <span className="village-mat" title="반짝돌 (복습 문제를 맞히면 받아요)"><SparkleIcon /><b>{craft.sparkle}</b></span>
           <button className="secondary small" onClick={() => setSheet('workbench')}>🔨 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
           <button className="secondary small" onClick={() => setSheet('make')}>🔨 만들기</button>
           <button className="secondary small village-bag-btn" onClick={() => setSheet('bag')}>🎒 가방{bagCount + decorBagCount + craft.saplings + craft.balls.length ? ` ${bagCount + decorBagCount + craft.saplings + craft.balls.length}` : ''}</button>
@@ -644,6 +642,12 @@ function BagSheet({ view, busy, onMake, onPlace, onPlaceDecor, onPlant, onOpenBa
   const empty = !habitat.length && !decor.length && !ground.length && !tools.length && !c.saplings && !c.balls.length;
   return <>
     <h3>🎒 가방</h3>
+    <div className="bag-section first"><b>🪨 재료</b><small>재료는 줍기·바위 캐기·낚시·벌레잡기·문제 정답으로 모여 (종류마다 {v.rules.matCap}개까지)</small>
+      <div className="bag-grid">
+        {MATERIALS.map(k => <span key={k} className={'bag-item tool' + (v.mats[k] ? '' : ' none')}><MaterialIcon kind={k} scale={3} /><span>{MATERIAL_INFO[k].name}</span><b>{v.mats[k]}/{v.rules.matCap}</b></span>)}
+        <span className={'bag-item tool' + (c.iron ? '' : ' none')}><IronIcon scale={3} /><span>철</span><b>{c.iron}</b><small>훈련 택배</small></span>
+        <span className={'bag-item tool' + (c.sparkle ? '' : ' none')}><SparkleIcon scale={3} /><span>반짝돌</span><b>{c.sparkle}</b><small>복습 정답</small></span>
+      </div></div>
     {empty && <p className="village-sheet-note">가방에 놓을 물건이 없어. <button className="link-btn" onClick={onMake}>🔨 만들기</button>에서 만들어 보자!</p>}
     {habitat.length > 0 && <div className="bag-section"><b>🌱 밭에 놓을 것</b><small>누르면 반짝이는 밭 칸에 놓아</small>
       <div className="bag-grid">{habitat.map(k => (
@@ -668,13 +672,9 @@ function BagSheet({ view, busy, onMake, onPlace, onPlaceDecor, onPlant, onOpenBa
       <div className="bag-grid">{tools.map(k => (
         <span key={k} className="bag-item tool"><span className="tool-icon">{TOOL_INFO[k].emoji}</span><span>{TOOL_INFO[k].name}</span><b>{c.tools[k]}번 남음</b></span>
       ))}</div></div>}
-    <div className="bag-section"><b>🪨 재료</b>
-      <div className="bag-mats">
-        {MATERIALS.map(k => <span key={k}><MaterialIcon kind={k} /> {MATERIAL_INFO[k].name} <b>{v.mats[k]}</b></span>)}
-        <span><IronIcon /> 철 <b>{c.iron}</b></span>
-        <span><SparkleIcon /> 반짝돌 <b>{c.sparkle}</b></span>
-      </div>
-      <small className="bag-hint">철은 트레이너 훈련, 반짝돌은 복습 문제를 맞히면 받아. 열매는 아이 화면 🎒 가방 탭에 있어.</small>
-    </div>
+    <div className="bag-section"><b>🍎 열매</b><small>열매는 제작대에서 볼을 만들 때 써. 포켓몬에게 먹이기는 첫 화면 🎒 가방 탭에서!</small>
+      <div className="bag-grid">{BERRY_KINDS.map(k => (
+        <span key={k} className={'bag-item tool' + (c.berries[k] ? '' : ' none')}><img src={ASSETS.potion[k]} alt="" width={30} height={30} /><span>{POTIONS[k].label}</span><b>{c.berries[k] ?? 0}/{c.berryCap}</b></span>
+      ))}</div></div>
   </>;
 }

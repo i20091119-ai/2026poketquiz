@@ -1329,3 +1329,7 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .bag-mats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
 .bag-mats span { display: inline-flex; align-items: center; gap: 3px; }
 .bag-hint { opacity: .7; font-size: 12px; }
+/* 가방 재료·열매 칸 (2026-11-14) */
+.bag-section.first { border-top: 0; padding-top: 0; }
+.bag-item.none { opacity: .45; }
+.bag-item small { font-size: 10px; opacity: .7; }
