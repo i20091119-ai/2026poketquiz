@@ -25,14 +25,14 @@
   .page ul { padding-left: 4px; list-style: none; margin: 8px 0; }
   .page li { margin: 10px 0; }
   .big { font-size: 64px; text-align: center; margin: 10px 0; }
-  .shot { display: block; width: 100%; max-width: 250px; margin: 12px auto; border-radius: 18px; border: 3px solid var(--line); background: #233; }
+  .shot { display: block; width: 100%; max-width: 360px; margin: 12px auto; border-radius: 18px; border: 3px solid var(--line); background: #233; }
   .shots { display: flex; gap: 8px; justify-content: center; }
   .shots .shot { width: 48%; margin: 12px 0; }
   .crop { width: 100%; max-width: 420px; }
   .tip { background: #fff7dd; border: 2px solid #f3dc8f; border-radius: 16px; padding: 10px 14px; font-size: 19px !important; }
   .card { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 10px 14px; margin: 10px 0; }
   .card b { color: var(--green); }
-  .recipe { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 20px; }
+  .recipe { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; font-size: 18px; }
   .recipe span:nth-child(odd) { font-size: 30px; }
   .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; gap: 10px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: rgba(244,248,241,.96); border-top: 2px solid var(--line); }
   .nav button { flex: 1; border: 0; border-radius: 16px; padding: 16px 10px; font-size: 21px; font-weight: 900; }
@@ -65,66 +65,65 @@
 
 <section class="page" data-title="마을 열기">
   <h2>🔒 마을은 언제 열려?</h2>
-  <img class="shot crop" src="img/home-strip.jpg" alt="첫 화면 포켓몬 마을 칸">
   <p>오늘 <b>일일미션</b>을 다 풀면 열려.</p>
   <p>첫 화면의 <b>🏡 포켓몬 마을</b>을 눌러 들어가.</p>
+  <img class="shot crop" src="img/home-strip.jpg" alt="첫 화면 포켓몬 마을 칸">
 </section>
 
 <section class="page" data-title="걷기">
   <h2>🚶 걷기 · 나가기</h2>
-  <img class="shot" src="img/map.jpg" alt="마을 화면">
   <ul>
     <li>▲ ◀ ▶ ▼ 버튼으로 걸어.</li>
     <li>서준이가 걷고 파트너가 따라와.</li>
     <li>나갈 땐 위쪽 <b>나가기</b>를 눌러.</li>
   </ul>
+  <img class="shot" src="img/map.jpg" alt="마을 화면">
 </section>
 
 <section class="page" data-title="누르기">
   <h2>✨ 노랗게 반짝이면 눌러 봐</h2>
-  <img class="shot" src="img/tree.jpg" alt="반짝이는 열매나무와 우편함">
   <ul>
     <li>🍎 열매나무 → 열매 따기</li>
     <li>🪨 회색 바위 → 돌멩이 캐기</li>
     <li>📮 우편함 → 택배 받기</li>
     <li>🐾 손님 → 말 걸기</li>
   </ul>
+  <img class="shot" src="img/tree.jpg" alt="반짝이는 열매나무와 우편함">
 </section>
 
 <section class="page" data-title="줍기">
   <h2>🍃 땅에 떨어진 재료 줍기</h2>
-  <img class="shot" src="img/map.jpg" alt="땅에 떨어진 재료">
   <p>반짝이는 재료가 있는 칸으로 <b>걸어가면</b> 저절로 주워.</p>
   <p>하루에 <b>3개</b> 주울 수 있어.</p>
   <p class="tip">위쪽에 "줍기 ○개 남음"이 보여.</p>
+  <img class="shot" src="img/map.jpg" alt="땅에 떨어진 재료">
 </section>
 
 <section class="page" data-title="바위">
   <h2>🪨 바위에서 돌멩이 캐기</h2>
-  <img class="shot" src="img/rock.jpg" alt="돌멩이를 캤다는 글">
   <p>회색 바위를 눌러 봐.</p>
   <p>돌멩이가 나와! 하루에 <b>5개</b>까지야.</p>
+  <img class="shot" src="img/rock.jpg" alt="돌멩이를 캤다는 글">
 </section>
 
 <section class="page" data-title="열매나무">
   <h2>🍎 열매 따기</h2>
-  <img class="shot" src="img/tree.jpg" alt="열매를 땄다는 글">
   <p>미션을 끝낸 날, 나무마다 <b>1개</b> 열려.</p>
   <p>안 따면 다음 날 사라져. 괜찮아!</p>
+  <img class="shot" src="img/tree.jpg" alt="열매를 땄다는 글">
 </section>
 
 <section class="page" data-title="손님">
   <h2>🐾 손님에게 말 걸기</h2>
-  <img class="shot" src="img/guest.jpg" alt="손님이 말하는 모습">
   <p>"손님" 표시가 있는 포켓몬을 눌러.</p>
   <p>좋아하는 것을 알려 줘.</p>
   <p>가끔 열매를 선물로 줘! 🎁</p>
   <p class="tip">손님마다 하루에 한 번이야.</p>
+  <img class="shot" src="img/guest.jpg" alt="손님이 말하는 모습">
 </section>
 
 <section class="page" data-title="재료">
   <h2>🎒 재료는 어디서 나와?</h2>
-  <img class="shot" src="img/bag.jpg" alt="가방의 재료 칸">
   <ul>
     <li>✅ 문제를 처음에 맞히면 가끔</li>
     <li>🏁 일일미션을 끝내면 2개</li>
@@ -133,6 +132,7 @@
     <li>🎣 낚시 = 물방울 · 진흙</li>
     <li>🦋 벌레잡기 = 꽃잎 · 풀잎</li>
   </ul>
+  <img class="shot" src="img/bag.jpg" alt="가방의 재료 칸">
 </section>
 
 <section class="page" data-title="반짝돌·철">
@@ -148,18 +148,18 @@
 
 <section class="page" data-title="만들기">
   <h2>🔨 만들기</h2>
-  <img class="shot" src="img/make-habitat.jpg" alt="만들기 창">
   <p>재료로 물건을 <b>만드는</b> 곳이야.</p>
   <p>칸이 4개 있어.<br>🌱 서식지 · 🎨 꾸미기 · ⛰️ 땅 · 🧰 도구</p>
   <p>만든 건 <b>🎒 가방</b>에 들어가.</p>
+  <img class="shot" src="img/make-habitat.jpg" alt="만들기 창">
 </section>
 
 <section class="page" data-title="가방">
   <h2>🎒 가방에서 놓기</h2>
-  <img class="shot" src="img/bag2.jpg" alt="가방 안 물건">
   <p>가방에서 물건을 눌러.</p>
   <p>노랗게 반짝이는 칸을 누르면 놓여!</p>
   <p class="tip">놓은 걸 다시 누르면 가방으로 돌아와.</p>
+  <img class="shot" src="img/bag2.jpg" alt="가방 안 물건">
 </section>
 
 <section class="page" data-title="서식지">
@@ -176,24 +176,23 @@
 
 <section class="page" data-title="묘목">
   <h2>🌳 열매나무 심기</h2>
-  <img class="shot" src="img/make-sapling.jpg" alt="묘목 만들기">
   <p>🔨 만들기 → 🌱 서식지 칸 맨 아래에 있어.</p>
   <p><b>열매 5 + 돌멩이 2</b>로 묘목을 만들어.</p>
   <p>열매는 아무거나 섞어도 돼.</p>
   <p class="tip">나무 자리가 꽉 차면 버튼 옆에 이유가 나와. 땅을 넓히면 자리가 늘어나!</p>
+  <img class="shot" src="img/make-sapling.jpg" alt="묘목 만들기">
 </section>
 
 <section class="page" data-title="꾸미기">
   <h2>🎨 꾸미기 · ⛰️ 땅 바꾸기</h2>
-  <img class="shot" src="img/make-decor.jpg" alt="꾸미기 물건">
   <p>꽃, 울타리, 벤치로 마을을 꾸며 봐.</p>
   <p>⛰️ 땅 칸에서는 연못, 흙길, 돌길을 만들어.</p>
   <p class="tip">붙여 놓으면 길과 연못이 이어져!</p>
+  <img class="shot" src="img/make-decor.jpg" alt="꾸미기 물건">
 </section>
 
 <section class="page" data-title="제작대">
   <h2>🔮 제작대에서 볼 만들기</h2>
-  <img class="shot" src="img/workbench.jpg" alt="제작대 창">
   <p>제작대에서는 <b>볼만</b> 만들어.</p>
   <div class="recipe">
     <span>🔴</span><span>몬스터볼 = 열매 10 + 돌멩이 3 + 반짝돌 1</span>
@@ -201,6 +200,7 @@
     <span>🟡</span><span>하이퍼볼 = 열매 99 + 반짝돌 1</span>
   </div>
   <p class="tip">"열매 183/10"은 열매를 다 합쳐 183개 가졌다는 뜻이야.</p>
+  <img class="shot" src="img/workbench.jpg" alt="제작대 창">
 </section>
 
 <section class="page" data-title="만든 볼">
@@ -215,57 +215,56 @@
 
 <section class="page" data-title="방명록">
   <h2>📖 방명록</h2>
-  <img class="shot" src="img/guestbook.jpg" alt="방명록">
   <p>마을에 놀러 온 포켓몬이 적혀.</p>
   <p>낚시, 벌레잡기로 만난 포켓몬도!</p>
   <p class="tip">"?"는 아직 안 온 친구야.</p>
+  <img class="shot" src="img/guestbook.jpg" alt="방명록">
 </section>
 
 <section class="page" data-title="방명록 한 장">
   <h2>🐾 포켓몬을 눌러 봐</h2>
-  <img class="shot" src="img/guestbook-entry.jpg" alt="방명록 한 장">
   <ul>
     <li>📅 처음 온 날</li>
     <li>🐾 온 횟수 (하루에 도장 하나)</li>
     <li>💗 좋아하는 열매 · 물건</li>
     <li>💬 들은 말</li>
   </ul>
+  <img class="shot" src="img/guestbook-entry.jpg" alt="방명록 한 장">
 </section>
 
 <section class="page" data-title="도구">
   <h2>🧰 낚싯대 · 잠자리채 만들기</h2>
-  <img class="shot" src="img/make-tools.jpg" alt="도구 만들기">
   <p>🔨 만들기 → 🧰 도구 칸에서 만들어.</p>
   <p>🎣 낚싯대 = 나뭇가지 3 + 풀잎 2</p>
   <p>🦋 잠자리채 = 나뭇가지 2 + 꽃잎 2</p>
   <p class="tip">도구는 <b>15번</b> 쓰면 부서져. 놓쳐도 1번 닳아. 다시 만들면 돼!</p>
+  <img class="shot" src="img/make-tools.jpg" alt="도구 만들기">
 </section>
 
 <section class="page" data-title="벌레잡기">
   <h2>🦋 벌레잡기</h2>
-  <div class="shots"><img class="shot" src="img/bug.jpg" alt="벌레잡기"><img class="shot" src="img/bug-result.jpg" alt="잡았다"></div>
   <p>날아다니는 벌레를 눌러.</p>
   <p>▼ 화살표가 <b>초록 칸</b>에 오면 "휘둘러!"</p>
+  <div class="shots"><img class="shot" src="img/bug.jpg" alt="벌레잡기"><img class="shot" src="img/bug-result.jpg" alt="잡았다"></div>
 </section>
 
 <section class="page" data-title="낚시">
   <h2>🎣 낚시</h2>
-  <div class="shots"><img class="shot" src="img/fish-spot.jpg" alt="낚시하기 버튼"><img class="shot" src="img/fish-bite.jpg" alt="퐁!"></div>
   <p>물 옆에 서면 <b>🎣 낚시하기</b> 버튼이 나와.</p>
   <p>찌가 <b>퐁!</b> 하면 바로 "당겨!"</p>
   <p class="tip">너무 빨라도, 늦어도 놓쳐.</p>
+  <div class="shots"><img class="shot" src="img/fish-spot.jpg" alt="낚시하기 버튼"><img class="shot" src="img/fish-bite.jpg" alt="퐁!"></div>
 </section>
 
 <section class="page" data-title="잡으면">
   <h2>🎁 잡으면 뭐가 나와?</h2>
-  <img class="shot" src="img/fish-result.jpg" alt="낚았다">
   <p>재료가 나와. 가끔 열매도!</p>
   <p>가끔 포켓몬을 만나. 📖 방명록에 적혀!</p>
+  <img class="shot" src="img/fish-result.jpg" alt="낚았다">
 </section>
 
 <section class="page" data-title="마을점수">
   <h2>🏠 마을점수</h2>
-  <img class="shot" src="img/level-2.jpg" alt="마을점수 받는 방법">
   <ul>
     <li>처음 보는 손님 → 🏠 3</li>
     <li>손님이 온 서식지 → 🏠 2</li>
@@ -274,15 +273,16 @@
     <li>열매 따기 → 🏠 1</li>
   </ul>
   <p class="tip">마을점수가 모이면 마을 레벨이 올라!</p>
+  <img class="shot" src="img/level-2.jpg" alt="마을점수 받는 방법">
 </section>
 
 <section class="page" data-title="열쇠">
   <h2>🔑 열쇠로 땅 넓히기</h2>
-  <img class="shot" src="img/key.jpg" alt="열쇠로 땅 고르기">
   <p>레벨이 오르면 🔑 열쇠 1개!</p>
   <p>붙어 있는 🔒 땅 중에 하나를 골라 열어.</p>
   <p>왼쪽, 오른쪽, 아래 중에서 골라.</p>
   <p class="tip">위쪽 ❓를 누르면 다시 볼 수 있어.</p>
+  <img class="shot" src="img/key.jpg" alt="열쇠로 땅 고르기">
 </section>
 
 <section class="page" data-title="먹이기">
