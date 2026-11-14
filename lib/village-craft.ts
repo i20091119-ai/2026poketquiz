@@ -55,6 +55,8 @@ export const CRAFT_DEFAULT = {
   levelNeed2: 50, levelNeedStep: 120, levelNeedGrow: 40,
   /** 별 받는 일: 새 손님 만남 · 서식지에 손님이 온 날(서식지마다, 들어갔을 때 하루 한 번) · 서식지·꾸미기 물건 만들기 · 볼·묘목 만들기 · 열매 따기 */
   starGuest: 3, starHabitat: 2, starMake: 1, starBall: 2, starHarvest: 1,
+  /** 낚시·벌레잡기 (2026-11-14, lib/village-tools.ts): 도구 재료·쓸 수 있는 횟수, 잡았을 때 열매·포켓몬 만남 확률(%) */
+  rodTwig: 3, rodLeaf: 2, netTwig: 2, netPetal: 2, toolUses: 15, catchBerry: 10, catchMeet: 15,
 };
 export type CraftRules = typeof CRAFT_DEFAULT;
 type Field = { key: keyof CraftRules; label: string; min: number; max: number; group: string };
@@ -84,6 +86,13 @@ export const CRAFT_FIELDS: Field[] = [
   { key: 'starMake', label: '별: 서식지·꾸미기 물건 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'starBall', label: '별: 볼·묘목 만들기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
   { key: 'starHarvest', label: '별: 열매 따기', min: 0, max: 20, group: '🏡 마을 레벨 (넓어지는 땅)' },
+  { key: 'rodTwig', label: '낚싯대: 나뭇가지', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'rodLeaf', label: '낚싯대: 풀잎', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'netTwig', label: '잠자리채: 나뭇가지', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'netPetal', label: '잠자리채: 꽃잎', min: 0, max: 20, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'toolUses', label: '도구가 부서지기까지 쓰는 횟수', min: 1, max: 99, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'catchBerry', label: '잡으면 열매가 나올 확률(%)', min: 0, max: 100, group: '🎣 낚시 · 🦋 벌레잡기' },
+  { key: 'catchMeet', label: '잡으면 포켓몬을 만날 확률(%)', min: 0, max: 100, group: '🎣 낚시 · 🦋 벌레잡기' },
 ];
 export function cleanCraftRules(ov: unknown): Partial<CraftRules> {
   const out: Partial<CraftRules> = {};

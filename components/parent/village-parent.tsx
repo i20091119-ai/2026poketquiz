@@ -19,13 +19,13 @@ export type VillageOverview = {
   decorPlaced: number; decorBag: Record<DecorKey, number>;
   decor: { now: Record<DecorKey, Partial<Record<MaterialKey, number>>>; defaults: Record<string, Partial<Record<MaterialKey, number>>>; changed: string[] };
   /** 열매나무·제작대 (2026-11-14) */
-  craft?: { trees: number; iron: number; sparkle: number; mail: number; balls: number; made: number;
+  craft?: { caught?: Record<string, number>; tools?: Record<string, number>; trees: number; iron: number; sparkle: number; mail: number; balls: number; made: number;
     now: CraftRules; defaults: CraftRules; overrides: Partial<CraftRules>; fields: { key: keyof CraftRules; label: string; min: number; max: number; group: string }[] };
   berrySources?: Partial<Record<string, number>>;
   /** 마을 레벨 (2026-11-14) */
   level?: { level: number; stars: number; into: number; next: number | null; region: string[]; keys?: number };
 };
-const SOURCE_LABEL: Record<string, string> = { box: '상자·선물 고르기', gift: '보호자 작은 선물', tree: '마을 열매나무', guest: '마을 손님', returned: '제작 볼 돌려받기' };
+const SOURCE_LABEL: Record<string, string> = { box: '상자·선물 고르기', gift: '보호자 작은 선물', tree: '마을 열매나무', guest: '마을 손님', returned: '제작 볼 돌려받기', catch: '낚시·벌레잡기' };
 
 const TIME_LABEL: Record<VillageTimeMode, string> = { off: '제한 없음', daily: '하루 ○분', perQuiz: '퀴즈 ○문제당 ○분' };
 
@@ -47,6 +47,7 @@ export function VillageReport({ village }: { village: VillageOverview }) {
         <p>재료: {MATERIALS.map(k => `${MATERIAL_INFO[k].name} ${village.mats[k]}`).join(' · ')}</p>
         <p>가방: {CRAFTS.map(k => `${CRAFT_INFO[k].name} ${village.items[k]}`).join(' · ')}</p>
         <p>꾸미기: 마을에 놓은 물건 {village.decorPlaced}개 · 가방 {DECOR_ITEMS.filter(k => village.decorBag[k] > 0).map(k => `${DECOR_INFO[k].name} ${village.decorBag[k]}`).join(' · ') || '없음'}</p>
+        {village.craft?.caught && <p>🎣 낚시 {village.craft.caught.rod ?? 0}번 · 🦋 벌레잡기 {village.craft.caught.net ?? 0}번 잡음 · 지금 도구: 낚싯대 {village.craft.tools?.rod ? `${village.craft.tools.rod}번 남음` : '없음'}, 잠자리채 {village.craft.tools?.net ? `${village.craft.tools.net}번 남음` : '없음'}</p>}
         {village.level && <p>열린 땅({village.level.region.length}/15): {village.level.region.join(' · ')}{village.level.keys ? ` · 아직 안 쓴 열쇠 🔑 ${village.level.keys}개` : ''}</p>}
         {village.craft && <p>열매나무 {village.craft.trees}그루 · 철 {village.craft.iron} · 반짝돌 {village.craft.sparkle}{village.craft.mail ? ` · 우편함에 철 소포 ${village.craft.mail}개` : ''} · 안 연 제작 볼 {village.craft.balls}개 · 지금까지 만든 것 {village.craft.made}번</p>}
         {village.berrySources && Object.keys(village.berrySources).length > 0 && <p>열매 들어온 곳: {Object.entries(village.berrySources).map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(' · ')}</p>}
@@ -188,6 +189,11 @@ export function VillageSimTools({ busy, call, reload }: { busy: boolean; call: C
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('levelUp')}>다음 레벨로</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('levelReset')}>레벨 1로 되돌리기</button>
+      </div>
+      <b>🎣 낚시 · 🦋 벌레잡기 시험</b>
+      <div className="button-row">
+        <button className="secondary small" disabled={busy} onClick={() => void run('tools')}>낚싯대·잠자리채 새것으로</button>
+        <button className="secondary small" disabled={busy} onClick={() => void run('toolsAlmost')}>한 번만 더 쓰면 부서지게</button>
       </div>
     </div>
   );

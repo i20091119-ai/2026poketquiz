@@ -12,7 +12,8 @@ import { RARE_POKEMON } from './rare-pokemon.ts';
 import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMessage, stageCandidates, stageNeed, weekDates, weekScore, weekStartOf, type DayBoxKind, type DayMark, type OfflineRules } from './offline.ts';
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { DECOR_BAG_MAX, DECOR_INFO, DECOR_ITEMS, DECOR_MAX, decorCells, decorCost, decorCostsNow, decorIndexAt, decorSpotProblem, TERRAIN_MAX, terrainIndexAt, type DecorKey, type DecorPlaced } from './village-decor.ts';
-import type { TerrainCell } from './village-map.ts';
+import { groundAt, type TerrainCell } from './village-map.ts';
+import { TOOL_INFO, toolCost, TOOLS, type ToolKey } from './village-tools.ts';
 import { choosableRegions, DIR_TEXT, isOpenCell, levelOfStars, lockedText, MAX_LEVEL, openRegions, REGIONS } from './village-level.ts';
 import { BERRY_KINDS, berryOfType, craftRules, ironForWeek, levelNeeds, treeSpotsOpen, RECIPE_INFO, RECIPES, recipeCost, GATHER_ROCKS, STUDY_MAT_INFO, TREE_SPOTS, type RecipeKey } from './village-craft.ts';
 import { CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, dayPickups, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
@@ -193,6 +194,10 @@ export type VillageState = {
   levelSeen?: number;
   /** 아이가 열쇠로 연 구역 (처음 마을 C1 빼고, 연 순서). 없으면 처음 마을만 */
   opened?: string[];
+  /** 낚시·벌레잡기 도구 (남은 횟수, 0이면 부서짐). 없으면 도구 없음 */
+  tools?: Partial<Record<ToolKey, number>>;
+  /** 잡은 수 (낚시·벌레잡기, 보호자 화면) */
+  caught?: Partial<Record<ToolKey, number>>;
   /** 서식지 손님 별을 받은 날 (하루 한 번) */
   guestStarDate?: string;
 };
@@ -498,7 +503,7 @@ export const berryOf = (state: GameState, kind: PotionKind) => (state.potions ??
  */
 export const berryCapped = (state: GameState, kind: PotionKind) => kind !== 'potion' && berryOf(state, kind) >= growth().berryCap;
 /** 열매가 들어온 곳 (보호자 내보내기 "열매 들어온 곳별 개수") */
-export type BerrySource = 'box' | 'gift' | 'tree' | 'guest' | 'returned';
+export type BerrySource = 'box' | 'gift' | 'tree' | 'guest' | 'returned' | 'catch';
 function noteBerry(state: GameState, source: BerrySource, n = 1) {
   const s = state.berrySources ??= {};
   s[source] = (s[source] ?? 0) + n;
@@ -1027,6 +1032,8 @@ export type Action =
   | { type: 'openCraftedBall'; id: string }
   | { type: 'villageLevelSeen' }
   | { type: 'villageUnlock'; region: string }
+  | { type: 'toolCraft'; tool: ToolKey; stay?: boolean }
+  | { type: 'villageCatch'; tool: ToolKey; x: number; y: number; hit: boolean; stay?: boolean }
   | { type: 'starter'; species: number }
   | { type: 'partner'; uid: string }
   | { type: 'answer'; mode: 'daily' | 'explore'; questionId: number; choice: number }
@@ -1459,6 +1466,62 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       trees.push({ spot: action.spot, berry: action.berry, since: ctx.today });
       v.saplings = (v.saplings ?? 0) - 1;
       return { message: `${POTIONS[action.berry].label} 나무를 심었어! 🌳 내일부터 열매가 열려.` };
+    }
+    case 'toolCraft': {
+      // 낚싯대·잠자리채 만들기 (하나씩만 가짐, 부서지면 다시 만듦)
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!TOOLS.includes(action.tool)) fail('만들 도구를 다시 골라 주세요.');
+      const info = TOOL_INFO[action.tool];
+      if ((v.tools?.[action.tool] ?? 0) > 0) fail(`${iGa(info.name)} 벌써 있어! 다 쓰면 다시 만들 수 있어.`);
+      const cost = Object.entries(toolCost(action.tool)) as [MaterialKey, number][];
+      const short = cost.filter(([k, n]) => (v.mats[k] ?? 0) < n);
+      if (short.length) fail(`${short.map(([k, n]) => `${MATERIAL_INFO[k].name} ${n - (v.mats[k] ?? 0)}개`).join(', ')}가 더 필요해!`);
+      for (const [k, n] of cost) v.mats[k] = (v.mats[k] ?? 0) - n;
+      v.tools = { ...v.tools, [action.tool]: craftRules().toolUses };
+      addStars(state, craftRules().starMake);
+      return { tool: action.tool, message: `${info.emoji} ${eulReul(info.name)} 만들었어! ${info.where} ${info.action}를 해 보자. (${craftRules().toolUses}번 쓸 수 있어)` };
+    }
+    case 'villageCatch': {
+      // 낚시(물 칸)·벌레잡기(열린 땅): 쓸 때마다 1번 닳고, 맞히면 재료(가끔 열매) + 낮은 확률로 포켓몬 만남
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      if (!TOOLS.includes(action.tool)) fail('도구를 다시 골라 주세요.');
+      const info = TOOL_INFO[action.tool];
+      const left = v.tools?.[action.tool] ?? 0;
+      if (left < 1) fail(`${iGa(info.name)} 없어! 🔨 만들기의 🧰 도구에서 만들어 보자.`);
+      const x = Number(action.x), y = Number(action.y);
+      if (!Number.isInteger(x) || !Number.isInteger(y) || !isOpenCell(x, y, villageOpen(state))) fail('여기서는 할 수 없어요.');
+      if (action.tool === 'rod' && groundAt(x, y, v.cells, v.terrain) !== 'water') fail('낚시는 물가에서만 할 수 있어!');
+      const rest = left - 1;
+      v.tools = { ...v.tools, [action.tool]: rest };
+      const broke = rest < 1 ? ` 앗, ${iGa(info.name)} 부서졌어! 다시 만들어 보자.` : '';
+      if (!action.hit) return { hit: false, left: rest, broke: rest < 1, message: `${action.tool === 'rod' ? '물고기가 도망갔어!' : '벌레가 날아가 버렸어!'} 다시 해 보자.${broke}` };
+      v.caught = { ...v.caught, [action.tool]: (v.caught?.[action.tool] ?? 0) + 1 };
+      const rules = craftRules();
+      const got: string[] = [];
+      let berry: PotionKind | null = null;
+      let mat: MaterialKey | null = null;
+      if (random() * 100 < rules.catchBerry) {
+        const kind = pick(BERRY_KINDS, random);
+        if (!berryCapped(state, kind)) { (state.potions ??= []).push({ id: nextId(state, 'm'), kind }); noteBerry(state, 'catch'); berry = kind; got.push(`${POTIONS[kind].label} 1개`); }
+      }
+      if (!berry) {
+        const kind = info.mats[random() < 0.65 ? 0 : 1];
+        const cap = villageRules().matCap;
+        if ((v.mats[kind] ?? 0) < cap) { v.mats[kind] = (v.mats[kind] ?? 0) + 1; v.gained = (v.gained ?? 0) + 1; mat = kind; got.push(`${MATERIAL_INFO[kind].name} 1개`); }
+        else got.push(`${MATERIAL_INFO[kind].name}(가방이 가득 차서 못 넣었어)`);
+      }
+      // 포켓몬 만남 (획득 아님): 물가 → 물 타입, 벌레 → 벌레·페어리 타입
+      let met: { species: number; fresh: boolean } | null = null;
+      if (random() * 100 < rules.catchMeet) {
+        const pool = guestPool(info.meet);
+        const species = pool[Math.floor(random() * pool.length)];
+        const list = state.met ??= [];
+        const fresh = !list.includes(species);
+        if (fresh) { list.push(species); addStars(state, rules.starGuest); }
+        met = { species, fresh };
+      }
+      return { hit: true, left: rest, broke: rest < 1, mat, berry, met,
+        message: `${action.tool === 'rod' ? '🎣 낚았다!' : '🦋 잡았다!'} ${got.join(', ')}를 얻었어!${broke}` };
     }
     case 'villageUnlock': {
       // 열쇠 1개로 잠긴 땅 하나 열기: 열린 땅에 붙어 있는 곳만 (마을이 열려 있을 때)
@@ -2469,6 +2532,10 @@ function craftView(state: GameState, today: string) {
     rules,
     /** 지금 키울 수 있는 나무 수·심을 수 있는 자리 (마을 레벨로 늘어남) */
     treeMax: spots.length, treeSpots: spots,
+    /** 낚싯대·잠자리채: 남은 횟수(0 = 없음/부서짐)·재료·잡은 수 */
+    tools: Object.fromEntries(TOOLS.map(k => [k, v?.tools?.[k] ?? 0])) as Record<ToolKey, number>,
+    toolCosts: Object.fromEntries(TOOLS.map(k => [k, toolCost(k)])) as Record<ToolKey, Partial<Record<MaterialKey, number>>>,
+    caught: Object.fromEntries(TOOLS.map(k => [k, v?.caught?.[k] ?? 0])) as Record<ToolKey, number>,
     recipes: Object.fromEntries(RECIPES.map(k => [k, recipeCost(k)])) as Record<RecipeKey, ReturnType<typeof recipeCost>>,
     trees: treesOf(state, today).map(t => ({ ...t, grown: treeGrown(t, today), ready: !harvested.includes(t.spot) && treeGrown(t, today) })),
     saplings: v?.saplings ?? 0,
@@ -2491,7 +2558,7 @@ export function villageReport(state: GameState, today: string) {
     guests: view.guests.map(g => ({ species: g.species, name: species(g.species).name, habitat: HABITAT_INFO[g.habitat].name })),
     met: (state.met ?? []).length, open: view.open, time: view.time,
     decorPlaced: view.decor.length, decorBag: view.decorBag, terrainChanged: view.terrain.length,
-    craft: { trees: view.craft.trees.length, iron: view.craft.iron, sparkle: view.craft.sparkle, mail: view.craft.mail, balls: view.craft.balls.length, made: state.village?.craftLog?.length ?? 0 },
+    craft: { caught: view.craft.caught, tools: view.craft.tools, trees: view.craft.trees.length, iron: view.craft.iron, sparkle: view.craft.sparkle, mail: view.craft.mail, balls: view.craft.balls.length, made: state.village?.craftLog?.length ?? 0 },
     berrySources: state.berrySources ?? {},
     /** 마을 레벨·별·다음 레벨까지 */
     level: { level: view.level.level, stars: view.level.stars, into: view.level.into, next: view.level.next, region: view.level.regions.filter(r => r.status === 'open').map(r => r.name), keys: view.level.keys },
@@ -2536,6 +2603,8 @@ export function simVillageCraft(state: GameState, op: string, bank: ActiveBank |
       v.stars = villageStars(state) + (l.next - l.into);
       return `마을 별을 채워 레벨 ${l.level + 1}로 올렸어요. 아이 화면에서 마을에 들어가면 🔑 열쇠로 열 땅을 고르는 창이 떠요.`;
     }
+    case 'tools': { v.tools = { rod: craftRules().toolUses, net: craftRules().toolUses }; return '낚싯대·잠자리채를 하나씩 넣었어요(새것).'; }
+    case 'toolsAlmost': { v.tools = { rod: 1, net: 1 }; return '낚싯대·잠자리채를 한 번만 더 쓰면 부서지게 했어요.'; }
     case 'levelReset': { v.stars = 0; v.levelSeen = 1; v.opened = []; return '마을 별을 0으로(레벨 1) 되돌리고 연 땅도 처음 마을만 남겼어요(시험용).'; }
     case 'dexFull': {
       for (const t of [0, 1, 2]) for (const id of CATCH_POOLS[t]) if (!state.dex.includes(id)) state.dex.push(id);

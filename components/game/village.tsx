@@ -17,6 +17,9 @@ import { GATHER_ROCKS, MAILBOX, TREE_SPOTS, WORKBENCH } from '@/lib/village-craf
 import type { PotionKind } from '@/lib/game-config';
 import { KeyChooser, LevelGuide, LockedRegions, useLevelPopups, VillageLevelBar } from './village-level';
 import { isOpenCell, lockedText } from '@/lib/village-level';
+import { CatchGame, FunIntro, funIntroSeen, ToolsTab, type CatchResult } from './village-fun';
+import type { ToolKey } from '@/lib/village-tools';
+import { groundAt } from '@/lib/village-map';
 import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
@@ -51,7 +54,7 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
 type Sheet = null | 'bag' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
-type MakeTab = 'habitat' | DecorTab;
+type MakeTab = 'habitat' | DecorTab | 'tools';
 type DecorPlacing = { item: DecorKey; variant: number };
 
 type ScreenProps = {
@@ -110,6 +113,38 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   const pop = useLevelPopups(inside, introOpen, v.level.keys);
   const blockedRef = useRef(blocked);
   useEffect(() => { blockedRef.current = blocked; });
+  // 낚시·벌레잡기 안내 (레벨 안내 다음, 기기마다 처음 한 번)
+  const [funOpen, setFunOpen] = useState(false);
+  useEffect(() => {
+    if (!inside || introOpen || pop.guide || funIntroSeen()) return;
+    const t = window.setTimeout(() => setFunOpen(true), 600);
+    return () => window.clearTimeout(t);
+  }, [inside, introOpen, pop.guide]);
+  // 낚시·벌레잡기 놀이 창 (round = 새 판마다 처음부터)
+  const [catching, setCatching] = useState<{ tool: ToolKey; x: number; y: number; bug?: number } | null>(null);
+  const [round, setRound] = useState(0);
+  // 날아다니는 벌레 (잠자리채가 있을 때만, 서준이 근처 열린 풀밭에 2마리)
+  const [bugs, setBugs] = useState<{ id: number; x: number; y: number; kind: string }[]>([]);
+  const hasNet = craft.tools.net > 0;
+  const posRef = useRef(pos);
+  useEffect(() => { posRef.current = pos; });
+  useEffect(() => {
+    if (!inside || !hasNet) return;
+    let next = 1;
+    const spawn = () => setBugs(list => {
+      const out = list.filter(b => Math.abs(b.x - posRef.current.x) <= 5 && Math.abs(b.y - posRef.current.y) <= 4).slice(0, 2);
+      for (let tries = 0; out.length < 2 && tries < 40; tries++) {
+        const x = posRef.current.x + Math.floor(Math.random() * 9) - 4, y = posRef.current.y + Math.floor(Math.random() * 7) - 3;
+        if (!inMap(x, y) || blockedRef.current.has(key(x, y)) || (x === posRef.current.x && y === posRef.current.y) || out.some(b => b.x === x && b.y === y)) continue;
+        if (groundAt(x, y, v.cells, v.terrain) !== 'grass') continue;
+        out.push({ id: Date.now() + next++, x, y, kind: Math.random() < 0.5 ? '🦋' : Math.random() < 0.5 ? '🐞' : '🐝' });
+      }
+      return out;
+    });
+    const first = window.setTimeout(spawn, 300);
+    const t = window.setInterval(spawn, 6000);
+    return () => { window.clearTimeout(first); window.clearInterval(t); };
+  }, [inside, hasNet, v.cells, v.terrain]);
 
   // 들어가기: 열려 있으면 한 번 villageEnter (손님을 도감 "만남"에)
   useEffect(() => {
@@ -217,6 +252,15 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     if (r) { setToast(r.message); setPlanting(null); }
   }
   const plantTargets = planting ? craft.treeSpots.map(spot => ({ ...TREE_SPOTS[spot], spot })).filter(s => !craft.trees.some(t => t.spot === s.spot)) : [];
+  // 물가: 서준이 바로 옆(위·아래·왼쪽·오른쪽) 열린 물 칸
+  const waterNear = [[0, -1], [0, 1], [-1, 0], [1, 0]].map(([dx, dy]) => ({ x: pos.x + dx, y: pos.y + dy }))
+    .find(c => inMap(c.x, c.y) && isOpenCell(c.x, c.y, openIds) && groundAt(c.x, c.y, v.cells, v.terrain) === 'water') ?? null;
+  async function catchDone(hit: boolean): Promise<CatchResult | null> {
+    if (!catching) return null;
+    const r = await act<CatchResult>({ type: 'villageCatch', tool: catching.tool, x: catching.x, y: catching.y, hit, stay: true });
+    if (catching.bug !== undefined) setBugs(list => list.filter(b => b.id !== catching.bug));
+    return r;
+  }
   async function onMonTap(w: Walker) {
     if (w.guest) {
       const r = await act<{ message: string }>({ type: 'villageTalk', plot: w.guest.plot, stay: true });
@@ -338,6 +382,11 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           {v.pickups.map(p => (
             <span key={'p' + p.spot} className="village-pickup" style={{ left: PICK_SPOTS[p.spot].x * TILE, top: PICK_SPOTS[p.spot].y * TILE, width: TILE, height: TILE }} title={MATERIAL_INFO[p.kind].name}><MaterialIcon kind={p.kind} /></span>
           ))}
+          {/* 날아다니는 벌레 (잠자리채가 있을 때) */}
+          {hasNet && !placing && !decorPlacing && !planting && bugs.map(b => (
+            <button key={b.id} className="village-bug" style={{ left: b.x * TILE, top: b.y * TILE, width: TILE, height: TILE, zIndex: 12 + b.y }}
+              aria-label="벌레 잡기" onClick={() => { setRound(n => n + 1); setCatching({ tool: 'net', x: b.x, y: b.y, bug: b.id }); }}>{b.kind}</button>
+          ))}
           {/* 돌아다니는 포켓몬 */}
           {walkers.map(w => (
             <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing || decorPlacing ? ' pass' : '')}
@@ -384,6 +433,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           </span>
           <button className="secondary small" onClick={() => setDecorPlacing(null)}>그만</button>
         </div>}
+        {craft.tools.rod > 0 && waterNear && !placing && !decorPlacing && !planting && <button className="village-fish-btn" onClick={() => { setRound(n => n + 1); setCatching({ tool: 'rod', x: waterNear.x, y: waterNear.y }); }}>🎣 낚시하기 <small>({craft.tools.rod}번 남음)</small></button>}
         {toast && <div className="village-toast" role="status">{toast}</div>}
         {timeUp && <div className="village-timeup"><p>⏰ 오늘 마을 시간은 끝났어.<br />내일 또 놀러 오자!</p><button className="primary" onClick={close}>나가기</button></div>}
       </div>
@@ -411,8 +461,10 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
       </div>
 
       <CraftIntro open={introOpen} view={view} onClose={closeIntro} />
+      <FunIntro open={funOpen && !introOpen && !pop.guide} view={view} onClose={() => setFunOpen(false)} />
+      <CatchGame tool={catching?.tool ?? null} round={round} onDone={catchDone} onClose={() => setCatching(null)} />
       <LevelGuide open={pop.guide} level={v.level} onClose={pop.closeGuide} />
-      <KeyChooser key={pop.chooser.first ?? 'none'} level={v.level} open={pop.chooser.open && !pop.guide} busy={busy} first={pop.chooser.first} onClose={pop.closeChooser}
+      <KeyChooser key={pop.chooser.first ?? 'none'} level={v.level} open={pop.chooser.open && !pop.guide && !funOpen} busy={busy} first={pop.chooser.first} onClose={pop.closeChooser}
         onUnlock={async id => { const r = await act<{ message: string }>({ type: 'villageUnlock', region: id }); if (r) { setToast(r.message); pop.doneChooser(); } return !!r; }} />
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
@@ -420,7 +472,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
               onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined}
               onPlant={() => setSheet('plant')} />
             : sheet === 'plant' ? <PlantSheet onPick={k => { setSheet(null); setPlacing(null); setDecorPlacing(null); setPlanting(k); }} />
-            : sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast}
+            : sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast} onHelp={() => { setSheet(null); setFunOpen(true); }}
               onPlace={k => { setSheet(null); setDecorPlacing(null); setPlacing(k); }}
               onPlaceDecor={k => { setSheet(null); setPlacing(null); setDecorPlacing({ item: k, variant: 0 }); }} />
             : 'decorAt' in sheet ? <DecorTakeSheet view={view} at={sheet.decorAt} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
@@ -503,10 +555,10 @@ function DecorIcon({ item, variant = 0, scale = 2 }: { item: DecorKey; variant?:
 }
 
 /** 만들기 창 하나에 세 칸: 🌱 서식지(밭) · 🎨 꾸미기(풀밭) · ⛰️ 땅 바꾸기(풀밭) — 2026-11-14 부모님: 만들기·꾸미기가 헷갈려서 합침 */
-const MAKE_TABS: { key: MakeTab; label: string }[] = [{ key: 'habitat', label: '🌱 서식지' }, { key: 'decor', label: '🎨 꾸미기' }, { key: 'ground', label: '⛰️ 땅 바꾸기' }];
-function MakeSheet({ tab, onTab, view, busy, act, onToast, onPlace, onPlaceDecor }: {
+const MAKE_TABS: { key: MakeTab; label: string }[] = [{ key: 'habitat', label: '🌱 서식지' }, { key: 'decor', label: '🎨 꾸미기' }, { key: 'ground', label: '⛰️ 땅' }, { key: 'tools', label: '🧰 도구' }];
+function MakeSheet({ tab, onTab, view, busy, act, onToast, onPlace, onPlaceDecor, onHelp }: {
   tab: MakeTab; onTab: (t: MakeTab) => void; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void;
-  onPlace: (k: CraftKey) => void; onPlaceDecor: (k: DecorKey) => void;
+  onPlace: (k: CraftKey) => void; onPlaceDecor: (k: DecorKey) => void; onHelp: () => void;
 }) {
   return <>
     <h3>🔨 만들기</h3>
@@ -514,6 +566,7 @@ function MakeSheet({ tab, onTab, view, busy, act, onToast, onPlace, onPlaceDecor
       {MAKE_TABS.map(t => <button key={t.key} role="tab" aria-selected={tab === t.key} className={'village-make-tab' + (tab === t.key ? ' on' : '')} onClick={() => onTab(t.key)}>{t.label}</button>)}
     </div>
     {tab === 'habitat' ? <CraftSheet view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlace} />
+      : tab === 'tools' ? <ToolsTab view={view} busy={busy} act={act} onToast={onToast} onHelp={onHelp} />
       : <DecorSheet tab={tab} view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlaceDecor} />}
   </>;
 }

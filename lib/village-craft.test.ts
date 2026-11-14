@@ -328,3 +328,73 @@ test('syncVillage는 열매나무 기록을 건드리지 않고, 예전 마을 �
   assert.equal(view.iron, 0);
   assert.equal(view.balls.length, 0);
 });
+
+// ---------- 낚시·벌레잡기 (2026-11-14) ----------
+test('도구: 재료로 낚싯대·잠자리채를 만들고, 15번 쓰면 부서짐 (하나씩만)', () => {
+  reset();
+  const bank = makeBank();
+  const state = started(bank);
+  finishDaily(state, bank);
+  const v = state.village!;
+  v.mats = { twig: 1, leaf: 2 };
+  assert.throws(() => applyAction(state, { type: 'toolCraft', tool: 'rod', stay: true }, ctx(bank)), /나뭇가지 2개가 더 필요해/);
+  v.mats = { twig: 5, leaf: 2, petal: 2 };
+  applyAction(state, { type: 'toolCraft', tool: 'rod', stay: true }, ctx(bank));
+  assert.deepEqual([v.mats.twig, v.mats.leaf], [2, 0]);
+  assert.equal(v.tools!.rod, 15);
+  assert.throws(() => applyAction(state, { type: 'toolCraft', tool: 'rod', stay: true }, ctx(bank)), /벌써 있어/);
+  applyAction(state, { type: 'toolCraft', tool: 'net', stay: true }, ctx(bank));
+  assert.equal(v.tools!.net, 15);
+  // 낚시는 물 칸에서만 (처음 마을 연못 x1~3, y15~17)
+  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'rod', x: 5, y: 9, hit: true, stay: true }, ctx(bank)), /물가에서만/);
+  // 잠긴 땅은 안 됨
+  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'net', x: 14, y: 6, hit: true, stay: true }, ctx(bank)), /할 수 없어요/);
+  // 놓쳐도 1번 닳음
+  const r0 = applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: false, stay: true }, ctx(bank)) as { hit: boolean; left: number };
+  assert.deepEqual([r0.hit, r0.left], [false, 14]);
+  for (let i = 0; i < 14; i++) applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: true, stay: true }, ctx(bank, TODAY, seeded(i + 2)));
+  assert.equal(v.tools!.rod, 0);
+  assert.equal(v.caught!.rod, 14);
+  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: true, stay: true }, ctx(bank)), /없어!/);
+  // 부서지면 다시 만들 수 있음
+  v.mats = { twig: 3, leaf: 2 };
+  applyAction(state, { type: 'toolCraft', tool: 'rod', stay: true }, ctx(bank));
+  assert.equal(v.tools!.rod, 15);
+  // 보호자가 횟수를 바꿀 수 있음
+  setCraftRules({ toolUses: 3 });
+  v.tools!.net = 0; v.mats = { twig: 2, petal: 2 };
+  applyAction(state, { type: 'toolCraft', tool: 'net', stay: true }, ctx(bank));
+  assert.equal(v.tools!.net, 3);
+  reset();
+});
+
+test('잡으면: 낚시 = 물방울·진흙, 벌레 = 꽃잎·풀잎(가끔 열매), 포켓몬은 "만남"만 (가진 포켓몬은 그대로)', () => {
+  reset();
+  const bank = makeBank();
+  const state = started(bank);
+  finishDaily(state, bank);
+  const v = state.village!;
+  v.tools = { rod: 15, net: 15 };
+  v.mats = {};
+  const owned = state.owned.length, dex = state.dex.length;
+  setCraftRules({ catchBerry: 0, catchMeet: 100, toolUses: 15 });
+  const r = applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: true, stay: true }, ctx(bank, TODAY, seeded(7))) as { mat: string; met: { species: number; fresh: boolean } };
+  assert.ok(['drop', 'mud'].includes(r.mat));
+  assert.ok(species(r.met.species).types.includes('water'));
+  assert.ok(species(r.met.species).tier < 3);
+  assert.ok(state.met!.includes(r.met.species));
+  assert.equal(r.met.fresh, true);
+  const b = applyAction(state, { type: 'villageCatch', tool: 'net', x: 4, y: 10, hit: true, stay: true }, ctx(bank, TODAY, seeded(9))) as { mat: string; met: { species: number } };
+  assert.ok(['petal', 'leaf'].includes(b.mat));
+  assert.ok(species(b.met.species).types.some(t => t === 'bug' || t === 'fairy'));
+  assert.equal(state.owned.length, owned);
+  assert.equal(state.dex.length, dex);
+  // 열매 100%면 열매 (상한이면 재료로)
+  setCraftRules({ catchBerry: 100, catchMeet: 0 });
+  const before = (state.potions ?? []).length;
+  const c = applyAction(state, { type: 'villageCatch', tool: 'net', x: 4, y: 10, hit: true, stay: true }, ctx(bank, TODAY, seeded(11))) as { berry: string | null };
+  assert.ok(c.berry);
+  assert.equal((state.potions ?? []).length, before + 1);
+  assert.equal(state.berrySources?.catch, 1);
+  reset();
+});
