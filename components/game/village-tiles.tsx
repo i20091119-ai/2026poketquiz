@@ -101,12 +101,14 @@ export function VillageGround({ tile, cells }: { tile: number; cells: (CraftKey 
 // ---------- 재료·만든 물건 아이콘 ----------
 const MATERIAL_OBJECT: Record<MaterialKey, ObjectKind> = { leaf: 'matLeaf', drop: 'matDrop', petal: 'matPetal', twig: 'matTwig' };
 export const MaterialIcon = ({ kind, scale = 2 }: { kind: MaterialKey; scale?: number }) => <ObjectSprite kind={MATERIAL_OBJECT[kind]} scale={scale} />;
+const puddleIconAt = (x: number, y: number): GroundKind => (x >= 0 && x < 2 && y >= 0 && y < 2 ? 'water' : 'grass');
 /** 만든 물건 그림: 풀숲 = 덤불, 꽃밭 = 꽃, 물웅덩이 = 물가 테두리가 있는 물 한 칸 */
 export function CraftIcon({ kind, scale = 2 }: { kind: CraftKey; scale?: number }) {
   if (kind === 'puddle') {
     return (
-      <span title={CRAFT_INFO[kind].name} style={{ display: 'inline-block', width: T * scale, height: T * scale }}>
-        <GroundLayer x0={0} y0={0} cols={1} rows={1} scale={scale} at={(x, y) => (x === 0 && y === 0 ? 'water' : 'grass')} version="puddle" />
+      // 작은 연못(물 2×2)을 반 크기로: 한 칸짜리 물은 모래 물가만 보여서
+      <span title={CRAFT_INFO[kind].name} style={{ display: 'inline-block', width: T * scale, height: T * scale, overflow: 'hidden', borderRadius: 4 }}>
+        <GroundLayer x0={0} y0={0} cols={2} rows={2} scale={scale / 2} at={puddleIconAt} version="puddle" />
       </span>
     );
   }

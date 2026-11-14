@@ -1208,3 +1208,6 @@ img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
 .village-placing { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(20,30,20,.9); font-size: 13px; font-weight: 700; }
 .village-placing > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .village-recipe-btns { display: flex; flex-direction: column; gap: 6px; }
+/* 시험용 마을 (/village-demo) 안내 띠 */
+.village-demo-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; padding: 4px 10px calc(4px + env(safe-area-inset-bottom)); background: #6d28d9; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+.village-demo-band.warn { bottom: 26px; background: #b45309; }
