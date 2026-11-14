@@ -44,6 +44,34 @@ SPDX-License-Identifier: AGPL-3.0-only
 		}
 	</style>
 	<link rel="stylesheet" type="text/css" href="./index.css" />
+	<!-- 퀴즈 앱(2026-11-14 부모님): 아래로 쓸어 새로고침·폰 뒤로 가기로 판이 끊기지 않게. 나가기는 오른쪽 위 ✕ 버튼 -->
+	<style>html, body { overscroll-behavior: none; }</style>
+	<script>
+	(function () {
+		try {
+			var armed = false;
+			var arm = function () {
+				if (armed) return; armed = true;
+				if (!(history.state && history.state.pqGuard)) history.pushState({ pqGuard: 1 }, '');
+			};
+			window.addEventListener('pointerdown', arm, { once: true });
+			window.addEventListener('touchstart', arm, { once: true, passive: true });
+			window.addEventListener('popstate', function () {
+				try { history.pushState({ pqGuard: 1 }, ''); } catch (e) {}
+				var t = document.getElementById('pq-back-toast');
+				if (!t) {
+					t = document.createElement('div'); t.id = 'pq-back-toast';
+					t.style.cssText = 'position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:99999;background:rgba(0,0,0,.85);color:#fff;padding:9px 16px;border-radius:12px;font:bold 15px sans-serif;text-align:center;max-width:90%';
+					document.body.appendChild(t);
+				}
+				t.textContent = '게임을 끝내려면 오른쪽 위 ✕ 버튼을 눌러 줘!';
+				t.style.display = 'block';
+				clearTimeout(window.__pqBackT);
+				window.__pqBackT = setTimeout(function () { t.style.display = 'none'; }, 2600);
+			});
+		} catch (e) {}
+	})();
+	</script>
 	<link rel="manifest" href="./manifest.webmanifest">
   <script>
     if ("serviceWorker" in navigator) {
