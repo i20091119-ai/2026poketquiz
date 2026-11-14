@@ -4,15 +4,19 @@
 // 상태 변경은 lib/game-engine.ts, 이 파일은 규칙과 계산만.
 import { SPECIES } from './pokedex.ts';
 import type { TypeKey } from './game-config.ts';
+import { isOpenCell, START_REGION } from './village-level.ts';
 
 /** 재료 4종 */
-export const MATERIALS = ['leaf', 'drop', 'petal', 'twig'] as const;
+/** 재료 6종 (돌멩이·진흙은 2026-11-14 땅 바꾸기와 함께) */
+export const MATERIALS = ['leaf', 'drop', 'petal', 'twig', 'stone', 'mud'] as const;
 export type MaterialKey = typeof MATERIALS[number];
 export const MATERIAL_INFO: Record<MaterialKey, { name: string; emoji: string }> = {
   leaf: { name: '풀잎', emoji: '🌿' },
   drop: { name: '물방울', emoji: '💧' },
   petal: { name: '꽃잎', emoji: '🌸' },
   twig: { name: '나뭇가지', emoji: '🪵' },
+  stone: { name: '돌멩이', emoji: '🪨' },
+  mud: { name: '진흙', emoji: '🟫' },
 };
 
 /** 만들 수 있는 물건 (처음부터 모두 열림). 나뭇가지는 지금은 모으기만 */
@@ -35,38 +39,44 @@ export const HABITAT_INFO: Record<HabitatKey, { name: string; emoji: string; nee
 
 // ---------- 지도 ----------
 /** 마을 크기 (타일 16×16 기준 칸 수) */
-export const MAP_W = 12;
-export const MAP_H = 20;
-/** 서식지를 만드는 밭 3개 (왼쪽 위 칸, 2×2). 칸 번호 = 밭 번호 × 4 + (0 왼위, 1 오위, 2 왼아래, 3 오아래) */
-export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }];
+/** 지도 전체 크기 (x는 MAP_X0부터). 처음 마을 12×20은 위쪽 가운데, 마을 레벨 열쇠로 붙어 있는 구역을 하나씩 엶 (lib/village-level.ts REGIONS) */
+export const MAP_W = 44;
+export const MAP_H = 40;
+/** 지도 왼쪽 끝 x (처음 마을의 왼쪽에 붙인 땅은 x가 음수: 예전 칸 번호가 그대로 남게) */
+export const MAP_X0 = -16;
+/** 서식지를 만드는 밭 (왼쪽 위 칸, 2×2). 칸 번호 = 밭 번호 × 4 + (0 왼위, 1 오위, 2 왼아래, 3 오아래). 처음 3개 + 넓어진 구역마다 1개(뒤에만 붙임) */
+export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }, { x: 15, y: 4 }, { x: -5, y: 4 }, { x: 2, y: 22 }, { x: 13, y: 20 },
+  // 더 넓은 구역 (꽃 들판·서쪽 호수·바위 언덕·꽃길·모래 해변)
+  { x: -13, y: 13 }, { x: -15, y: 21 }, { x: 21, y: 25 }, { x: -6, y: 36 }, { x: 13, y: 31 }];
 export const CELL_COUNT = PLOTS.length * 4;
 export const cellPos = (cell: number) => {
   const p = PLOTS[Math.floor(cell / 4)];
   const i = cell % 4;
   return { x: p.x + (i % 2), y: p.y + Math.floor(i / 2) };
 };
-/** 마을 꾸밈 (그림 자리, 걸을 수 없음): 집 4×3, 나무 2×2, 연못 3×3 */
-export const HOUSE = { x: 4, y: 1, w: 4, h: 3 };
-export const TREES: { x: number; y: number; pink?: boolean }[] = [
-  { x: 0, y: 0 }, { x: 10, y: 0, pink: true }, { x: 0, y: 10 }, { x: 10, y: 10 }, { x: 0, y: 18, pink: true }, { x: 10, y: 18 },
-];
-export const POND = { x: 1, y: 15, w: 3, h: 3 };
-/** 흙길: 집 앞에서 아래로 2칸 너비 + 가운데 가로 1줄 */
-export const isPath = (x: number, y: number) => ((x === 5 || x === 6) && y >= 4) || y === 8;
+// 집·나무·길·연못 같은 지도 모습은 lib/village-map.ts (칸 단위 기록: 칸마다 땅 + 그 위 물건)
 /** 땅에 떨어진 재료가 나올 수 있는 자리 (날마다 그중 몇 곳) */
 export const PICK_SPOTS: { x: number; y: number }[] = [
   { x: 3, y: 2 }, { x: 9, y: 3 }, { x: 3, y: 6 }, { x: 8, y: 10 }, { x: 4, y: 12 },
   { x: 2, y: 10 }, { x: 7, y: 16 }, { x: 10, y: 15 }, { x: 4, y: 19 }, { x: 8, y: 18 },
+  // 넓어진 구역 (레벨 2~5, 열린 구역 자리만 씀)
+  { x: 14, y: 2 }, { x: 18, y: 7 }, { x: 13, y: 11 }, { x: 16, y: 16 },
+  { x: -6, y: 1 }, { x: -3, y: 9 }, { x: -5, y: 13 },
+  { x: 3, y: 25 }, { x: 10, y: 21 }, { x: 4, y: 29 },
+  { x: 12, y: 22 }, { x: 18, y: 23 },
+  { x: -5, y: 22 }, { x: -1, y: 25 }, { x: -7, y: 29 },
+  { x: -12, y: 3 }, { x: -15, y: 8 }, { x: -11, y: 17 },
+  { x: 21, y: 3 }, { x: 25, y: 9 }, { x: 22, y: 18 },
+  { x: -13, y: 23 }, { x: -11, y: 25 }, { x: -9, y: 29 },
+  { x: 22, y: 22 }, { x: 25, y: 28 }, { x: 20, y: 27 },
+  { x: -13, y: 33 }, { x: -9, y: 39 },
+  { x: -3, y: 31 }, { x: -2, y: 38 },
+  { x: 3, y: 33 }, { x: 10, y: 33 }, { x: 2, y: 39 },
+  { x: 17, y: 31 }, { x: 14, y: 35 }, { x: 19, y: 35 },
+  { x: 22, y: 33 }, { x: 26, y: 31 },
 ];
 /** 집 문 앞: 처음 서는 자리 */
 export const START_POS = { x: 5, y: 4 };
-const rect = (r: { x: number; y: number; w: number; h: number }) =>
-  Array.from({ length: r.w * r.h }, (_, i) => ({ x: r.x + (i % r.w), y: r.y + Math.floor(i / r.w) }));
-/** 걸을 수 없는 칸 (집·나무·연못) */
-export const BLOCKED: { x: number; y: number }[] = [
-  ...rect(HOUSE), ...TREES.flatMap(t => rect({ x: t.x, y: t.y, w: 2, h: 2 })), ...rect(POND),
-];
-
 // ---------- 규칙 숫자 (보호자 공간 전체 설정 "포켓몬 마을 규칙"에서 바꾸면 settings.village_rules에 바꾼 것만) ----------
 export type VillageTimeMode = 'off' | 'daily' | 'perQuiz';
 export const VILLAGE_DEFAULT = {
@@ -136,10 +146,10 @@ export function seeded(seed: string) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-/** 오늘 땅에 떨어진 재료: 자리 번호와 종류 (하루 줍기 수만큼, 날짜로 정해짐) */
-export function dayPickups(date: string, count: number): { spot: number; kind: MaterialKey }[] {
+/** 오늘 땅에 떨어진 재료: 자리 번호와 종류 (하루 줍기 수만큼, 날짜로 정해짐). open = 열린 구역(그 자리만, 처음 마을만이면 예전과 같음) */
+export function dayPickups(date: string, count: number, open: readonly string[] = [START_REGION]): { spot: number; kind: MaterialKey }[] {
   const r = seeded('pick:' + date);
-  const spots = PICK_SPOTS.map((_, i) => i);
+  const spots = PICK_SPOTS.map((_, i) => i).filter(i => isOpenCell(PICK_SPOTS[i].x, PICK_SPOTS[i].y, open));
   for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
   return spots.slice(0, Math.max(0, count)).sort((a, b) => a - b).map(spot => ({ spot, kind: MATERIALS[Math.floor(r() * MATERIALS.length)] }));
 }

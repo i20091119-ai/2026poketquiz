@@ -1,2 +1,29 @@
-Village tiles: Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
-License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
+포켓몬 마을 그림 출처 (Village art credits)
+
+1) ground.png(땅) · objects.png(물건) — 마을 바닥·흙길·물가·나무·집·꽃·버섯·돌·울타리·재료 (scripts/pack-village-town.mjs 로 필요한 조각만 잘라 묶음, 조각별 목록은 ASSETS.md)
+   From the Tuxemon project tilesets (https://github.com/Tuxemon/Tuxemon, mods/tuxemon/gfx/tilesets):
+   - core_outdoor.png, core_outdoor_nature.png, core_outdoor_water.png
+     by rubberduck, based on "Updated Ground Tiles" by rubberduck (original tiles by Buch, commissioned by luke83,
+     changes and additions by luke83 and Past the Future, and original tiles by George_),
+     "Sand n Water" by luke83 and "Grass, Sand, Snow" by PastTheFuture (both based on
+     "Kyrodian Legends Overworld Tileset" by Midi), "Basic Buch Tiles Compiled" by Buch.
+     Licensed under CC BY-SA 4.0 (parts CC BY 3.0 / CC BY 4.0 / CC0).
+   - core_buildings.png (house) — "Inspired 16x16 Tiles" based on "pokemon-inspired-16x16-tiles"
+     by RedVoxel (https://red-voxel.itch.io/), roofs adapted by Jaskrendix. Licensed under CC BY-SA 4.0.
+   Full list: https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
+   License text: https://creativecommons.org/licenses/by-sa/4.0/
+   ground.png · objects.png (잘라 묶은 그림)도 같은 CC BY-SA 4.0 으로 나눕니다.
+
+2) village.png — 재료 그림 중 물방울 하나만 objects.png 의 matDrop 으로 옮겨 씀 (그림체가 달라 임시)
+   Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
+   License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
+
+   - Objects_by_ArMM1998.png (둥근 덤불, 마을 나무색으로 바꿈) by ArMM1998, Outdoor_odds_and_ends_by_Isaiah658.png (화분·꽃 상자·벤치) by Isaiah658 — 둘 다 CC0.
+   - 돌길 세트는 흙길 세트 모양에 core_outdoor_nature 의 돌 무늬를 입혀 만든 것 (CC BY-SA 4.0).
+   - Furniture_and_Fittings_by_George.png (제작대 = 줄무늬 지붕 가게) by George_ (Tuxemon), CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/).
+   - 열매나무 6가지(마을 둥근 나무에 열매를 그려 넣음, CC BY-SA 4.0)·우편함·철·반짝돌은 이 게임에서 직접 그림.
+
+3) player.png — 서준이 걷는 그림: Tuxemon "Postboy" overland sprite by Catch Challenger
+   (https://github.com/alphaonex86/CatchChallenger-datapack, CC BY 4.0), palette changed by Sanglorian (Tuxemon, CC BY-SA 4.0).
+
+4) 마을의 움직이는 포켓몬 그림은 포켓로그(/battle/images/pokemon/)에 이미 있는 그림을 그대로 씁니다.

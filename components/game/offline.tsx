@@ -229,7 +229,7 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
         <div className="intro-dots">{slides.map((_, i) => <i key={i} className={i === page ? 'on' : ''} />)}</div>
         <div className="intro-buttons">
           <button className="primary big-button" onClick={() => (last ? onClose() : setPage(p => p + 1))}>{last ? '알았어!' : '다음'}</button>
-          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
         </div>
       </DialogContent>
     </Dialog>

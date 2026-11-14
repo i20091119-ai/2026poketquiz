@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ACTIVITY_LOG_DAYS, BALLS, DAILY_BOX_TABLE, GIFT_SIZES, SHINY_CHANCE_DEFAULT, EVOLUTION_COST, DAILY_ATTEMPTS, RETRY_WAIT_SECONDS, DAILY_CANDY, EXP_EXCHANGE, WEAK_AREA, EXP_GIFT, DAILY_PER_SUBJECT, SUBJECTS, SUBJECT_TYPES, STARTERS, TYPE_INFO, statReward, iGa, GROWTH_DEFAULT, setGrowthRules, growth, evolutionCost } from './game-config.ts';
-import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill, openRetryToday, lockedToday, berryCount } from './game-engine.ts';
+import { activityList, applyAction, areaReport, seedAreaStats, recordBattleLevels, battleStartsLeft, battleTimeUp, candySummary, childView, claimCandy, isWeakArea, dailyBoxPicks, ensureDaily, GameError, initialState, nextExploreQuestion, recordBattleProgress, startBattle, battleLogList, type ActiveBank, type Context, type GameState, type Question, recordShiny, simGiveBalls, simGiveShinies, shiftDate, sendGift, giftCounts, battleTickets, battleStartsAvailable, unseenReplies, markRepliesSeen, limitedView, limitedReport, syncLimited, simLimited, resetLimitedIntro, battleIvOf, battleIvList, simBattlePower, simHearts, expExchangeToday, teamOf, createOuting, reviewOuting, syncOutings, outingView, outingReport, simOutingFill, openRetryToday, lockedToday, berryCount, berryCapped } from './game-engine.ts';
 import { LIMITED_EVENTS, limitedShinyMultiplier } from './limited-events.ts';
 import { CATCH_POOLS, rootOf, heartGoalOf, evolutionRequirement, evolutionsOf, isStrong, isValidThird, setStrongOverrides, shinyColor, shinyName, species, SPECIES, TOTAL_SPECIES } from './pokedex.ts';
 import { THIRD_TYPE } from './strong-pokemon.ts';
@@ -1543,11 +1543,17 @@ test('열매·상처약을 먹이면 그 포켓몬 계열 💗 +5 (팀에 없어
   setGrowthRules(null);
 });
 
-test('열매가 10개 이상이면 랜덤상자·탐험 선물에서 열매 대신 몬스터볼·슈퍼볼 (상처약은 그대로)', () => {
+test('열매가 종류마다 99개(상한)면 랜덤상자·탐험 선물에서 그 열매 대신 몬스터볼·슈퍼볼 (상처약은 그대로, 2026-11-14)', () => {
   const bank = makeBank(3);
   const state = started(bank);
+  // 10개로는 아직 볼로 안 바뀜 (11/12 규칙은 없어짐)
   for (let i = 0; i < 10; i++) state.potions.push({ id: 'x' + i, kind: 'apple' });
-  assert.equal(berryCount(state), 10);
+  assert.equal(berryCapped(state, 'apple'), false);
+  for (const kind of ['apple', 'blue', 'fire', 'thunder', 'moon', 'star'] as const) {
+    while (state.potions.filter(p => p.kind === kind).length < 99) state.potions.push({ id: kind + state.potions.length, kind });
+  }
+  assert.equal(berryCount(state), 6 * 99);
+  assert.equal(berryCapped(state, 'apple'), true);
   // 랜덤상자 (여러 번 굴려 열매가 하나도 없는지)
   for (let seed = 1; seed < 40; seed++) {
     const s2 = structuredClone(state);
@@ -1563,7 +1569,7 @@ test('열매가 10개 이상이면 랜덤상자·탐험 선물에서 열매 대�
   const r = applyAction(state, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank, seeded(3))) as { items: { kind: string; potion?: string; ball?: string }[] };
   for (const it of r.items) assert.ok(it.kind === 'ball' ? ['poke', 'great'].includes(it.ball!) : it.potion === 'potion');
   // 상한은 보호자가 바꿀 수 있음
-  setGrowthRules({ berryCap: 50 });
+  setGrowthRules({ berryCap: 200 });
   const s3 = structuredClone(state);
   s3.banks[bank.id].subjectRewards = [];
   const r2 = applyAction(s3, { type: 'exploreReward', subject: '국어', pick: 0 }, ctx(bank, seeded(3))) as { items: { kind: string }[] };

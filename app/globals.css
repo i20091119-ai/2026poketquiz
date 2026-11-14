@@ -1126,30 +1126,42 @@ button.study-day:active { transform: scale(.94); }
 .village-strip-text b { font-size: 16px; }
 .village-strip-text small { font-size: 13px; }
 .village-screen { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; background: #24331f; color: #fff; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); overflow-y: auto; }
-.village-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 352px; max-width: 100%; margin-bottom: 6px; }
+.village-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 336px; max-width: 100%; margin-bottom: 6px; }
 .village-top b { font-size: 17px; }
 .village-picks { font-size: 13px; opacity: .85; }
-.village-view { position: relative; overflow: hidden; border-radius: 10px; border: 3px solid #4d6b3c; flex: none; touch-action: manipulation; }
+.village-view { position: relative; overflow: hidden; border-radius: 12px; border: 3px solid #4d6b3c; flex: none; touch-action: manipulation; background: #40b080; }
 .village-map { position: absolute; left: 0; top: 0; transition: transform .18s ease-out; }
-.village-ground, .village-tile { position: absolute; }
-.village-ground { inset: 0; }
+.village-ground, .village-tile, .village-world { position: absolute; }
+.village-world { left: 0; }
+.vcanvas { display: block; image-rendering: pixelated; }
+.village-ground .vsprite, .village-entrance .vsprite { image-rendering: pixelated; }
+.vquad { display: block; }
+.village-ground { inset: 0; pointer-events: none; }
 .village-tile { width: 32px; height: 32px; display: grid; place-items: center; font-size: 26px; line-height: 1; image-rendering: pixelated; }
-.village-cell { position: absolute; border: 2px dashed rgba(255,255,255,.55); background: transparent; padding: 0; display: grid; place-items: center; }
-.village-cell.filled { border-style: solid; border-color: rgba(255,255,255,.25); }
+.village-cell { position: absolute; z-index: 2; border: 2px dashed rgba(255,255,255,.6); background: transparent; padding: 0; display: grid; place-items: center; }
+.village-cell.filled { border-color: transparent; }
 .village-item { font-size: 24px; line-height: 1; }
-.village-habitat-tag { position: absolute; z-index: 3; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
+.village-habitat-tag { position: absolute; z-index: 40; white-space: nowrap; font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 8px; background: rgba(255,255,255,.9); color: #26352d; }
 .village-pickup { position: absolute; display: grid; place-items: center; font-size: 20px; filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 2px #ffe066); animation: village-bob 1.2s ease-in-out infinite; z-index: 2; }
 @keyframes village-bob { 50% { transform: translateY(-4px); } }
-.village-mon, .village-me { position: absolute; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; z-index: 4; transition: left .5s linear, top .5s linear; }
+.village-mon, .village-me { position: absolute; width: 48px; height: 48px; padding: 0; border: 0; background: transparent; z-index: 4; transition: left .5s linear, top .5s linear; }
 .village-me { z-index: 5; transition: left .15s linear, top .15s linear; }
-.village-mon img, .village-me img { position: absolute; left: -32px; bottom: -8px; width: 96px; height: 96px; max-width: none; image-rendering: pixelated; pointer-events: none; }
-.village-me-mark, .village-guest-mark { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #2563eb; color: #fff; white-space: nowrap; }
+.anim-mon { position: absolute; left: 50%; bottom: 4px; max-width: none; image-rendering: pixelated; pointer-events: none; }
+img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
+.village-shadow, .village-me-ring { position: absolute; left: 50%; bottom: 2px; width: 34px; height: 12px; transform: translateX(-50%); border-radius: 50%; background: rgba(20,40,30,.25); pointer-events: none; }
+.village-me-ring { width: 44px; height: 16px; background: rgba(160,235,255,.25); border: 3px solid rgba(160,235,255,.9); animation: village-ring 1.4s ease-in-out infinite; }
+@keyframes village-ring { 50% { transform: translateX(-50%) scale(1.12); } }
+.village-me-body { position: absolute; left: 0; bottom: 2px; line-height: 0; }
+.village-me-body .vsprite { display: block; image-rendering: pixelated; }
+.village-credit { font-size: 10px; color: rgba(255,255,255,.55); text-decoration: none; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .village-me-ring { animation: none; } }
+.village-me-mark, .village-guest-mark { position: absolute; left: 50%; top: -34px; transform: translateX(-50%); font-size: 10px; font-weight: 800; padding: 0 5px; border-radius: 6px; background: #2563eb; color: #fff; white-space: nowrap; }
 .village-guest-mark { background: #e5a100; }
-.village-shiny { position: absolute; right: -10px; top: -26px; font-size: 14px; }
-.village-bubble { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); z-index: 9; width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 12px; background: #fff; color: #26352d; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+.village-shiny { position: absolute; right: -8px; top: -24px; font-size: 16px; }
+.village-bubble { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); z-index: 9; width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 12px; background: #fff; color: #26352d; font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
 .village-toast { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 10; width: max-content; max-width: 320px; padding: 8px 14px; border-radius: 14px; background: rgba(20,30,20,.88); font-weight: 800; font-size: 14px; text-align: center; }
 .village-timeup { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(20,30,20,.85); text-align: center; font-size: 18px; font-weight: 800; }
-.village-controls { width: 352px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
+.village-controls { width: 336px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 8px; }
 .village-mats { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 18px; }
 .village-mats b { font-size: 14px; margin-left: 2px; }
 .village-pad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 50px); gap: 4px; }
@@ -1169,7 +1181,8 @@ button.study-day:active { transform: scale(.94); }
 .village-place-btn { flex: 1; min-width: 90px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border: 2px solid #d9e4cb; border-radius: 14px; background: #fff; font: inherit; }
 .village-place-btn span { font-size: 30px; }
 .village-locked { width: 352px; max-width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; text-align: center; }
-.village-entrance { width: 100%; height: 220px; border-radius: 14px; background: linear-gradient(#bfe6ff 0 45%, #8fcf6a 45%); display: flex; flex-direction: column; align-items: center; justify-content: center; filter: saturate(.75); image-rendering: pixelated; }
+.village-entrance { position: relative; max-width: 100%; overflow: hidden; border-radius: 14px; border: 3px solid #4d6b3c; }
+.village-entrance:not(.open) { filter: saturate(.7) brightness(.92); }
 .village-entrance-gate { font-size: 90px; line-height: 1; }
 .village-entrance-trees { font-size: 32px; }
 .village-lock-text { margin: 0; font-size: 20px; font-weight: 800; }
@@ -1187,7 +1200,7 @@ button.study-day:active { transform: scale(.94); }
 .village-cost > span { display: inline-flex; align-items: center; gap: 2px; }
 .village-entrance { position: relative; overflow: hidden; border-radius: 14px; background: none !important; height: auto; filter: saturate(.7); max-width: 100%; }
 .village-entrance.open { filter: none; }
-.village-entrance-lock { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.village-entrance-lock { position: absolute; z-index: 50; left: 50%; top: 58%; transform: translate(-50%, -50%); font-size: 46px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
 .village-guests-parent { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; } .village-guests-parent span { display: inline-flex; align-items: center; gap: 4px; }
 .village-me, .village-mon.partner, .village-mon.pass { pointer-events: none; }
 .village-cell.target { border: 3px solid #ffe066; background: rgba(255,224,102,.35); animation: village-target 1s ease-in-out infinite; z-index: 6; }
@@ -1195,3 +1208,168 @@ button.study-day:active { transform: scale(.94); }
 .village-placing { position: absolute; left: 6px; right: 6px; top: 6px; z-index: 11; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 12px; background: rgba(20,30,20,.9); font-size: 13px; font-weight: 700; }
 .village-placing > span { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .village-recipe-btns { display: flex; flex-direction: column; gap: 6px; }
+/* 시험용 마을 (/village-demo) 안내 띠 */
+.village-demo-band { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80; padding: 4px 10px calc(4px + env(safe-area-inset-bottom)); background: #6d28d9; color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+.village-demo-band.warn { bottom: 26px; background: #b45309; }
+/* 꾸미기 (2026-11-14) */
+.village-decor-hit { position: absolute; z-index: 2; padding: 0; border: 0; background: transparent; }
+.village-cell.target.decor { z-index: 9; border-color: rgba(255,230,90,.95); background: rgba(255,240,140,.18); }
+.village-variants { display: inline-flex; gap: 3px; margin-left: 4px; }
+.village-variant { padding: 2px; border: 2px solid transparent; border-radius: 6px; background: rgba(255,255,255,.15); line-height: 0; }
+.village-variant.on { border-color: #ffd84d; background: rgba(255,255,255,.35); }
+.village-recipe-icon .vsprite { image-rendering: pixelated; }
+.decor-costs { margin-top: 14px; display: grid; gap: 8px; }
+.decor-costs h3 { margin: 0; font-size: 16px; }
+.decor-cost-table { border-collapse: collapse; font-size: 13px; }
+.decor-cost-table th, .decor-cost-table td { padding: 4px 6px; border-bottom: 1px solid #e2e8e0; text-align: left; vertical-align: middle; }
+.decor-cost-table input { width: 52px; }
+.table-wrap { overflow-x: auto; max-width: 100%; }
+.village-placing > button { flex: none; white-space: nowrap; }
+/* 만들기 창 세 칸 (2026-11-14) */
+.village-make-tabs { display: flex; gap: 6px; }
+.village-make-tab { flex: 1; padding: 8px 4px; border: 2px solid #d9e4cb; border-radius: 12px; background: #fff; font: inherit; font-weight: 800; font-size: 14px; color: #3b5a3f; }
+.village-make-tab.on { border-color: #4f9a3d; background: #eaf7e2; color: #1f4a1a; }
+
+/* 포켓몬 마을 열매나무·제작대 (2026-11-14) */
+body:has(.village-screen) [data-slot="dialog-overlay"], body:has(.village-screen) [data-slot="dialog-content"] { z-index: 70; }
+.village-hit { position: absolute; z-index: 2; padding: 0; border: 0; background: transparent; border-radius: 8px; }
+.village-hit.ready { animation: village-ready 1.6s ease-in-out infinite; }
+@keyframes village-ready { 0%, 100% { box-shadow: none; } 50% { box-shadow: inset 0 0 0 3px rgba(255,236,120,.75); } }
+.village-cell.target.plant { z-index: 9; border-color: rgba(140,255,140,.95); background: rgba(160,255,160,.22); }
+.village-study { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+.craft-stock { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; font-size: 14px; margin-bottom: 6px; }
+.craft-stock span { display: inline-flex; align-items: center; gap: 4px; }
+.craft-berries { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 6px 0 10px; }
+.craft-berry { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 10px; border: 2px solid #d9e4d0; background: #fff; color: #253; font-size: 12px; }
+.craft-berry.on { border-color: #f0a020; background: #fff6dc; box-shadow: 0 0 0 2px rgba(240,160,32,.35); }
+.craft-berry b { font-size: 13px; }
+.berry-icon { object-fit: contain; image-rendering: auto; }
+.village-cost .ok { color: #2a7a2a; }
+.village-cost .lack { color: #c0392b; font-weight: 700; }
+.village-recipe.short .village-recipe-icon { opacity: .5; }
+button.dim { opacity: .45; filter: grayscale(.6); }
+.craft-note { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: #fff3d6; color: #6b4300; font-size: 14px; font-weight: 600; }
+.craft-making { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 0; }
+.craft-making img, .craft-made-pic img { image-rendering: auto; }
+.craft-hammer { font-size: 44px; display: inline-block; transform-origin: 80% 80%; animation: craft-hammer .3s ease-in-out infinite alternate; }
+@keyframes craft-hammer { from { transform: rotate(-35deg); } to { transform: rotate(15deg); } }
+.craft-made { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.craft-made-pic { animation: craft-pop .5s ease-out; }
+@keyframes craft-pop { 0% { transform: scale(.3); opacity: 0; } 70% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 1; } }
+.craft-balls { margin-top: 10px; }
+.craft-ball-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.craft-ball { display: flex; flex-direction: column; align-items: center; padding: 4px 6px; border-radius: 10px; border: 1px solid #d9e4d0; background: #fff; color: #253; }
+/* 포켓몬 마을 레벨·넓어지는 땅 (2026-11-14) */
+.village-level { display: flex; align-items: center; gap: 8px; max-width: 100%; margin-bottom: 6px; font-size: 13px; }
+.village-level b { white-space: nowrap; }
+.village-level small { white-space: nowrap; opacity: .9; }
+.village-level-bar { flex: 1; height: 10px; border-radius: 6px; background: rgba(255,255,255,.18); overflow: hidden; min-width: 40px; }
+.village-level-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffd34d, #ffb020); border-radius: 6px; transition: width .4s; }
+.village-fog { position: absolute; z-index: 50; background: rgba(28, 40, 30, .62); backdrop-filter: grayscale(.7); border: 3px dashed rgba(255, 230, 150, .55); box-sizing: border-box; display: grid; place-items: center; pointer-events: none; }
+.village-fog-sign { background: #8a5a2b; color: #fff6dc; border: 3px solid #5a3a1a; border-radius: 10px; padding: 6px 12px; font-weight: 700; text-align: center; font-size: 16px; box-shadow: 0 3px 0 #3a2410; }
+.village-fog-sign small { font-weight: 600; font-size: 12px; }
+.village-levelup-list { display: flex; flex-direction: column; gap: 6px; font-size: 18px; }
+.village-levelup-note { font-size: 14px; opacity: .85; }
+/* 마을 열쇠로 땅 고르기 (2026-11-14) */
+.village-fog.choose { border-color: rgba(255, 215, 80, .95); background: rgba(40, 52, 30, .5); }
+.village-fog-sign.can { pointer-events: auto; cursor: pointer; background: #c98a1e; border-color: #7a4f0e; animation: village-sign 1.4s ease-in-out infinite; font-family: inherit; }
+@keyframes village-sign { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+.village-key-btn, .village-help-btn { flex: none; border: 0; border-radius: 999px; padding: 3px 9px; font-weight: 800; font-size: 14px; }
+.village-key-btn { background: #ffd34d; color: #5a3a00; animation: village-sign 1.2s ease-in-out infinite; }
+.village-help-btn { background: rgba(255,255,255,.2); color: #fff; }
+.village-guide-btn { white-space: nowrap; }
+.link-btn.village-sheet-guide { align-self: center; font-size: 15px; font-weight: 800; }
+.village-guide-frame { position: fixed; inset: 0; z-index: 1000; background: #f4f8f1; }
+.village-guide-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.village-minimap { display: grid; gap: 4px; margin: 6px 0; }
+.village-mini { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px; padding: 4px 2px; border-radius: 8px; border: 2px solid transparent; font-size: 20px; line-height: 1.1; color: #253; background: #dfe7da; }
+.village-mini small { font-size: 10px; font-weight: 700; }
+.village-mini.open { background: #9fdc8a; }
+.village-mini.home { box-shadow: inset 0 0 0 2px #2a7a2a; }
+.village-mini.choose { background: #fff1b8; border-color: #f0a020; border-style: dashed; }
+.village-mini.choose:not(:disabled) { cursor: pointer; }
+.village-mini.locked { background: #5b6658; color: #fff; opacity: .7; }
+.village-mini.picked { background: #ffd34d; border-style: solid; transform: scale(1.06); }
+.village-key-list { display: flex; flex-direction: column; gap: 6px; }
+.village-key-choice { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 16px; }
+.village-key-choice small { width: 100%; font-size: 12px; opacity: .75; }
+.village-key-choice.on { border-color: #f0a020; background: #fff1b8; }
+.village-key-note { font-size: 12px; opacity: .75; margin: 0; }
+.village-guide-list { text-align: left; margin: 6px auto; padding-left: 0; list-style: none; font-size: 16px; display: flex; flex-direction: column; gap: 6px; }
+.intro-text.small { font-size: 13px; opacity: .85; }
+/* 마을 낚시·벌레잡기 (2026-11-14) */
+.tool-icon { font-size: 34px; line-height: 1; }
+.tool-uses { display: flex; align-items: center; gap: 6px; }
+.tool-uses i { display: block; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #6cc04a, #3a9a2a); min-width: 4px; max-width: 90px; flex: none; width: 90px; }
+.tool-uses small { white-space: nowrap; }
+.link-btn { border: 0; background: none; color: #1a6fb0; text-decoration: underline; padding: 0; font: inherit; cursor: pointer; }
+.village-bug { position: absolute; border: 0; background: transparent; padding: 0; font-size: 26px; display: grid; place-items: center; animation: bug-fly 1.6s ease-in-out infinite; cursor: pointer; }
+@keyframes bug-fly { 0%, 100% { transform: translate(0, 0) rotate(-8deg); } 25% { transform: translate(6px, -8px) rotate(6deg); } 50% { transform: translate(-4px, -3px) rotate(-4deg); } 75% { transform: translate(-7px, -10px) rotate(8deg); } }
+.village-fish-btn { white-space: nowrap; position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 80; border: 0; border-radius: 999px; padding: 10px 18px; font-size: 17px; font-weight: 800; background: #2f8fd8; color: #fff; box-shadow: 0 3px 0 #1a5f99; animation: village-sign 1.4s ease-in-out infinite; }
+.village-fish-btn small { font-weight: 600; opacity: .85; }
+.fish-pond { position: relative; height: 120px; border-radius: 16px; background: linear-gradient(#7fc8f5, #3a8fd0); overflow: hidden; display: grid; place-items: center; }
+.fish-bobber { font-size: 34px; animation: bobber 1.2s ease-in-out infinite; }
+.fish-pond.bite .fish-bobber { animation: bobber-bite .25s ease-in-out infinite; transform: translateY(14px); }
+.fish-pop { position: absolute; top: 14px; right: 24px; font-size: 26px; color: #fff; text-shadow: 0 2px 0 #1a5f99; animation: village-sign .4s ease-in-out infinite; }
+@keyframes bobber { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+@keyframes bobber-bite { 0%, 100% { transform: translateY(12px); } 50% { transform: translateY(20px); } }
+.bug-gauge { position: relative; height: 70px; border-radius: 14px; background: #eef5e6; overflow: hidden; }
+.bug-zone { position: absolute; top: 34px; height: 26px; border-radius: 8px; background: #6cc04a; }
+.bug-arrow { position: absolute; top: 6px; transform: translateX(-50%); font-size: 22px; color: #c0392b; }
+.bug-fly { position: absolute; right: 10px; top: 6px; font-size: 22px; animation: bug-fly 1.6s ease-in-out infinite; }
+.pull-btn { animation: village-sign .9s ease-in-out infinite; }
+.catch-got { display: grid; place-items: center; }
+.catch-met { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.catch-met-mon { position: relative; display: block; width: 140px; height: 120px; }
+.catch-left { font-size: 13px; opacity: .8; margin: 0; }
+/* 마을 가방 (2026-11-14) */
+.village-bag-btn { background: #fff3d6; }
+.bag-section { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid #eee; }
+.bag-section > small { opacity: .7; font-size: 12px; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; }
+.bag-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 10px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 12px; text-align: center; }
+.bag-item b { font-size: 14px; }
+.bag-item:not(.tool):not(:disabled) { cursor: pointer; }
+.bag-item:not(.tool):active { transform: scale(.96); }
+.bag-mats { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
+.bag-mats span { display: inline-flex; align-items: center; gap: 3px; }
+.bag-hint { opacity: .7; font-size: 12px; }
+/* 가방 재료·열매 칸 (2026-11-14) */
+.bag-section.first { border-top: 0; padding-top: 0; }
+.bag-item.none { opacity: .45; }
+.bag-item small { font-size: 10px; opacity: .7; }
+/* 실수로 나가지는 것 막기 (2026-11-14): 당겨서 새로고침 끄기, 뒤로 가기 안내 */
+html, body { overscroll-behavior-y: none; }
+.village-screen { overscroll-behavior: contain; }
+.back-guard-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 200; background: rgba(20, 30, 25, .9); color: #fff; padding: 10px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; max-width: calc(100% - 32px); text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.craft-berry.none { opacity: .4; }
+.berry-plan { display: flex; flex-direction: column; gap: 6px; }
+.berry-plan-row { display: grid; grid-template-columns: 32px 1fr auto 34px auto; align-items: center; gap: 6px; }
+.berry-plan-row b { text-align: center; font-size: 18px; }
+.berry-plan-sum { font-weight: 800; margin: 4px 0; color: #c0392b; }
+.berry-plan-sum.ok { color: #2a7a2a; }
+/* 📖 방명록 (2026-11-14) */
+.guestbook-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.guestbook-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 12px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 12px; min-height: 92px; justify-content: center; }
+.guestbook-cell.blank { background: #eef1ea; border-style: dashed; color: #9aa69a; font-size: 26px; font-weight: 800; }
+.guestbook-mon { height: 48px; display: grid; place-items: center; }
+.guest-page { display: flex; gap: 12px; align-items: center; }
+.guest-page p { margin: 2px 0; }
+.guest-page-mon { width: 96px; height: 96px; display: grid; place-items: center; background: #eef7ea; border-radius: 16px; flex: none; }
+.guest-from { font-size: 12px; opacity: .75; }
+.guest-stamps { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-radius: 12px; background: #fdf3df; }
+.guest-stamps span { font-size: 20px; opacity: .18; filter: grayscale(1); }
+.guest-stamps span.on { opacity: 1; filter: none; transform: rotate(-12deg); }
+.guest-knows p, .guest-lines p { margin: 2px 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.guestbook-mon img { width: 48px; height: 48px; object-fit: contain; }
+.guest-page-mon img { width: 84px; height: 84px; object-fit: contain; }
+/* 마을 글자: 낱말 중간에서 줄이 안 끊기게 (2026-11-14 부모님) */
+.village-screen, .village-sheet, body:has(.village-screen) [data-slot="dialog-content"] { word-break: keep-all; overflow-wrap: break-word; }
+/* 제작대 글씨 크게·열매 글자·묘목 막힌 이유 (2026-11-14 부모님) */
+.workbench-berries .craft-berry small { font-size: 14px; font-weight: 700; }
+.workbench-berries .craft-berry b { font-size: 15px; }
+.workbench-recipes .village-recipe small { font-size: 14px; }
+.workbench-recipes .village-cost { font-size: 15px; }
+.workbench-recipes .village-recipe b { font-size: 17px; }
+.cost-word { font-weight: 800; }
+.recipe-why { display: block; margin-top: 4px; font-size: 15px; color: #b5541a; }

@@ -1,114 +1,136 @@
 "use client";
-// 포켓몬 마을 그림. 한 장으로 묶은 타일 그림(public/assets/village/village.png, Ninja Adventure · CC0)을
-// 정수 배(2배)로 키워 그려요 (image-rendering: pixelated). 조각 자리는 lib/data/village-atlas.json.
-import type { CSSProperties } from 'react';
-import atlas from '@/lib/data/village-atlas.json' with { type: 'json' };
-import { CRAFT_INFO, HOUSE, isPath, MAP_H, MAP_W, PLOTS, POND, TREES, type CraftKey, type MaterialKey } from '@/lib/village';
+// 포켓몬 마을 그림 (2026-11-13). 지도는 칸 단위 기록(lib/village-map.ts)이고, 여기서 두 층으로 다시 그려요.
+//   땅 층: 캔버스 한 장 (풀·흙길·밭·물, 이어지는 땅은 오토타일 8px 조각) — 밭에 놓은 물웅덩이도 땅(물)이라 붙으면 연못처럼 이어짐
+//   물건 층: 칸마다 그림 조각 (집·나무·꽃…), 아래 줄 기준으로 포켓몬과 앞뒤를 맞춤
+// 그림판: public/assets/village/ground.png·objects.png (16px 배수, 목록·출처 ASSETS.md), 화면에서는 정수 배(3배 = 48px).
+import { useEffect, useRef, type CSSProperties } from 'react';
+import assets from '@/lib/data/village-assets.json' with { type: 'json' };
+import { autotileQuarters, groundAt, MAP_OBJECTS, objectInfo, plotObjects, type GroundKind, type MapObject, type ObjectKind, type TerrainCell, type TerrainGround } from '@/lib/village-map';
+import { decorImageAt, fenceKind, type DecorPlaced } from '@/lib/village-decor';
+import { CRAFT_INFO, MAP_H, MAP_W, MAP_X0, type CraftKey, type MaterialKey } from '@/lib/village';
 
-export const SHEET = '/assets/village/village.png';
-const PIECES = atlas.pieces as Record<string, number[]>;
-export type PieceName = keyof typeof atlas.pieces;
+const T = assets.tile;
+const GROUND = assets.ground as Record<string, { rect: number[] }>;
+const OBJECTS = assets.objects as Record<string, { rect: number[] }>;
+/** 지도 위쪽에 더 그리는 숲 줄 수 (걸을 수 없음, 그림만) */
+export const TOP_ROWS = 2;
 
-/** 타일 조각 하나 (scale = 정수 배) */
-export function Sprite({ name, scale = 2, x, y, className, style, title }: {
-  name: PieceName | string; scale?: number; x?: number; y?: number; className?: string; style?: CSSProperties; title?: string;
+function sheetStyle(sheet: { file: string; width: number; height: number }, rect: number[], scale: number): CSSProperties {
+  const [sx, sy, w, h] = rect;
+  return {
+    width: w * scale, height: h * scale, backgroundImage: `url(${sheet.file})`,
+    backgroundSize: `${sheet.width * scale}px ${sheet.height * scale}px`, backgroundPosition: `${-sx * scale}px ${-sy * scale}px`,
+  };
+}
+
+/** 물건 그림 하나 (scale = 정수 배) */
+export function ObjectSprite({ kind, scale = 3, style, title }: { kind: ObjectKind; scale?: number; style?: CSSProperties; title?: string }) {
+  return <i className="vsprite" title={title} aria-hidden={!title} style={{ ...sheetStyle(assets.sheets.objects, OBJECTS[kind].rect, scale), ...style }} />;
+}
+
+/** 걷는 사람 (16×32, 4방향 × 걷기 3장). step이 바뀔 때마다 다음 걸음, 서 있으면 가운데 장면 */
+export function PlayerSprite({ sprite, dir, step, scale = 3 }: { sprite: keyof typeof assets.players; dir: 'down' | 'up' | 'left' | 'right'; step: number; scale?: number }) {
+  const p = assets.players[sprite];
+  const col = p.walk[step % p.walk.length];
+  const row = p.rows[dir];
+  return <i className="vsprite" aria-hidden style={sheetStyle(p, [col * p.frame[0], row * p.frame[1], p.frame[0], p.frame[1]], scale)} />;
+}
+
+// ---------- 땅 층 ----------
+let sheetImg: Promise<HTMLImageElement> | null = null;
+function loadGroundSheet() {
+  sheetImg ??= new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = assets.sheets.ground.file; });
+  return sheetImg;
+}
+/** cols×rows 칸(왼쪽 위 = 지도 칸 x0, y0)의 땅을 원래 크기(16px)로 그림 */
+function drawGround(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x0: number, y0: number, cols: number, rows: number, at: (x: number, y: number) => GroundKind) {
+  const tile = (name: string, dx: number, dy: number) => { const [sx, sy] = GROUND[name].rect; ctx.drawImage(img, sx, sy, T, T, dx, dy, T, T); };
+  ctx.clearRect(0, 0, cols * T, rows * T);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = x0 + c, y = y0 + r, g = at(x, y);
+    tile(g === 'water' ? 'water' : 'grass', c * T, r * T);
+    if (g === 'grass') continue;
+    for (const [sx, sy, dx, dy] of autotileQuarters(g, (a, b) => at(a, b) === g, x, y)) ctx.drawImage(img, sx, sy, 8, 8, c * T + dx, r * T + dy, 8, 8);
+  }
+}
+function GroundLayer({ x0, y0, cols, rows, scale, at, version, style }: {
+  x0: number; y0: number; cols: number; rows: number; scale: number; at: (x: number, y: number) => GroundKind; version: string; style?: CSSProperties;
 }) {
-  const [sx, sy, w, h] = PIECES[name] ?? PIECES.grass;
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let alive = true;
+    void loadGroundSheet().then(img => {
+      const ctx = ref.current?.getContext('2d');
+      if (!alive || !ctx) return;
+      ctx.imageSmoothingEnabled = false;
+      drawGround(ctx, img, x0, y0, cols, rows, at);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [x0, y0, cols, rows, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <canvas ref={ref} className="vcanvas" width={cols * T} height={rows * T} aria-hidden style={{ width: cols * T * scale, height: rows * T * scale, ...style }} />;
+}
+
+// ---------- 물건 층 ----------
+/** 물건들을 칸 자리에 (y0 = 그림 맨 위 칸이 지도 몇 번째 줄인지). z = 아래 줄 기준(포켓몬 z = 11 + 줄), 바닥에 붙은 것은 늘 아래 */
+function ObjectLayer({ objects, tile, y0, x0 = 0 }: { objects: MapObject[]; tile: number; y0: number; x0?: number }) {
+  const scale = tile / T;
+  return <>{objects.map((o, i) => {
+    const info = objectInfo(o.kind);
+    const bottom = o.y + info.cells[1] - 1;
+    return <ObjectSprite key={i} kind={o.kind} scale={scale}
+      style={{ position: 'absolute', left: (o.x - x0) * tile, top: (o.y - y0) * tile, zIndex: info.flat ? 3 : 11 + bottom }} />;
+  })}</>;
+}
+
+/** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 그림 좌표 = (x - MAP_X0, y + TOP_ROWS) 칸 */
+export function VillageGround({ tile, cells, decor = [], terrain = [], extra = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[]; terrain?: TerrainCell[]; extra?: MapObject[] }) {
+  const at = (x: number, y: number) => groundAt(x, y, cells, terrain);
+  const version = cells.join(',') + '|' + terrain.map(t => `${t.x},${t.y},${t.ground}`).join(';');
   return (
-    <i className={'vsprite' + (className ? ' ' + className : '')} title={title} aria-hidden={!title}
-      style={{
-        width: w * scale, height: h * scale, backgroundImage: `url(${SHEET})`,
-        backgroundSize: `${atlas.width * scale}px ${atlas.height * scale}px`, backgroundPosition: `${-sx * scale}px ${-sy * scale}px`,
-        ...(x !== undefined ? { position: 'absolute', left: x, top: y } : null), ...style,
-      }} />
+    <div className="village-ground" aria-hidden>
+      <GroundLayer x0={MAP_X0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={version} />
+      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor), ...extra]} tile={tile} y0={-TOP_ROWS} x0={MAP_X0} />
+    </div>
   );
 }
 
-/** 아이(Boy, 16×16 칸 4방향 × 4걸음) 한 칸 */
-export function BoySprite({ dir, step, scale = 2 }: { dir: 'down' | 'up' | 'left' | 'right'; step: number; scale?: number }) {
-  const [bx, by] = PIECES.boy;
-  const col = { down: 0, up: 1, left: 2, right: 3 }[dir];
-  return <i className="vsprite" style={{
-    width: 16 * scale, height: 16 * scale, backgroundImage: `url(${SHEET})`,
-    backgroundSize: `${atlas.width * scale}px ${atlas.height * scale}px`,
-    backgroundPosition: `${-(bx + col * 16) * scale}px ${-(by + (step % 4) * 16) * scale}px`,
-  }} />;
+/** 꾸미기 물건 → 물건 층 (울타리는 이웃을 보고 모양을 고름) */
+export function decorObjects(decor: DecorPlaced[]): MapObject[] {
+  // 작은 덤불은 2026-11-14에 그림이 바뀜 (그 전에 놓은 'bush'도 작은 덤불로)
+  return decor.map(d => ({ kind: d.item === 'fence' ? fenceKind(decor, d.x, d.y) : d.item === 'bush' ? 'bushSmall' : d.kind, ...decorImageAt(d) }));
 }
 
-/** 재료·만든 물건 그림 */
-export const MATERIAL_PIECE: Record<MaterialKey, string> = { leaf: 'm_leaf', drop: 'm_drop', petal: 'redflower', twig: 'm_twig' };
-export const CRAFT_PIECE: Record<CraftKey, string> = { bush: 'bush', puddle: 'w_one', flowers: 'sunflower' };
-export const MaterialIcon = ({ kind, scale = 2 }: { kind: MaterialKey; scale?: number }) => <Sprite name={MATERIAL_PIECE[kind]} scale={scale} />;
-export const CraftIcon = ({ kind, scale = 2 }: { kind: CraftKey; scale?: number }) => <Sprite name={CRAFT_PIECE[kind]} scale={scale} title={CRAFT_INFO[kind].name} />;
-
-/** 이웃 칸이 같은 땅인지 보고 고르는 조각 (prefix: d_ 흙, w_ 물) */
-export function autoPiece(prefix: 'd_' | 'w_', same: (x: number, y: number) => boolean, x: number, y: number): string {
-  const n = same(x, y - 1), s = same(x, y + 1), w = same(x - 1, y), e = same(x + 1, y);
-  if (!w && !e) return prefix + (n && s ? 'v' : n ? 'v2' : s ? 'v1' : 'one');
-  if (!n && !s) return prefix + (w && e ? 'h' : w ? 'h2' : 'h1');
-  return prefix + (!n ? 't' : !s ? 'b' : '') + (!w ? 'l' : !e ? 'r' : '') || prefix + 'c';
-}
-const pieceFix = (name: string) => (name.endsWith('_') ? name + 'c' : name);
-// 흙 한 칸(d_one)은 없으면 가로 가운데로
-const dirt = (name: string) => (PIECES[name] ? name : 'd_h');
-
-const inPlot = (x: number, y: number) => PLOTS.findIndex(p => x >= p.x && x <= p.x + 1 && y >= p.y && y <= p.y + 1);
-const inPond = (x: number, y: number) => x >= POND.x && x < POND.x + POND.w && y >= POND.y && y < POND.y + POND.h;
-const path = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H && isPath(x, y) && inPlot(x, y) < 0;
-/** 풀밭 무늬 (칸마다 정해짐) */
-const grassAt = (x: number, y: number) => ['grass', 'grass', 'grass', 'grass1', 'grass', 'grass2', 'grass', 'grass3', 'grass', 'grass4'][(x * 7 + y * 13 + x * y) % 10];
-/** 꾸밈 꽃·풀 (걸을 수 있음) */
-const DECOR: { x: number; y: number; name: string }[] = [
-  { x: 3, y: 4, name: 'daisy' }, { x: 8, y: 2, name: 'tuft' }, { x: 2, y: 12, name: 'daisy' }, { x: 9, y: 9, name: 'tuft' },
-  { x: 4, y: 14, name: 'daisy' }, { x: 9, y: 17, name: 'stump' }, { x: 3, y: 9, name: 'tuft' }, { x: 7, y: 12, name: 'stump' },
-  { x: 11, y: 13, name: 'rock' }, { x: 7, y: 19, name: 'tuft' },
-];
-
-/** 바닥 + 집·나무·연못 (밭 칸에 놓은 물건은 village.tsx 가 그 위에) */
-export function VillageGround({ tile }: { tile: number }) {
-  const scale = tile / 16;
-  const out = [];
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
-    out.push(<Sprite key={`g${x},${y}`} name={grassAt(x, y)} scale={scale} x={x * tile} y={y * tile} />);
-    if (inPond(x, y)) out.push(<Sprite key={`w${x},${y}`} name={pieceFix(autoPiece('w_', inPond, x, y))} scale={scale} x={x * tile} y={y * tile} />);
-    else if (path(x, y)) out.push(<Sprite key={`p${x},${y}`} name={dirt(pieceFix(autoPiece('d_', path, x, y)))} scale={scale} x={x * tile} y={y * tile} />);
-    else {
-      const plot = inPlot(x, y);
-      if (plot >= 0) out.push(<Sprite key={`s${x},${y}`} name={pieceFix(autoPiece('d_', (a, b) => inPlot(a, b) === plot, x, y))} scale={scale} x={x * tile} y={y * tile} />);
-    }
-  }
-  for (const d of DECOR) out.push(<Sprite key={`d${d.x},${d.y}`} name={d.name} scale={scale} x={d.x * tile} y={d.y * tile} />);
-  for (const t of TREES) out.push(<Sprite key={`t${t.x},${t.y}`} name={t.pink ? 'treePink' : 'tree'} scale={scale} x={t.x * tile} y={t.y * tile} />);
-  out.push(<Sprite key="house" name="house" scale={scale} x={HOUSE.x * tile} y={HOUSE.y * tile} />);
-  return <div className="village-ground" aria-hidden>{out}</div>;
-}
-
-/** 밭에 놓은 물건: 물웅덩이끼리 붙어 있으면 연못처럼 이어서 그림 */
-export function PlacedItem({ cells, cell, tile }: { cells: (CraftKey | null)[]; cell: number; tile: number }) {
-  const item = cells[cell];
-  if (!item) return null;
-  const scale = tile / 16;
-  if (item !== 'puddle') return <Sprite name={CRAFT_PIECE[item]} scale={scale} />;
-  const base = cell - (cell % 4), i = cell % 4;
-  const at = (cx: number, cy: number) => cx >= 0 && cx <= 1 && cy >= 0 && cy <= 1 && cells[base + cy * 2 + cx] === 'puddle';
-  return <Sprite name={pieceFix(autoPiece('w_', at, i % 2, Math.floor(i / 2)))} scale={scale} />;
-}
-
-/** 잠겨 있을 때 보이는 마을 입구 그림 (문 + 나무 + 풀밭, 타일로) */
-export function VillageEntrance({ open }: { open?: boolean }) {
-  const W = 11, H = 6, tile = 32;
-  const cells = [];
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    cells.push(<Sprite key={`g${x},${y}`} name={grassAt(x + 3, y + 5)} x={x * tile} y={y * tile} />);
-    if (x === 5 && y >= 2) cells.push(<Sprite key={`p${x},${y}`} name={y === 2 ? 'd_v1' : 'd_v'} x={x * tile} y={y * tile} />);
-  }
+// ---------- 재료·만든 물건 아이콘 ----------
+const MATERIAL_OBJECT: Record<MaterialKey, ObjectKind> = { leaf: 'matLeaf', drop: 'matDrop', petal: 'matPetal', twig: 'matTwig', stone: 'matStone', mud: 'matMud' };
+export const MaterialIcon = ({ kind, scale = 2 }: { kind: MaterialKey; scale?: number }) => <ObjectSprite kind={MATERIAL_OBJECT[kind]} scale={scale} />;
+/** 땅 아이콘: 2×2 칸을 반 크기로 (한 칸만 그리면 테두리만 보여서) */
+export function GroundIcon({ ground, scale = 2, title }: { ground: TerrainGround; scale?: number; title?: string }) {
   return (
-    <div className={'village-entrance' + (open ? ' open' : '')} style={{ width: W * tile, height: H * tile }} aria-hidden>
-      {cells}
-      <Sprite name="tree" x={0} y={0} /><Sprite name="treePink" x={2 * tile} y={tile} /><Sprite name="tree" x={7 * tile} y={tile} /><Sprite name="treePink" x={9 * tile} y={0} />
-      <Sprite name="house" x={3.5 * tile} y={-tile} style={{ opacity: 0.9 }} />
-      <Sprite name="gate" x={4 * tile} y={3 * tile} />
-      <Sprite name="daisy" x={1 * tile} y={4 * tile} /><Sprite name="daisy" x={9 * tile} y={4 * tile} /><Sprite name="tuft" x={3 * tile} y={5 * tile} />
+    <span title={title} style={{ display: 'inline-block', width: T * scale, height: T * scale, overflow: 'hidden', borderRadius: 4, verticalAlign: 'middle' }}>
+      <GroundLayer x0={0} y0={0} cols={2} rows={2} scale={scale / 2} at={(x, y) => (x >= 0 && x < 2 && y >= 0 && y < 2 ? ground : 'grass')} version={'icon-' + ground} />
+    </span>
+  );
+}
+/** 만든 물건 그림: 풀숲 = 덤불, 꽃밭 = 꽃, 물웅덩이 = 물가 테두리가 있는 물 한 칸 */
+export function CraftIcon({ kind, scale = 2 }: { kind: CraftKey; scale?: number }) {
+  if (kind === 'puddle') return <GroundIcon ground="water" scale={scale} title={CRAFT_INFO[kind].name} />;
+  return <ObjectSprite kind={kind === 'bush' ? 'bush' : 'flowerPink'} scale={scale} title={CRAFT_INFO[kind].name} />;
+}
+
+// ---------- 잠겨 있을 때 보이는 마을 입구 (작은 지도 기록) ----------
+const ENT_ROWS = ['...........', '...........', '...........', '.....=.....', '.....=.....', '.....=.....'];
+const ENT_OBJECTS: MapObject[] = [
+  { kind: 'treePine', x: 0, y: -1 }, { kind: 'treeRound', x: 2, y: 0 }, { kind: 'treeRound', x: 7, y: 0 }, { kind: 'treePine', x: 9, y: -1 },
+  { kind: 'house', x: 3, y: -3 },
+  { kind: 'flowerYellow', x: 1, y: 4 }, { kind: 'flowerPink', x: 9, y: 4 }, { kind: 'flowerWhite', x: 3, y: 5 }, { kind: 'mushroom', x: 7, y: 5 },
+];
+const entranceAt = (x: number, y: number): GroundKind => (ENT_ROWS[y]?.[x] === '=' ? 'path' : 'grass');
+export function VillageEntrance({ open }: { open?: boolean }) {
+  const tile = 32, cols = ENT_ROWS[0].length, rows = ENT_ROWS.length;
+  return (
+    <div className={'village-entrance' + (open ? ' open' : '')} style={{ width: cols * tile, height: rows * tile }} aria-hidden>
+      <GroundLayer x0={0} y0={0} cols={cols} rows={rows} scale={tile / T} at={entranceAt} version="entrance" style={{ position: 'absolute', left: 0, top: 0 }} />
+      <ObjectLayer objects={ENT_OBJECTS} tile={tile} y0={0} />
       {!open && <span className="village-entrance-lock">🔒</span>}
     </div>
   );

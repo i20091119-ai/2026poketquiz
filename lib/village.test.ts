@@ -87,12 +87,12 @@ test('마을: 하루 줍기 3개, 종류별 최대 20개', () => {
   for (const p of spots) applyAction(state, { type: 'villagePick', spot: p.spot }, ctx(bank));
   assert.throws(() => applyAction(state, { type: 'villagePick', spot: spots[0].spot }, ctx(bank)), GameError);
   assert.equal(childView(state, bank, TODAY).village.pickLeft, 0);
-  state.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20 };
-  const s2 = started(bank); finishDaily(s2, bank); s2.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20 };
+  state.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20, stone: 20, mud: 20 };
+  const s2 = started(bank); finishDaily(s2, bank); s2.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20, stone: 20, mud: 20 };
   assert.throws(() => applyAction(s2, { type: 'villagePick', spot: spots[0].spot }, ctx(bank)), /가득/);
 });
 
-test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손님, 도감 "만남"(획득 아님)', () => {
+test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손님, 📖 방명록(획득 아님)', () => {
   setVillageRules(null);
   const bank = makeBank();
   const state = started(bank);
@@ -104,8 +104,10 @@ test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손�
   assert.throws(() => applyAction(state, { type: 'villageCraft', item: 'bush' }, ctx(bank)), /더 필요/);
   const plan = ['bush', 'bush', 'bush', 'bush', 'bush', 'puddle', 'puddle', 'bush', 'flowers', 'flowers', 'flowers', 'flowers'] as const;
   plan.forEach((item, cell) => applyAction(state, { type: 'villagePlace', cell, item }, ctx(bank)));
-  assert.equal(plan.length, CELL_COUNT);
-  assert.deepEqual(state.village!.habitats.map(h => h?.kind), ['green', 'shore', 'garden']);
+  assert.equal(plan.length, 12); // 처음 마을 밭 3개 (넓어진 구역 밭은 레벨로 열림)
+  assert.equal(CELL_COUNT, 48);
+  assert.deepEqual(state.village!.habitats.slice(0, 3).map(h => h?.kind), ['green', 'shore', 'garden']);
+  assert.ok(state.village!.habitats.slice(3).every(h => !h));
   // 오늘은 손님 없음
   syncVillage(state, TODAY, seeded());
   assert.equal(childView(state, bank, TODAY).village.guests.length, 0);
@@ -124,7 +126,7 @@ test('마을: 만들기 3가지 → 서식지 3가지 → 다음 날 맞는 손�
     assert.ok(sp.types.some(t => (types[g.habitat] as readonly string[]).includes(t)));
   }
   assert.equal(state.owned.length, owned); // 손님은 획득이 아님
-  assert.deepEqual([...(state.met ?? [])].sort(), guests.map(g => g.species).sort());
+  assert.deepEqual(Object.keys(state.village!.guestbook!).map(Number).sort(), guests.map(g => g.species).sort()); // 📖 방명록 (2026-11-14, 도감 "만남" 대신)
   // 되가져오면 서식지가 풀림
   applyAction(state, { type: 'villageTake', cell: 0 }, ctx(bank, next));
   assert.equal(state.village!.habitats[0], null);
