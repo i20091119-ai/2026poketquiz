@@ -128,20 +128,20 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       <span><SparkleIcon scale={1} /> 반짝돌 <b>{craft.sparkle}</b></span>
     </div>
     <p className="village-sheet-note">열매는 <b>종류 상관없이 합쳐서</b> 써. 지금 열매 <b>{berryTotal(craft)}개</b></p>
-    <div className="craft-berries" aria-label="가진 열매">
+    <div className="craft-berries workbench-berries" aria-label="가진 열매">
       {BERRY_KINDS.map(k => (
         <span key={k} className={'craft-berry' + ((craft.berries[k] ?? 0) ? '' : ' none')}>
           <BerryIcon kind={k} /><small>{POTIONS[k].label}</small><b>{craft.berries[k] ?? 0}/{craft.berryCap}</b>
         </span>
       ))}
     </div>
-    <div className="village-recipes">
+    <div className="village-recipes workbench-recipes">
       {RECIPES.filter(k => k !== 'sapling').map(k => {
         const cost = craft.recipes[k];
         const short = shortageText(craft, stone, cost);
         const blocked: string | null = null;
         const parts: { key: string; icon: React.ReactNode; have: number; need: number }[] = [
-          { key: 'berry', icon: <span aria-label="열매">🍎</span>, have: berryTotal(craft), need: cost.berry },
+          { key: 'berry', icon: <span className="cost-word">열매</span>, have: berryTotal(craft), need: cost.berry },
           { key: 'stone', icon: <MaterialIcon kind="stone" scale={1} />, have: stone, need: cost.stone },
           { key: 'iron', icon: <IronIcon scale={1} />, have: craft.iron, need: cost.iron },
           { key: 'sparkle', icon: <SparkleIcon scale={1} />, have: craft.sparkle, need: cost.sparkle },
@@ -205,7 +205,7 @@ export function CraftIntro({ open, view, onClose }: { open: boolean; view: Child
     <>
       <p className="intro-title">🔮 제작대</p>
       <div className="feed-intro-pics"><ObjectSprite kind="workbench" scale={3} /><img src={ASSETS.ball.poke} alt="" /></div>
-      <p className="intro-text">제작대에서 열매로 <b>몬스터볼</b>을 만들 수 있어.<br />볼을 열면 <b>아직 못 만난 포켓몬</b>이 나와!</p>
+      <p className="intro-text">제작대에서 열매로 <b>몬스터볼</b>을 만들 수 있어.<br />볼을 열면 <b>아직 없는 포켓몬</b>이 나와!<br />마을에서 만난 포켓몬이 먼저 나와.</p>
     </>,
     <>
       <p className="intro-title">공부로 얻는 재료</p>

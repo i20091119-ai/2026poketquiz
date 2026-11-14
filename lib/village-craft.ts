@@ -21,17 +21,17 @@ export function berryOfType(type: TypeKey): PotionKind {
 export const RECIPES = ['poke', 'great', 'ultra', 'sapling'] as const;
 export type RecipeKey = typeof RECIPES[number];
 export const RECIPE_INFO: Record<RecipeKey, { name: string; emoji: string; tier?: number; shiny?: boolean; note: string }> = {
-  poke: { name: '몬스터볼', emoji: '🔴', tier: 0, note: '보통 포켓몬이 나와요' },
-  great: { name: '슈퍼볼', emoji: '🔵', tier: 1, note: '조금 드문 포켓몬이 나와요' },
-  ultra: { name: '하이퍼볼', emoji: '🟡', tier: 2, shiny: true, note: '드문 포켓몬이 나와요. 가끔 이로치도!' },
-  sapling: { name: '열매나무 묘목', emoji: '🌱', note: '마을에 심으면 열매나무가 돼요' },
+  poke: { name: '몬스터볼', emoji: '🔴', tier: 0, note: '보통 포켓몬이 나와' },
+  great: { name: '슈퍼볼', emoji: '🔵', tier: 1, note: '조금 드문 포켓몬이 나와' },
+  ultra: { name: '하이퍼볼', emoji: '🟡', tier: 2, shiny: true, note: '드문 포켓몬이 나와. 가끔 이로치도!' },
+  sapling: { name: '열매나무 묘목', emoji: '🌱', note: '마을에 심으면 열매나무가 돼' },
 };
 /** 공부로만 얻는 재료 */
 export const STUDY_MATS = ['iron', 'sparkle'] as const;
 export type StudyMat = typeof STUDY_MATS[number];
 export const STUDY_MAT_INFO: Record<StudyMat, { name: string; how: string }> = {
-  iron: { name: '철', how: '트레이너 훈련을 열심히 한 주나, 미션을 5일 끝낸 주에 우편함으로 와요' },
-  sparkle: { name: '반짝돌', how: '이틀 뒤 복습 문제를 처음에 맞히거나, 오늘 미션을 하나도 안 틀리면 받아요' },
+  iron: { name: '철', how: '트레이너 훈련을 열심히 한 주나, 미션을 5일 끝낸 주에 우편함으로 와' },
+  sparkle: { name: '반짝돌', how: '이틀 뒤 복습 문제를 처음에 맞히거나, 오늘 미션을 하나도 안 틀리면 받아' },
 };
 /** 레시피 재료: 열매(한 종류)·돌멩이·철·반짝돌 */
 export type RecipeCost = { berry: number; stone: number; iron: number; sparkle: number };

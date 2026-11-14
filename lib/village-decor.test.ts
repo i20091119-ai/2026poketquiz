@@ -51,7 +51,7 @@ test('재료가 모자라면, 가방에 없으면, 마을이 닫혀 있으면 �
   setDecorCosts(null);
   const state = openVillage(1);
   throws(() => applyAction(state, { type: 'decorCraft', item: 'bench' }, ctx()), /나뭇가지.*3개 더/);
-  throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 8, y: 11 }, ctx()), /가방에 없어요/);
+  throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 8, y: 11 }, ctx()), /가방에 없어/);
   state.daily = null;
   throws(() => applyAction(state, { type: 'decorCraft', item: 'flower' }, ctx()), /미션/);
 });
@@ -112,7 +112,7 @@ test('땅 바꾸기: 풀밭을 물·흙길·돌길로, 붙이면 같은 땅, 되
   assert.equal(state.village!.mats.stone, 8);
   applyAction(state, { type: 'decorPlace', item: 'stoneTile', x: 8, y: 11 }, ctx());
   assert.equal(groundAt(8, 11, [], state.village!.terrain), 'stone');
-  throws(() => applyAction(state, { type: 'decorPlace', item: 'stoneTile', x: 8, y: 11 }, ctx()), /가방에 없어요/);
+  throws(() => applyAction(state, { type: 'decorPlace', item: 'stoneTile', x: 8, y: 11 }, ctx()), /가방에 없어/);
   // 길 위는 바꿀 수 없음
   applyAction(state, { type: 'decorCraft', item: 'pondTile' }, ctx());
   throws(() => applyAction(state, { type: 'decorPlace', item: 'pondTile', x: 5, y: 10 }, ctx()), /풀밭만/);

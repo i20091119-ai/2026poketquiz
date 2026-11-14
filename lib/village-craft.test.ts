@@ -213,7 +213,7 @@ test('제작대: 열매는 종류 상관없이 합쳐서(많이 가진 것부터
   assert.deepEqual(v.craftLog![0].berries, { apple: 6, fire: 4 });
   // 아이가 고른 대로 (합이 맞아야 함)
   fill(state, 'apple', 12);
-  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke', berries: { apple: 5 } }, ctx(bank)), /열매 수가 맞지 않아요/);
+  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke', berries: { apple: 5 } }, ctx(bank)), /열매 수가 맞지 않아/);
   applyAction(state, { type: 'villageMake', recipe: 'poke', berries: { apple: 9, fire: 1 } }, ctx(bank));
   assert.deepEqual([count(state, 'apple'), count(state, 'fire')], [3, 0]);
   // 열매가 모자라면 "열매 n개"
@@ -307,7 +307,7 @@ test('제작 볼 열기: 새 포켓몬이 들어오고 제작 기록에 남음',
   assert.ok(species(r.caught).tier < 3);
   assert.equal(state.village!.craftedBalls!.length, 0);
   assert.equal((state.village!.craftLog![0].result as { species: number }).species, r.caught);
-  assert.throws(() => applyAction(state, { type: 'openCraftedBall', id }, ctx(bank)), /찾을 수 없어요/);
+  assert.throws(() => applyAction(state, { type: 'openCraftedBall', id }, ctx(bank)), /찾을 수 없어/);
 });
 
 test('syncVillage는 열매나무 기록을 건드리지 않고, 예전 마을 기록도 그대로 읽힘', () => {
@@ -345,7 +345,7 @@ test('도구: 재료로 낚싯대·잠자리채를 만들고, 15번 쓰면 부�
   // 낚시는 물 칸에서만 (처음 마을 연못 x1~3, y15~17)
   assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'rod', x: 5, y: 9, hit: true, stay: true }, ctx(bank)), /물가에서만/);
   // 잠긴 땅은 안 됨
-  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'net', x: 14, y: 6, hit: true, stay: true }, ctx(bank)), /할 수 없어요/);
+  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'net', x: 14, y: 6, hit: true, stay: true }, ctx(bank)), /할 수 없어/);
   // 놓쳐도 1번 닳음
   const r0 = applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: false, stay: true }, ctx(bank)) as { hit: boolean; left: number };
   assert.deepEqual([r0.hit, r0.left], [false, 14]);

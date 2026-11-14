@@ -118,7 +118,7 @@ export function ShinyBurst() {
 }
 
 /** 볼을 눌러 포켓몬을 만납니다. */
-/** 마을 제작대에서 만든 볼 (crafted: 열면 아직 못 만난 포켓몬) */
+/** 마을 제작대에서 만든 볼 (crafted: 열면 아직 도감에 없는 포켓몬, 방명록 손님 먼저) */
 export type QueuedBall = Ball & { crafted?: boolean };
 export function BallDialog({ ball, busy, onOpen, onClose }: {
   ball: QueuedBall | null;
@@ -152,7 +152,7 @@ export function BallDialog({ ball, busy, onOpen, onClose }: {
           <button className="primary" onClick={close}>{result.shiny ? '이로치 도감에 저장했어!' : '도감에 저장했어!'}</button>
         </> : ball && <>
           <DialogTitle>{ball.crafted ? '🔨 내가 만든 ' : ''}{BALLS[ball.kind].label}을 눌러 봐!</DialogTitle>
-          <DialogDescription>{ball.crafted ? '아직 못 만난 포켓몬이 들어 있어!' : '어떤 포켓몬이 들어 있을까?'}</DialogDescription>
+          <DialogDescription>{ball.crafted ? '아직 도감에 없는 포켓몬이 들어 있어! 마을에서 만난 포켓몬이 먼저 나와.' : '어떤 포켓몬이 들어 있을까?'}</DialogDescription>
           <button className="ball-open" disabled={busy} onClick={async () => { const r = await onOpen(ball); if (r) setResult(r); }}>
             <img src={ASSETS.ball[ball.kind]} alt={BALLS[ball.kind].label} />
           </button>

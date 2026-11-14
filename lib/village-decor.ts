@@ -24,15 +24,15 @@ export const DECOR_INFO: Record<DecorKey, { name: string; tab: DecorTab; variant
   mushroom: { name: '버섯', tab: 'decor', variants: ['mushroom', 'mushroomBrown'], cost: { leaf: 1, drop: 1 } },
   lily: { name: '연잎', tab: 'decor', variants: ['lily'], cost: { leaf: 1, drop: 1 }, onWater: true, note: '물 위에만' },
   stump: { name: '그루터기', tab: 'decor', variants: ['stump'], cost: { twig: 2 } },
-  fence: { name: '나무 울타리', tab: 'decor', variants: ['fenceT'], cost: { twig: 2 }, note: '붙이면 이어져요' },
+  fence: { name: '나무 울타리', tab: 'decor', variants: ['fenceT'], cost: { twig: 2 }, note: '붙이면 이어져' },
   pot: { name: '꽃 화분', tab: 'decor', variants: ['pot'], cost: { petal: 2, twig: 1 } },
   flowerBox: { name: '꽃 상자', tab: 'decor', variants: ['flowerBox'], cost: { petal: 3, twig: 2 } },
   bench: { name: '벤치', tab: 'decor', variants: ['bench'], cost: { twig: 4 } },
   pineSmall: { name: '작은 나무', tab: 'decor', variants: ['pineSmall'], cost: { leaf: 3, twig: 2 } },
   rock: { name: '바위', tab: 'decor', variants: ['rock'], cost: { stone: 1 } },
-  pondTile: { name: '연못 칸', tab: 'ground', variants: [], ground: 'water', cost: { drop: 2 }, note: '붙이면 연못이 돼요' },
-  pathTile: { name: '흙길', tab: 'ground', variants: [], ground: 'path', cost: { mud: 1 }, note: '붙이면 길이 이어져요' },
-  stoneTile: { name: '돌길', tab: 'ground', variants: [], ground: 'stone', cost: { stone: 2 }, note: '붙이면 길이 이어져요' },
+  pondTile: { name: '연못 칸', tab: 'ground', variants: [], ground: 'water', cost: { drop: 2 }, note: '붙이면 연못이 돼' },
+  pathTile: { name: '흙길', tab: 'ground', variants: [], ground: 'path', cost: { mud: 1 }, note: '붙이면 길이 이어져' },
+  stoneTile: { name: '돌길', tab: 'ground', variants: [], ground: 'stone', cost: { stone: 2 }, note: '붙이면 길이 이어져' },
 };
 export const isGroundItem = (item: DecorKey) => !!DECOR_INFO[item].ground;
 /** 마을에 놓을 수 있는 꾸미기 물건 수·땅 바꾸기 칸 수 (기록이 너무 커지지 않게) */
@@ -112,21 +112,21 @@ export function decorSpotProblem(decor: DecorPlaced[], terrain: TerrainCell[], i
   const info = DECOR_INFO[item];
   const cells = info.ground || !kind ? [{ x, y }] : decorCells({ kind, x, y });
   for (const c of cells) {
-    if (c.x < MAP_X0 || c.y < 0 || c.x >= MAP_X0 + MAP_W || c.y >= MAP_H) return '마을 밖에는 놓을 수 없어요.';
+    if (c.x < MAP_X0 || c.y < 0 || c.x >= MAP_X0 + MAP_W || c.y >= MAP_H) return '마을 밖에는 놓을 수 없어.';
     if (!isOpenCell(c.x, c.y, open)) return lockedText(c.x, c.y);
     const k = `${c.x},${c.y}`;
     const base = baseGround(c.x, c.y);
     if (info.ground) {
-      if (base !== 'grass') return '풀밭만 바꿀 수 있어요.';
-      if (changed.has(k)) return '여기는 이미 바꾼 땅이에요. 누르면 되돌릴 수 있어요.';
+      if (base !== 'grass') return '풀밭만 바꿀 수 있어.';
+      if (changed.has(k)) return '여기는 이미 바꾼 땅이야. 누르면 되돌릴 수 있어.';
     }
     const g = changed.get(k) ?? base;
-    if (!info.ground && (info.onWater ? g !== 'water' : g !== 'grass')) return info.onWater ? '연잎은 물 위에만 놓을 수 있어요.' : '풀밭에만 놓을 수 있어요.';
-    if (plotCellAt(c.x, c.y) >= 0) return '밭에는 놓을 수 없어요.';
-    if (!info.onWater && MAP_BLOCKED.has(k)) return '여기는 자리가 없어요.';
-    if (used.has(k) || MAP_TAKEN.has(k)) return '여기에는 이미 놓여 있어요.';
-    if (KEEP_FREE.has(k)) return '여기는 비워 두자! (재료가 떨어지는 자리예요)';
-    if (TREE_CELLS.has(k)) return '여기는 열매나무 자리예요.';
+    if (!info.ground && (info.onWater ? g !== 'water' : g !== 'grass')) return info.onWater ? '연잎은 물 위에만 놓을 수 있어.' : '풀밭에만 놓을 수 있어.';
+    if (plotCellAt(c.x, c.y) >= 0) return '밭에는 놓을 수 없어.';
+    if (!info.onWater && MAP_BLOCKED.has(k)) return '여기는 자리가 없어.';
+    if (used.has(k) || MAP_TAKEN.has(k)) return '여기에는 이미 놓여 있어.';
+    if (KEEP_FREE.has(k)) return '여기는 비워 두자! (재료가 떨어지는 자리야)';
+    if (TREE_CELLS.has(k)) return '여기는 열매나무 자리야.';
   }
   return null;
 }

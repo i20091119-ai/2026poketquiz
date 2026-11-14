@@ -1360,3 +1360,11 @@ html, body { overscroll-behavior-y: none; }
 .guest-page-mon img { width: 84px; height: 84px; object-fit: contain; }
 /* 마을 글자: 낱말 중간에서 줄이 안 끊기게 (2026-11-14 부모님) */
 .village-screen, .village-sheet, body:has(.village-screen) [data-slot="dialog-content"] { word-break: keep-all; overflow-wrap: break-word; }
+/* 제작대 글씨 크게·열매 글자·묘목 막힌 이유 (2026-11-14 부모님) */
+.workbench-berries .craft-berry small { font-size: 14px; font-weight: 700; }
+.workbench-berries .craft-berry b { font-size: 15px; }
+.workbench-recipes .village-recipe small { font-size: 14px; }
+.workbench-recipes .village-cost { font-size: 15px; }
+.workbench-recipes .village-recipe b { font-size: 17px; }
+.cost-word { font-weight: 800; }
+.recipe-why { display: block; margin-top: 4px; font-size: 15px; color: #b5541a; }
