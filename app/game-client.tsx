@@ -20,6 +20,7 @@ import { AdventureIntro, adventureIntroSeen, markAdventureIntroSeen } from '@/co
 import { FeedIntro, feedIntroSeen, markFeedIntroSeen } from '@/components/game/feed-intro';
 import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
 import { VillageScreen, VillageStrip } from '@/components/game/village';
+import { useBackGuard } from '@/components/back-guard';
 import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
 import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter, type OutingPieceResult } from '@/components/game/outing';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
@@ -145,6 +146,22 @@ export default function Game() {
   const villageInsideRef = useRef(false);
   const villageRef = useRef(0);
   const [villageOpen, setVillageOpen] = useState(false);
+  // 마을이 열려 있었는데 새로고침되면 다시 마을로 (2026-11-14 부모님: 밀려서 새로고침되면 나가짐)
+  const openVillage = useCallback(() => { setVillageOpen(true); try { sessionStorage.setItem('pq-village-open', '1'); } catch { /* 이번만 */ } }, []);
+  const closeVillage = useCallback(() => { setVillageOpen(false); try { sessionStorage.removeItem('pq-village-open'); } catch { /* 이번만 */ } }, []);
+  useEffect(() => {
+    let again = false;
+    try { again = sessionStorage.getItem('pq-village-open') === '1'; } catch { /* 없음 */ }
+    if (!again) return;
+    const t = window.setTimeout(() => setVillageOpen(true), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  // 폰의 뒤로 가기로 실수로 나가지 않게: 페이지를 떠나지 않고 안내만
+  const [backToast, setBackToast] = useState('');
+  const villageOpenRef = useRef(false);
+  useEffect(() => { villageOpenRef.current = villageOpen; }, [villageOpen]);
+  useBackGuard(() => (villageOpenRef.current ? '마을에서 나가려면 위쪽 "나가기"를 눌러 줘!' : '게임을 끄려면 폰의 홈 버튼을 눌러 줘!'), setBackToast);
+  useEffect(() => { if (!backToast) return; const t = window.setTimeout(() => setBackToast(''), 2600); return () => window.clearTimeout(t); }, [backToast]);
   const onVillageSeconds = useCallback((inside: boolean) => { villageInsideRef.current = inside; }, []);
   useEffect(() => { quizOpenRef.current = !!quiz; }, [quiz]);
   useEffect(() => {
@@ -321,7 +338,7 @@ export default function Game() {
             onSaveTeam={saveTeam} onIntro={() => setIntroOpen(true)}
             onExchange={async statType => { const r = await act<{ message: string }>({ type: 'exchangeExp', statType }); if (r) setNotice(r.message); return !!r; }} />
           <StudyStrip view={view} onCalendar={() => setStudyOpen(true)} onMap={() => setMapOpen(true)} />
-          <VillageStrip view={view} onOpen={() => setVillageOpen(true)} />
+          <VillageStrip view={view} onOpen={openVillage} />
           <Tabs value={tab} onValueChange={v => { if (!busy) setTab(v); }}>
             <TabsList className="nav">
               <TabsTrigger value="daily"><Sun />일일미션</TabsTrigger>
@@ -388,7 +405,8 @@ export default function Game() {
         </footer>
       </div>
 
-      <VillageScreen open={villageOpen} view={view} busy={busy} act={act} onClose={() => setVillageOpen(false)} onSeconds={onVillageSeconds}
+      {backToast && <div className="back-guard-toast" role="status">{backToast}</div>}
+      <VillageScreen open={villageOpen} view={view} busy={busy} act={act} onClose={closeVillage} onSeconds={onVillageSeconds}
         onOpenBall={b => setBallQueue([{ id: b.id, kind: b.kind, crafted: true }])} />
 
       <QuizDialog

@@ -1333,3 +1333,7 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .bag-section.first { border-top: 0; padding-top: 0; }
 .bag-item.none { opacity: .45; }
 .bag-item small { font-size: 10px; opacity: .7; }
+/* 실수로 나가지는 것 막기 (2026-11-14): 당겨서 새로고침 끄기, 뒤로 가기 안내 */
+html, body { overscroll-behavior-y: none; }
+.village-screen { overscroll-behavior: contain; }
+.back-guard-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 200; background: rgba(20, 30, 25, .9); color: #fff; padding: 10px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; max-width: calc(100% - 32px); text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
