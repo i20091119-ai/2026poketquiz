@@ -187,7 +187,7 @@ export type VillageState = {
   /** 만들었지만 아직 안 연 제작 볼 */
   craftedBalls?: { id: string; kind: 'poke' | 'great' | 'ultra'; made: string }[];
   /** 제작 기록 (날짜·레시피·쓴 열매·나온 포켓몬) */
-  craftLog?: { at: string; date: string; recipe: RecipeKey; berry: PotionKind; berries?: Partial<Record<PotionKind, number>>; ballId?: string; result?: { species: number; shiny: boolean } | { returned: number } }[];
+  craftLog?: { at: string; date: string; recipe: RecipeKey; berry: PotionKind; berries?: Partial<Record<PotionKind, number>>; used?: { stone: number; iron: number; sparkle: number }; ballId?: string; result?: { species: number; shiny: boolean } | { returned: number; stone?: number; iron?: number; sparkle?: number } }[];
   // ---- 마을 레벨·넓어지는 땅 (2026-11-14, lib/village-level.ts). 없으면 지금까지 한 일로 한 번 계산 ----
   /** 마을 별 누적 */
   stars?: number;
@@ -1466,7 +1466,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       v.mats.stone = (v.mats.stone ?? 0) - cost.stone;
       v.study = { iron: (v.study?.iron ?? 0) - cost.iron, sparkle: (v.study?.sparkle ?? 0) - cost.sparkle };
       const firstKind = (Object.keys(plan)[0] ?? 'apple') as PotionKind;
-      const log: NonNullable<VillageState['craftLog']>[number] = { at: ctx.now, date: ctx.today, recipe: action.recipe, berry: firstKind, berries: plan };
+      const log: NonNullable<VillageState['craftLog']>[number] = { at: ctx.now, date: ctx.today, recipe: action.recipe, berry: firstKind, berries: plan, used: { stone: cost.stone, iron: cost.iron, sparkle: cost.sparkle } };
       (v.craftLog ??= []).push(log);
       addStars(state, craftRules().starBall);
       if (action.recipe === 'sapling') {
@@ -1570,7 +1570,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const log = v.craftLog?.find(l => l.ballId === ball.id);
       const found = pickCraftedSpecies(state, ball.kind, random, ctx.shinyChance?.[ball.kind]);
       if (!found) {
-        // 만날 포켓몬이 하나도 없으면 볼 대신 열매를 돌려줌
+        // 만날 포켓몬이 하나도 없으면 볼 대신 쓴 재료를 모두 돌려줌 (2026-11-14 부모님: 열매·돌멩이·반짝돌·철 전부)
         const used = log?.berries ?? { [log?.berry ?? 'apple']: recipeCost(ball.kind).berry };
         let n = 0;
         for (const [kind, k] of Object.entries(used) as [PotionKind, number][]) {
@@ -1578,10 +1578,16 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
           for (let i = 0; i < give; i++) (state.potions ??= []).push({ id: nextId(state, 'm'), kind });
           n += give;
         }
+        // 예전 기록(쓴 재료를 안 적어 둔 볼)은 지금 레시피 숫자로
+        const spent = log?.used ?? (() => { const c = recipeCost(ball.kind); return { stone: c.stone, iron: c.iron, sparkle: c.sparkle }; })();
+        const stone = Math.max(0, Math.min(spent.stone, villageRules().matCap - (v.mats.stone ?? 0)));
+        v.mats.stone = (v.mats.stone ?? 0) + stone;
+        v.study = { iron: (v.study?.iron ?? 0) + spent.iron, sparkle: (v.study?.sparkle ?? 0) + spent.sparkle };
         const berry = (Object.keys(used)[0] ?? 'apple') as PotionKind;
         noteBerry(state, 'returned', n);
-        if (log) log.result = { returned: n };
-        return { caught: 0, tier: 0, shiny: false, duplicate: false, returned: { berry, n }, message: `이제 새로 만날 포켓몬이 없어! 열매 ${n}개를 돌려받았어.` };
+        if (log) log.result = { returned: n, stone, iron: spent.iron, sparkle: spent.sparkle };
+        const parts = [`열매 ${n}개`, stone && `돌멩이 ${stone}개`, spent.sparkle && `반짝돌 ${spent.sparkle}개`, spent.iron && `철 ${spent.iron}개`].filter(Boolean).join(', ');
+        return { caught: 0, tier: 0, shiny: false, duplicate: false, returned: { berry, n, stone, iron: spent.iron, sparkle: spent.sparkle }, message: `이제 새로 만날 포켓몬이 없어! 볼을 만들 때 쓴 ${parts}를 모두 돌려받았어.` };
       }
       const result = addPokemon(state, found.id, ctx.now, found.shiny);
       if (log) log.result = { species: found.id, shiny: found.shiny };
@@ -2739,7 +2745,7 @@ export function simVillageCraft(state: GameState, op: string, bank: ActiveBank |
     case 'levelReset': { v.stars = 0; v.levelSeen = 1; v.opened = []; return '마을점수를 0으로(레벨 1) 되돌리고 연 땅도 처음 마을만 남겼어요(시험용).'; }
     case 'dexFull': {
       for (const t of [0, 1, 2]) for (const id of CATCH_POOLS[t]) if (!state.dex.includes(id)) state.dex.push(id);
-      return '흔함·조금 드묾·희귀 포켓몬을 모두 도감에 넣었어요(시험용). 제작 볼을 열면 이로치나 열매 돌려받기가 나와요.';
+      return '보통·조금 드문·드문 포켓몬을 모두 도감에 넣었어요(시험용). 제작 볼을 열면 이로치나 쓴 재료 돌려받기가 나와요.';
     }
   }
   return '시험 항목을 다시 골라 주세요.';

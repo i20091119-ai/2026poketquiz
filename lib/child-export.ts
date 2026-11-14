@@ -142,7 +142,7 @@ export function buildChildExport(input: { state: GameState; rows: Row[]; since: 
       // 열매·제작대 (2026-11-14): 열매가 들어온 곳별 개수(이날부터 셈)·제작 기록(날짜·레시피·쓴 열매·나온 포켓몬)
       열매들어온곳: Object.fromEntries(Object.entries(state.berrySources ?? {}).map(([k, n]) => [({ box: '상자', gift: '보호자선물', tree: '마을열매나무', guest: '손님', returned: '제작볼대신돌려받음', catch: '낚시벌레잡기' } as Record<string, string>)[k] ?? k, n])),
       제작기록: (state.village?.craftLog ?? []).map(l => ({ 날짜: l.date, 레시피: RECIPE_INFO[l.recipe].name, 쓴열매: POTIONS[l.berry].label,
-        결과: !l.result ? (l.recipe === 'sapling' ? '묘목' : '아직 안 엶') : 'returned' in l.result ? `열매 ${l.result.returned}개 돌려받음` : `${l.result.shiny ? '✨이로치 ' : ''}${species(l.result.species).name}` })),
+        결과: !l.result ? (l.recipe === 'sapling' ? '묘목' : '아직 안 엶') : 'returned' in l.result ? `돌려받음: 열매 ${l.result.returned}개${l.result.stone ? `, 돌멩이 ${l.result.stone}개` : ''}${l.result.sparkle ? `, 반짝돌 ${l.result.sparkle}개` : ''}${l.result.iron ? `, 철 ${l.result.iron}개` : ''}` : `${l.result.shiny ? '✨이로치 ' : ''}${species(l.result.species).name}` })),
       트레이너훈련과전설조각: { 훈련지금: state.offline ?? null, 전설지금: state.legend ?? null, 부모님기록: of('offline').map(plain), 전설진행기록: of('legend').map(plain) },
     },
     ...(beforeReset.length ? { 처음부터다시하기_이전기록: { 설명: '아이 게임을 처음부터 다시 하기 전에 쌓인 활동 기록(원본 그대로)', 기록: beforeReset.map(plain) } } : {}),

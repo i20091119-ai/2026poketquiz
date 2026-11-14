@@ -1278,6 +1278,7 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 .village-key-btn { background: #ffd34d; color: #5a3a00; animation: village-sign 1.2s ease-in-out infinite; }
 .village-help-btn { background: rgba(255,255,255,.2); color: #fff; }
 .village-guide-btn { white-space: nowrap; }
+.link-btn.village-sheet-guide { align-self: center; font-size: 15px; font-weight: 800; }
 .village-guide-frame { position: fixed; inset: 0; z-index: 1000; background: #f4f8f1; }
 .village-guide-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
 .village-minimap { display: grid; gap: 4px; margin: 6px 0; }

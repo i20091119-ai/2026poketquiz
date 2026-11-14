@@ -99,10 +99,10 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   const [makeTab, setMakeTab] = useState<MakeTab>('habitat');
   const [toast, setToast] = useState('');
   // 📘 설명서 (public/guide/village.html): 마을 위에 창으로 띄움. 설명서의 "닫기"가 알려 주면 닫음
-  const [guide, setGuide] = useState(false);
+  const [guide, setGuide] = useState<string | null>(null);
   useEffect(() => {
     if (!guide) return;
-    const onMsg = (e: MessageEvent) => { if (e.origin === window.location.origin && (e.data as { type?: string } | null)?.type === 'pq-guide-close') setGuide(false); };
+    const onMsg = (e: MessageEvent) => { if (e.origin === window.location.origin && (e.data as { type?: string } | null)?.type === 'pq-guide-close') setGuide(null); };
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, [guide]);
@@ -349,7 +349,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
         <span className="village-picks">줍기 {v.pickLeft}개 남음</span>
         <button className="secondary small" onClick={close}>나가기</button>
       </div>
-      <VillageLevelBar level={v.level} width={VIEW_COLS * TILE} onKeys={() => pop.openChooser()} onHelp={pop.openGuide} onGuide={() => setGuide(true)} />
+      <VillageLevelBar level={v.level} width={VIEW_COLS * TILE} onKeys={() => pop.openChooser()} onHelp={pop.openGuide} onGuide={() => setGuide('')} />
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
           <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} extra={extraObjects} />
@@ -459,7 +459,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
         </div>}
         {craft.tools.rod > 0 && waterNear && !placing && !decorPlacing && !planting && <button className="village-fish-btn" onClick={() => { setRound(n => n + 1); setCatching({ tool: 'rod', x: waterNear.x, y: waterNear.y }); }}>🎣 낚시하기 <small>({craft.tools.rod}번 남음)</small></button>}
         {toast && <div className="village-toast" role="status">{toast}</div>}
-        {guide && createPortal(<div className="village-guide-frame"><iframe src="/guide/village.html" title="포켓몬 마을 설명서" /></div>, document.body)}
+        {guide !== null && createPortal(<div className="village-guide-frame"><iframe src={'/guide/village.html' + (guide ? '#' + encodeURIComponent(guide) : '')} title="포켓몬 마을 설명서" /></div>, document.body)}
         {timeUp && <div className="village-timeup"><p>⏰ 오늘 마을 시간은 끝났어.<br />내일 또 놀러 오자!</p><button className="primary" onClick={close}>나가기</button></div>}
       </div>
 
@@ -506,6 +506,11 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
               onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined} />
             : 'decorAt' in sheet ? <DecorTakeSheet view={view} at={sheet.decorAt} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
             : <CellSheet view={view} cell={sheet.cell} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />}
+          {(() => {
+            // 📘 설명서: 지금 연 창에 맞는 묶음을 바로 엶 (public/guide/village.html 의 #이름)
+            const topic = sheet === 'workbench' ? '볼만들기' : sheet === 'book' ? '방명록' : sheet === 'make' ? (makeTab === 'tools' ? '낚시' : '만들기') : sheet === 'bag' || sheet === 'plant' ? '만들기' : null;
+            return topic && <button className="link-btn village-sheet-guide" onClick={() => setGuide(topic)}>📘 설명서 보기</button>;
+          })()}
           <button className="secondary" onClick={() => setSheet(null)}>닫기</button>
         </div>
       </div>}

@@ -11,7 +11,7 @@ export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event' | 'boo
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
 export type CatchResult = { caught: number; tier: number; shiny?: boolean; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string;
   /** 제작 볼에서 만날 포켓몬이 없어 열매를 돌려받음 (caught 0) */
-  returned?: { berry: PotionKind; n: number } };
+  returned?: { berry: PotionKind; n: number; stone?: number; iron?: number; sparkle?: number } };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
   daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
@@ -135,7 +135,7 @@ export function BallDialog({ ball, busy, onOpen, onClose }: {
           <DialogTitle>모두 만났어!</DialogTitle>
           <DialogDescription>{result.message}</DialogDescription>
           <img src={ASSETS.potion[result.returned.berry]} alt="" className="celebration-img" />
-          <button className="primary" onClick={close}>열매를 가방에 넣었어</button>
+          <button className="primary" onClick={close}>가방에 다시 넣었어</button>
         </> : result ? <>
           <DialogTitle>{result.shiny ? '✨ 이로치다! ✨' : result.duplicate ? '또 만났네!' : '새로운 친구를 만났어!'}</DialogTitle>
           <DialogDescription>{result.message}</DialogDescription>

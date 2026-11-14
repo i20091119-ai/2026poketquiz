@@ -283,11 +283,17 @@ test('제작 볼 열기: 아직 도감에 없는 포켓몬만(전설·환상 없
   fill(state, 'apple', 10);
   applyAction(state, { type: 'villageMake', recipe: 'poke', berry: 'apple' }, ctx(bank));
   const id = state.village!.craftedBalls![0].id;
-  const r = applyAction(state, { type: 'openCraftedBall', id }, ctx(bank)) as { caught: number; returned: { berry: string; n: number } };
+  const before = { stone: state.village!.mats.stone, sparkle: state.village!.study?.sparkle ?? 0, iron: state.village!.study?.iron ?? 0 };
+  const r = applyAction(state, { type: 'openCraftedBall', id }, ctx(bank)) as { caught: number; returned: { berry: string; n: number }; message: string };
   assert.equal(r.caught, 0);
-  assert.deepEqual(r.returned, { berry: 'apple', n: 10 });
+  // 쓴 재료를 모두 돌려받음: 열매 10 + 돌멩이 3 + 반짝돌 1 (몬스터볼)
+  assert.deepEqual(r.returned, { berry: 'apple', n: 10, stone: 3, iron: 0, sparkle: 1 });
   assert.equal(count(state, 'apple'), 10);
-  assert.deepEqual(state.village!.craftLog![0].result, { returned: 10 });
+  assert.equal(state.village!.mats.stone, before.stone + 3);
+  assert.equal(state.village!.study!.sparkle, before.sparkle + 1);
+  assert.equal(state.village!.study!.iron, before.iron);
+  assert.match(r.message, /열매 10개, 돌멩이 3개, 반짝돌 1개/);
+  assert.deepEqual(state.village!.craftLog![0].result, { returned: 10, stone: 3, iron: 0, sparkle: 1 });
 });
 
 test('제작 볼 열기: 새 포켓몬이 들어오고 제작 기록에 남음', () => {
