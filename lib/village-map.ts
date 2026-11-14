@@ -3,7 +3,7 @@
 // 나중에 아이가 마을을 꾸미는 기능(물건 놓기·땅 바꾸기)은 이 기록을 바꾸는 방식으로 붙일 수 있게 해 둡니다.
 // 기준 타일 16px(그림), 화면에서는 3배. 물건 크기·밟는 칸은 lib/data/village-assets.json(scripts/pack-village-town.mjs).
 import assets from './data/village-assets.json' with { type: 'json' };
-import { MAP_H, MAP_W, PLOTS } from './village.ts';
+import { MAP_H, MAP_W, MAP_X0, PLOTS } from './village.ts';
 import type { CraftKey } from './village.ts';
 import { GATHER_ROCKS, MAILBOX, WORKBENCH } from './village-craft.ts';
 
@@ -19,38 +19,39 @@ export type TerrainCell = { x: number; y: number; ground: TerrainGround };
 const LEGEND: Record<string, GroundKind> = { '.': 'grass', '=': 'path', s: 'soil', '~': 'water' };
 export const GROUND_LEGEND = LEGEND;
 
-/** 땅 층 (한 글자 = 한 칸, 가로 MAP_W × 세로 MAP_H). . 풀, = 흙길, s 밭, ~ 물. 처음 마을은 왼쪽 위 12×20, 나머지는 레벨로 열림(lib/village-level.ts) */
+/** 땅 층 (한 글자 = 한 칸, 가로 MAP_W × 세로 MAP_H, 글자 번호 = x - MAP_X0). . 풀, = 흙길, s 밭, ~ 물.
+ *  처음 마을(x 0~11, y 0~19)은 넓은 사각형의 위쪽 가운데, 왼쪽(x -8~-1)·오른쪽·아래는 레벨로 열림(lib/village-level.ts) */
 export const GROUND_ROWS: string[] = [
   '............................', // 0
   '............................', // 1
   '............................', // 2
   '............................', // 3
-  '.....==........ss...........', // 4  집 문 앞에서 길 시작 · (레벨2) 밭 3
-  '.ss..==..ss....ss...........', // 5  밭 0, 밭 1
-  '.ss..==..ss.................', // 6
-  '.....==.....................', // 7
-  '==========================..', // 8  가로 길 (레벨2·5까지 이어짐)
-  '.....==.....................', // 9
-  '.....==.....................', // 10
-  '.....==.....................', // 11
-  '.....==.....................', // 12
-  '.....==.ss..................', // 13 밭 2
-  '.....==.ss.............~~...', // 14 (레벨5) 작은 연못
-  '.~~~.==................~~...', // 15 연못
-  '.~~~.==.....................', // 16
-  '.~~~.==.....................', // 17
-  '.....==.....................', // 18
-  '.....==.....................', // 19 ─ 처음 마을은 여기까지 (가로 0~11)
-  '.....==......ss.............', // 20 (레벨3) 숲길 · (레벨4) 밭 5
-  '.....==......ss.............', // 21
-  '..ss.==.....................', // 22 (레벨3) 밭 4
-  '..ss.============...........', // 23 숲길 → 강가 길
-  '.....==.....................', // 24
-  '.....==.......~~~~~.........', // 25 (레벨4) 강가 호수
-  '.....==......~~~~~~~........', // 26
-  '.....==......~~~~~~~........', // 27
-  '.....==......~~~~~~~........', // 28
-  '.....==......~~~~~~~........', // 29
+  '...ss........==........ss...', // 4  (레벨3) 밭 4 · 집 문 앞 길 · (레벨2) 밭 3
+  '...ss....ss..==..ss....ss...', // 5  밭 0, 밭 1
+  '.........ss..==..ss.........', // 6
+  '.............==.............', // 7
+  '..==========================', // 8  가로 길 (왼쪽 숲 ~ 오른쪽 풀밭)
+  '.............==.............', // 9
+  '.............==.............', // 10
+  '.............==.............', // 11
+  '.............==.............', // 12
+  '.............==.ss..........', // 13 밭 2
+  '.............==.ss..........', // 14
+  '.~~~.....~~~.==.............', // 15 (레벨3) 숲 연못 · 처음 마을 연못
+  '.~~~.....~~~.==.............', // 16
+  '.........~~~.==.............', // 17
+  '.............==.............', // 18
+  '.............==.............', // 19 ─ 처음 마을은 여기까지 (가로 0~11)
+  '.............==......ss.....', // 20 (레벨5) 밭 6
+  '.............==......ss.....', // 21
+  '..........ss.==.............', // 22 (레벨4) 밭 5
+  '..........ss.============...', // 23 숲길 → 강가 길
+  '..=============.............', // 24 (레벨6) 언덕 길 → 숲길
+  '.............==.......~~~~~.', // 25 (레벨5) 강가 호수
+  '....~~.......==......~~~~~~~', // 26 (레벨6) 언덕 연못
+  '....~~.......==......~~~~~~~', // 27
+  '.............==......~~~~~~~', // 28
+  '.............==......~~~~~~~', // 29
 ];
 
 /** 물건 이름 (그림 목록의 물건) */
@@ -65,7 +66,7 @@ export function objectInfo(kind: ObjectKind): { cells: [number, number]; foot: [
 /** 물건 층: (x, y) = 그림 왼쪽 위 칸. 지도 밖(y < 0)은 위쪽 숲처럼 그림만 */
 export const MAP_OBJECTS: MapObject[] = [
   // 위쪽 숲 (지도 밖, 걸을 수 없는 곳)
-  ...[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26].map((x, i): MapObject => ({ kind: i % 2 ? 'treeRound' : 'treePine', x, y: -3 })),
+  ...[-8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18].map((x, i): MapObject => ({ kind: i % 2 ? 'treeRound' : 'treePine', x, y: -3 })),
   // 집 (5×6, 아래 3줄이 막힘 = 4~8, 1~3)
   { kind: 'house', x: 4, y: -2 },
   // 나무 (2×3, 아래 2줄이 막힘)
@@ -80,26 +81,28 @@ export const MAP_OBJECTS: MapObject[] = [
   // 열매·제작대 (2026-11-14): 제작대·우편함, 돌멩이를 캘 바위 (자리는 lib/village-craft.ts)
   { kind: 'workbench', x: WORKBENCH.x, y: WORKBENCH.y }, { kind: 'mailbox', x: MAILBOX.x, y: MAILBOX.y },
   ...GATHER_ROCKS.filter(r => !(r.x === 11 && r.y === 13)).map((r): MapObject => ({ kind: 'rock', x: r.x, y: r.y })),
-  // ---- 넓어지는 구역 (2026-11-14, 마을 레벨로 열림) ----
+  // ---- 넓어지는 구역 (2026-11-14, 마을 레벨로 열림. 처음 마을이 넓은 사각형의 위쪽 가운데: 왼쪽은 x가 음수) ----
   // 레벨2 오른쪽 풀밭: 넓은 풀밭 (꾸미기 놓을 자리)
   { kind: 'treeRound', x: 18, y: -1 }, { kind: 'treePine', x: 18, y: 17 },
   { kind: 'flowerPink', x: 13, y: 2 }, { kind: 'flowerBlue', x: 19, y: 5 }, { kind: 'mushroom', x: 14, y: 9 }, { kind: 'flowerYellow', x: 19, y: 13 }, { kind: 'stump', x: 12, y: 18 },
-  // 레벨3 아래쪽 숲길
+  // 레벨3 왼쪽 숲
+  { kind: 'treePine', x: -8, y: -1 }, { kind: 'treeRound', x: -3, y: -1 }, { kind: 'treePine', x: -8, y: 10 }, { kind: 'treeRound', x: -3, y: 11 }, { kind: 'treePine', x: -2, y: 17 },
+  { kind: 'flowerYellow', x: -6, y: 2 }, { kind: 'flowerPink', x: -2, y: 6 }, { kind: 'mushroom', x: -4, y: 12 }, { kind: 'flowerBlue', x: -7, y: 18 }, { kind: 'lily', x: -6, y: 16 },
+  // 레벨4 아래쪽 숲길
   { kind: 'treePine', x: 0, y: 20 }, { kind: 'treePine', x: 0, y: 26 }, { kind: 'treeRound', x: 9, y: 27 }, { kind: 'pineSmall', x: 11, y: 25 },
   { kind: 'mushroomBrown', x: 8, y: 21 }, { kind: 'flowerRed', x: 3, y: 27 }, { kind: 'bushRose', x: 7, y: 28 },
-  // 레벨4 강가 모래밭
+  // 레벨5 강가 모래밭
   { kind: 'lily', x: 16, y: 27 }, { kind: 'lily', x: 14, y: 28 }, { kind: 'flowerOrange', x: 12, y: 25 }, { kind: 'flowerWhite', x: 16, y: 21 },
-  // 레벨5 언덕 풀밭 (언덕·계단은 다음에 이 구역에)
-  { kind: 'treePine', x: 20, y: -1 }, { kind: 'treePine', x: 22, y: 1 }, { kind: 'treeRound', x: 25, y: 3 }, { kind: 'treePine', x: 21, y: 10 }, { kind: 'treeRound', x: 26, y: 11 },
-  { kind: 'treePine', x: 25, y: 19 }, { kind: 'treeRound', x: 21, y: 24 }, { kind: 'treePine', x: 26, y: 26 },
-  { kind: 'flowerYellow', x: 23, y: 7 }, { kind: 'flowerPink', x: 26, y: 15 }, { kind: 'stump', x: 26, y: 8 }, { kind: 'lily', x: 23, y: 14 },
+  // 레벨6 언덕 풀밭 (언덕·계단은 다음에 이 구역에)
+  { kind: 'treePine', x: -8, y: 20 }, { kind: 'treeRound', x: -3, y: 20 }, { kind: 'treePine', x: -8, y: 26 }, { kind: 'pineSmall', x: -2, y: 28 },
+  { kind: 'flowerOrange', x: -6, y: 22 }, { kind: 'flowerWhite', x: -2, y: 22 }, { kind: 'stump', x: -7, y: 24 }, { kind: 'lily', x: -4, y: 26 },
 ];
 
-const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
+const inMap = (x: number, y: number) => x >= MAP_X0 && y >= 0 && x < MAP_X0 + MAP_W && y < MAP_H;
 /** 지도 기록의 땅 (지도 밖은 풀) */
 export function baseGround(x: number, y: number): GroundKind {
   if (!inMap(x, y)) return 'grass';
-  return LEGEND[GROUND_ROWS[y][x]] ?? 'grass';
+  return LEGEND[GROUND_ROWS[y][x - MAP_X0]] ?? 'grass';
 }
 /** 밭 칸 번호 (밭 × 4 + 자리), 밭이 아니면 -1 */
 export function plotCellAt(x: number, y: number): number {
@@ -139,7 +142,7 @@ export function blockedCells(objects: MapObject[] = MAP_OBJECTS): Set<string> {
     if (!f) continue;
     for (let dy = 0; dy < f[3]; dy++) for (let dx = 0; dx < f[2]; dx++) out.add(`${o.x + f[0] + dx},${o.y + f[1] + dy}`);
   }
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (baseGround(x, y) === 'water') out.add(`${x},${y}`);
+  for (let y = 0; y < MAP_H; y++) for (let x = MAP_X0; x < MAP_X0 + MAP_W; x++) if (baseGround(x, y) === 'water') out.add(`${x},${y}`);
   return out;
 }
 

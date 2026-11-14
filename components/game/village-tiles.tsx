@@ -7,7 +7,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import assets from '@/lib/data/village-assets.json' with { type: 'json' };
 import { autotileQuarters, groundAt, MAP_OBJECTS, objectInfo, plotObjects, type GroundKind, type MapObject, type ObjectKind, type TerrainCell, type TerrainGround } from '@/lib/village-map';
 import { decorImageAt, fenceKind, type DecorPlaced } from '@/lib/village-decor';
-import { CRAFT_INFO, MAP_H, MAP_W, type CraftKey, type MaterialKey } from '@/lib/village';
+import { CRAFT_INFO, MAP_H, MAP_W, MAP_X0, type CraftKey, type MaterialKey } from '@/lib/village';
 
 const T = assets.tile;
 const GROUND = assets.ground as Record<string, { rect: number[] }>;
@@ -72,24 +72,24 @@ function GroundLayer({ x0, y0, cols, rows, scale, at, version, style }: {
 
 // ---------- 물건 층 ----------
 /** 물건들을 칸 자리에 (y0 = 그림 맨 위 칸이 지도 몇 번째 줄인지). z = 아래 줄 기준(포켓몬 z = 11 + 줄), 바닥에 붙은 것은 늘 아래 */
-function ObjectLayer({ objects, tile, y0 }: { objects: MapObject[]; tile: number; y0: number }) {
+function ObjectLayer({ objects, tile, y0, x0 = 0 }: { objects: MapObject[]; tile: number; y0: number; x0?: number }) {
   const scale = tile / T;
   return <>{objects.map((o, i) => {
     const info = objectInfo(o.kind);
     const bottom = o.y + info.cells[1] - 1;
     return <ObjectSprite key={i} kind={o.kind} scale={scale}
-      style={{ position: 'absolute', left: o.x * tile, top: (o.y - y0) * tile, zIndex: info.flat ? 3 : 11 + bottom }} />;
+      style={{ position: 'absolute', left: (o.x - x0) * tile, top: (o.y - y0) * tile, zIndex: info.flat ? 3 : 11 + bottom }} />;
   })}</>;
 }
 
-/** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 좌표는 위쪽 숲 줄(TOP_ROWS)을 포함한 그림 좌표 */
+/** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 그림 좌표 = (x - MAP_X0, y + TOP_ROWS) 칸 */
 export function VillageGround({ tile, cells, decor = [], terrain = [], extra = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[]; terrain?: TerrainCell[]; extra?: MapObject[] }) {
   const at = (x: number, y: number) => groundAt(x, y, cells, terrain);
   const version = cells.join(',') + '|' + terrain.map(t => `${t.x},${t.y},${t.ground}`).join(';');
   return (
     <div className="village-ground" aria-hidden>
-      <GroundLayer x0={0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={version} />
-      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor), ...extra]} tile={tile} y0={-TOP_ROWS} />
+      <GroundLayer x0={MAP_X0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={version} />
+      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor), ...extra]} tile={tile} y0={-TOP_ROWS} x0={MAP_X0} />
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
 import { species } from '@/lib/pokedex';
 import {
-  CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, HABITAT_INFO, MAP_H, MAP_W, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
+  CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, HABITAT_INFO, MAP_H, MAP_W, MAP_X0, MATERIAL_INFO, MATERIALS, PICK_SPOTS, PLOTS,
   RESIDENT_LINES, START_POS, type CraftKey, type MaterialKey,
 } from '@/lib/village';
 import { AnimMon } from './anim-mon';
@@ -33,7 +33,7 @@ function useViewCols() {
 const pixelSrc = (id: number) => `/assets/pokemon/pixel/${id}.png`;
 const key = (x: number, y: number) => `${x},${y}`;
 const MAP_BLOCKED = blockedCells();
-const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < MAP_W && y < MAP_H;
+const inMap = (x: number, y: number) => x >= MAP_X0 && y >= 0 && x < MAP_X0 + MAP_W && y < MAP_H;
 
 /** 첫 화면: 마을 입구 버튼 (잠김 / 열림) */
 export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => void }) {
@@ -136,7 +136,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   // 돌아다니는 포켓몬: 모험 팀 + 오늘 손님 (손님은 자기 서식지 근처)
   const baseWalkers = useMemo<Walker[]>(() => [
     ...v.residents.slice(1, 3).map((r, i) => ({ id: 'r' + i, species: r.species, shiny: r.shiny, x: [4, 8][i], y: [9, 10][i] })),
-    ...v.guests.map(g => { const p = PLOTS[g.plot]; return { id: 'g' + g.plot, species: g.species, x: p.x + 2 < MAP_W ? p.x + 2 : p.x - 1, y: p.y + 1, guest: g }; }),
+    ...v.guests.map(g => { const p = PLOTS[g.plot]; return { id: 'g' + g.plot, species: g.species, x: p.x + 2 < MAP_X0 + MAP_W ? p.x + 2 : p.x - 1, y: p.y + 1, guest: g }; }),
   ], [v.residents, v.guests]);
   // 걸어간 자리 (포켓몬 id → 칸). 없으면 처음 자리
   const [moved, setMoved] = useState<Record<string, { x: number; y: number }>>({});
@@ -181,7 +181,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   // 화면 위치: 지도 위쪽 숲 줄(TOP_ROWS)까지 포함한 그림 좌표
   const fullH = (MAP_H + TOP_ROWS) * TILE;
   const cam = {
-    x: Math.max(0, Math.min(MAP_W * TILE - VIEW_COLS * TILE, pos.x * TILE - Math.floor(VIEW_COLS / 2) * TILE)),
+    x: Math.max(0, Math.min(MAP_W * TILE - VIEW_COLS * TILE, (pos.x - MAP_X0) * TILE - Math.floor(VIEW_COLS / 2) * TILE)),
     y: Math.max(0, Math.min(fullH - VIEW_ROWS * TILE, (pos.y + TOP_ROWS) * TILE - Math.floor(VIEW_ROWS / 2) * TILE)),
   };
   const partner = view.owned.find(p => p.uid === view.partner);
@@ -231,7 +231,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     const info = DECOR_INFO[decorPlacing.item];
     const kind = info.ground ? null : info.variants[decorPlacing.variant];
     const out: { x: number; y: number }[] = [];
-    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+    for (let y = 0; y < MAP_H; y++) for (let x = MAP_X0; x < MAP_X0 + MAP_W; x++) {
       if (decorSpotProblem(v.decor, v.terrain, decorPlacing.item, kind, x, y, level)) continue;
       // 서준이·파트너가 서 있는 칸은 빼고 (물 칸이나 막히는 물건이 발밑에 생기지 않게)
       const cells = kind ? decorCells({ kind, x, y }) : [{ x, y }];
@@ -284,7 +284,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
           <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} extra={extraObjects} />
-          <div className="village-world" style={{ top: TOP_ROWS * TILE, width: MAP_W * TILE, height: MAP_H * TILE }}>
+          <div className="village-world" style={{ top: TOP_ROWS * TILE, left: -MAP_X0 * TILE, width: (MAP_W + MAP_X0) * TILE, height: MAP_H * TILE }}>
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
             const p = cellPos(cell);

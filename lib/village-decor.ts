@@ -5,7 +5,7 @@
 // 재료 수는 보호자 전체 설정에서 바꿀 수 있어요 (settings.village_decor_costs, 바꾼 것만).
 // 상태 변경은 lib/game-engine.ts (decorCraft·decorPlace·decorTake), 이 파일은 규칙과 계산만.
 import { baseGround, blockedCells, MAP_OBJECTS, objectInfo, plotCellAt, type ObjectKind, type TerrainCell, type TerrainGround } from './village-map.ts';
-import { MAP_H, MAP_W, MATERIALS, PICK_SPOTS, START_POS, type MaterialKey } from './village.ts';
+import { MAP_H, MAP_W, MAP_X0, MATERIALS, PICK_SPOTS, START_POS, type MaterialKey } from './village.ts';
 import { TREE_SPOTS } from './village-craft.ts';
 import { isOpenCell, lockedText } from './village-level.ts';
 
@@ -112,7 +112,7 @@ export function decorSpotProblem(decor: DecorPlaced[], terrain: TerrainCell[], i
   const info = DECOR_INFO[item];
   const cells = info.ground || !kind ? [{ x, y }] : decorCells({ kind, x, y });
   for (const c of cells) {
-    if (c.x < 0 || c.y < 0 || c.x >= MAP_W || c.y >= MAP_H) return '마을 밖에는 놓을 수 없어요.';
+    if (c.x < MAP_X0 || c.y < 0 || c.x >= MAP_X0 + MAP_W || c.y >= MAP_H) return '마을 밖에는 놓을 수 없어요.';
     if (!isOpenCell(c.x, c.y, level)) return lockedText(c.x, c.y);
     const k = `${c.x},${c.y}`;
     const base = baseGround(c.x, c.y);

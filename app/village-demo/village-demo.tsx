@@ -52,7 +52,7 @@ function demoState(today: string): GameState {
     study: { iron: 2, sparkle: 1 },
     mail: [{ id: 'k1', kind: 'iron', amount: 1, week: yesterday, at: now }],
     craftedBalls: [{ id: 'c1', kind: 'poke', made: yesterday }],
-    // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=700 처럼 붙이면 그만큼으로
+    // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=1200 처럼 붙이면 그만큼으로
     stars: demoStars(),
   } as unknown as GameState['village'];
   // 열매: 사과열매 32 · 불꽃열매 99(가득) · 별빛열매 40 · 얼음열매 12

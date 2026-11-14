@@ -39,11 +39,13 @@ export const HABITAT_INFO: Record<HabitatKey, { name: string; emoji: string; nee
 
 // ---------- 지도 ----------
 /** 마을 크기 (타일 16×16 기준 칸 수) */
-/** 지도 전체 크기. 처음 마을은 왼쪽 위 12×20이고, 마을 레벨이 오르면 오른쪽·아래쪽 구역이 열림 (lib/village-level.ts REGIONS) */
+/** 지도 전체 크기 (x는 MAP_X0부터). 처음 마을 12×20은 위쪽 가운데, 마을 레벨이 오르면 왼쪽·오른쪽·아래 구역이 열림 (lib/village-level.ts REGIONS) */
 export const MAP_W = 28;
 export const MAP_H = 30;
+/** 지도 왼쪽 끝 x (처음 마을의 왼쪽에 붙인 땅은 x가 음수: 예전 칸 번호가 그대로 남게) */
+export const MAP_X0 = -8;
 /** 서식지를 만드는 밭 (왼쪽 위 칸, 2×2). 칸 번호 = 밭 번호 × 4 + (0 왼위, 1 오위, 2 왼아래, 3 오아래). 처음 3개 + 넓어진 구역마다 1개(뒤에만 붙임) */
-export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }, { x: 15, y: 4 }, { x: 2, y: 22 }, { x: 13, y: 20 }];
+export const PLOTS: { x: number; y: number }[] = [{ x: 1, y: 5 }, { x: 9, y: 5 }, { x: 8, y: 13 }, { x: 15, y: 4 }, { x: -5, y: 4 }, { x: 2, y: 22 }, { x: 13, y: 20 }];
 export const CELL_COUNT = PLOTS.length * 4;
 export const cellPos = (cell: number) => {
   const p = PLOTS[Math.floor(cell / 4)];
@@ -57,9 +59,10 @@ export const PICK_SPOTS: { x: number; y: number }[] = [
   { x: 2, y: 10 }, { x: 7, y: 16 }, { x: 10, y: 15 }, { x: 4, y: 19 }, { x: 8, y: 18 },
   // 넓어진 구역 (레벨 2~5, 열린 구역 자리만 씀)
   { x: 14, y: 2 }, { x: 18, y: 7 }, { x: 13, y: 11 }, { x: 16, y: 16 },
+  { x: -6, y: 1 }, { x: -3, y: 9 }, { x: -5, y: 13 },
   { x: 3, y: 25 }, { x: 10, y: 21 }, { x: 4, y: 29 },
   { x: 12, y: 22 }, { x: 18, y: 23 },
-  { x: 23, y: 5 }, { x: 22, y: 16 }, { x: 26, y: 22 },
+  { x: -5, y: 22 }, { x: -1, y: 25 }, { x: -7, y: 29 },
 ];
 /** 집 문 앞: 처음 서는 자리 */
 export const START_POS = { x: 5, y: 4 };
