@@ -65,7 +65,6 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
   const [planning, setPlanning] = useState<{ recipe: RecipeKey; plan: Partial<Record<PotionKind, number>> } | null>(null);
   const [making, setMaking] = useState<RecipeKey | null>(null);
   const [made, setMade] = useState<{ recipe: RecipeKey; ballId?: string } | null>(null);
-  const treesFull = craft.trees.length + craft.saplings >= craft.treeMax;
 
   async function make(recipe: RecipeKey, berries: Partial<Record<PotionKind, number>>) {
     setNote('');
@@ -122,7 +121,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
   }
 
   return <>
-    <h3>🔨 제작대</h3>
+    <h3>🔮 제작대 <small className="muted">볼을 만드는 곳</small></h3>
     <div className="craft-stock" aria-label="가진 재료">
       <span><MaterialIcon kind="stone" scale={1} /> 돌멩이 <b>{stone}</b></span>
       <span><IronIcon scale={1} /> 철 <b>{craft.iron}</b></span>
@@ -137,10 +136,10 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       ))}
     </div>
     <div className="village-recipes">
-      {RECIPES.map(k => {
+      {RECIPES.filter(k => k !== 'sapling').map(k => {
         const cost = craft.recipes[k];
         const short = shortageText(craft, stone, cost);
-        const blocked = k === 'sapling' && treesFull ? `지금은 열매나무를 ${craft.treeMax}그루까지 키울 수 있어! 마을 레벨이 오르면 자리가 늘어나.` : null;
+        const blocked: string | null = null;
         const parts: { key: string; icon: React.ReactNode; have: number; need: number }[] = [
           { key: 'berry', icon: <span aria-label="열매">🍎</span>, have: berryTotal(craft), need: cost.berry },
           { key: 'stone', icon: <MaterialIcon kind="stone" scale={1} />, have: stone, need: cost.stone },
@@ -152,7 +151,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
             <span className="village-recipe-icon"><RecipeIcon recipe={k} /></span>
             <span><b>{RECIPE_INFO[k].name}</b>
               <small className="village-cost">{parts.map(p => <span key={p.key} className={p.have >= p.need ? 'ok' : 'lack'}>{p.icon} {p.have}/{p.need}</span>)}</small>
-              <small>{k === 'sapling' ? `열매나무 ${craft.trees.length}그루${craft.saplings ? ` · 묘목 ${craft.saplings}개` : ''} (최대 ${craft.treeMax})` : RECIPE_INFO[k].note}</small></span>
+              <small>{RECIPE_INFO[k].note}</small></span>
             <span className="village-recipe-btns">
               <button className={'primary small' + (short || blocked ? ' dim' : '')} disabled={busy} aria-disabled={!!(short || blocked)}
                 onClick={() => { if (short || blocked) setNote(blocked ?? short!); else { setNote(''); setPlanning({ recipe: k, plan: autoBerryPlan(craft, cost.berry) }); } }}>만들기</button>
@@ -162,7 +161,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       })}
     </div>
     {note && <p className="craft-note" role="status">{note}</p>}
-    {craft.saplings > 0 && <button className="secondary glow" onClick={onPlant}>🌱 묘목 심기 ({craft.saplings}개)</button>}
+    <p className="village-sheet-note">🌳 열매나무 묘목은 <b>🔨 만들기</b>의 🌱 서식지 칸에서 만들어.</p>
     {craft.balls.length > 0 && <div className="craft-balls">
       <b>만든 볼 {craft.balls.length}개</b> <small>(가방에도 있어)</small>
       <div className="craft-ball-row">{craft.balls.map(b => (
@@ -204,7 +203,7 @@ export function CraftIntro({ open, view, onClose }: { open: boolean; view: Child
       <p className="intro-text">마을에 열매나무가 생겼어!<br />매일 미션을 끝내면 <b>열매를 딸 수 있어</b></p>
     </>,
     <>
-      <p className="intro-title">🔨 제작대</p>
+      <p className="intro-title">🔮 제작대</p>
       <div className="feed-intro-pics"><ObjectSprite kind="workbench" scale={3} /><img src={ASSETS.ball.poke} alt="" /></div>
       <p className="intro-text">제작대에서 열매로 <b>몬스터볼</b>을 만들 수 있어.<br />볼을 열면 <b>아직 못 만난 포켓몬</b>이 나와!</p>
     </>,

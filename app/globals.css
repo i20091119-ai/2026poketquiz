@@ -1358,3 +1358,5 @@ html, body { overscroll-behavior-y: none; }
 .guest-knows p, .guest-lines p { margin: 2px 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .guestbook-mon img { width: 48px; height: 48px; object-fit: contain; }
 .guest-page-mon img { width: 84px; height: 84px; object-fit: contain; }
+/* 마을 글자: 낱말 중간에서 줄이 안 끊기게 (2026-11-14 부모님) */
+.village-screen, .village-sheet, body:has(.village-screen) [data-slot="dialog-content"] { word-break: keep-all; overflow-wrap: break-word; }

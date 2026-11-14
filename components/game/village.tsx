@@ -133,6 +133,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   const hasNet = craft.tools.net > 0;
   const posRef = useRef(pos);
   useEffect(() => { posRef.current = pos; });
+  const followRef = useRef(follow);
+  useEffect(() => { followRef.current = follow; });
   useEffect(() => {
     if (!inside || !hasNet) return;
     let next = 1;
@@ -188,17 +190,25 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     if (!inside) return;
     const t = window.setInterval(() => {
       const next: Record<string, { x: number; y: number }> = {};
+      // 서준이·파트너·다른 포켓몬이 있는 칸에는 겹치지 않게 (2026-11-14 부모님: 파트너와 손님이 겹침)
+      const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y))]);
       for (const w of walkersRef.current) {
-        if (Math.random() < 0.5) continue;
-        const [dx, dy] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(Math.random() * 4)];
-        const x = w.x + dx, y = w.y + dy;
-        // 손님은 자기 밭에서 3칸 안에서만
+        const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y)].includes(key(w.x, w.y))
+          || walkersRef.current.some(o => o.id !== w.id && o.x === w.x && o.y === w.y);
+        if (!crowded && Math.random() < 0.5) continue;
+        const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
         const home = w.guest ? PLOTS[w.guest.plot] : null;
-        if (!inMap(x, y) || blockedRef.current.has(key(x, y)) || (home && (Math.abs(x - home.x) > 3 || Math.abs(y - home.y) > 3))) continue;
-        next[w.id] = { x, y };
+        for (const [dx, dy] of dirs) {
+          const x = w.x + dx, y = w.y + dy;
+          // 손님은 자기 밭에서 3칸 안에서만
+          if (!inMap(x, y) || blockedRef.current.has(key(x, y)) || taken.has(key(x, y)) || (home && (Math.abs(x - home.x) > 3 || Math.abs(y - home.y) > 3))) continue;
+          taken.add(key(x, y));
+          next[w.id] = { x, y };
+          break;
+        }
       }
       setMoved(m => ({ ...m, ...next }));
-    }, 1400);
+    }, 900);
     return () => window.clearInterval(t);
   }, [inside]);
 
@@ -399,7 +409,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
               onClick={() => void onMonTap(w)}
               aria-label={species(w.species).name}>
               <span className="village-shadow" />
-              <AnimMon species={w.species} shiny={w.shiny} scale={1.5} fallback={pixelSrc(w.species)} />
+              <AnimMon species={w.species} shiny={w.shiny} scale={1} fallback={pixelSrc(w.species)} />
               {w.shiny && <span className="village-shiny">✨</span>}
               {w.guest && <span className="village-guest-mark">손님</span>}
               {bubble?.id === w.id && <span className="village-bubble">{bubble.text}</span>}
@@ -408,7 +418,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           {/* 파트너: 서준이 한 칸 뒤에서 따라옴 (발밑 동그라미) */}
           {partner && <span className="village-mon partner" style={{ left: follow.x * TILE, top: follow.y * TILE, width: TILE, height: TILE, zIndex: 11 + follow.y }}>
             <span className="village-me-ring" />
-            <AnimMon species={partner.species} shiny={partner.shiny} scale={1.5} back={follow.dir === 'up'} flip={follow.dir === 'right'} fallback={pixelSrc(partner.species)} />
+            <AnimMon species={partner.species} shiny={partner.shiny} scale={1} back={follow.dir === 'up'} flip={follow.dir === 'right'} fallback={pixelSrc(partner.species)} />
           </span>}
           {/* 서준이 */}
           <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
@@ -445,7 +455,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
 
       <div className="village-controls" style={{ width: VIEW_COLS * TILE }}>
         <div className="village-mats" aria-label="재료">
-          <button className="secondary small" onClick={() => setSheet('workbench')}>🔨 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
+          <button className="secondary small" onClick={() => setSheet('workbench')}>🔮 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
           <button className="secondary small" onClick={() => setSheet('make')}>🔨 만들기</button>
           <button className="secondary small" onClick={() => setSheet('book')}>📖 방명록</button>
           <button className="secondary small village-bag-btn" onClick={() => setSheet('bag')}>🎒 가방{bagCount + decorBagCount + craft.saplings + craft.balls.length ? ` ${bagCount + decorBagCount + craft.saplings + craft.balls.length}` : ''}</button>
@@ -515,6 +525,7 @@ function CraftSheet({ view, busy, act, onToast }: {
           </div>
         );
       })}
+      <SaplingRecipe view={view} busy={busy} act={act} onToast={onToast} />
     </div>
     <div className="village-habitat-help">
       <b>서식지 만들기 (밭 4칸)</b>
@@ -526,6 +537,29 @@ function CraftSheet({ view, busy, act, onToast }: {
       <small><MaterialIcon kind="twig" scale={1} /> 나뭇가지는 🧰 도구(낚싯대·잠자리채)를 만들 때 써요!</small>
     </div>
   </>;
+}
+
+/** 🌳 열매나무 묘목 (2026-11-14 부모님: 제작대는 볼만, 묘목은 🔨 만들기로. 레시피·개수 그대로, 열매는 섞어서 많이 가진 것부터) */
+function SaplingRecipe({ view, busy, act, onToast }: { view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void }) {
+  const c = view.village.craft;
+  const cost = c.recipes.sapling;
+  const berries = BERRY_KINDS.reduce((a, k) => a + (c.berries[k] ?? 0), 0);
+  const stone = view.village.mats.stone;
+  const full = c.trees.length + c.saplings >= c.treeMax;
+  const short = [berries < cost.berry && `열매 ${cost.berry - berries}개`, stone < cost.stone && `돌멩이 ${cost.stone - stone}개`].filter(Boolean).join(', ');
+  const why = full ? `지금은 열매나무를 ${c.treeMax}그루까지 키울 수 있어! 열쇠로 새 땅을 열면 자리가 늘어나.` : short ? `${short}가 더 필요해!` : null;
+  return (
+    <div className={'village-recipe' + (why ? ' short' : '')}>
+      <span className="village-recipe-icon"><ObjectSprite kind="sapling" scale={3} /></span>
+      <span><b>🌳 열매나무 묘목</b>
+        <small className="village-cost"><span className={berries >= cost.berry ? 'ok' : 'lack'}>🍎 {berries}/{cost.berry}</span><span className={stone >= cost.stone ? 'ok' : 'lack'}><MaterialIcon kind="stone" scale={1} /> {stone}/{cost.stone}</span></small>
+        <small>열매나무 {c.trees.length}그루{c.saplings ? ` · 묘목 ${c.saplings}개` : ''} (최대 {c.treeMax}) · 열매는 섞어서 써</small></span>
+      <span className="village-recipe-btns">
+        <button className={'primary small' + (why ? ' dim' : '')} disabled={busy} aria-disabled={!!why}
+          onClick={async () => { if (why) { onToast(why); return; } const r = await act<{ message: string }>({ type: 'villageMake', recipe: 'sapling', stay: true }); if (r) onToast('열매나무 묘목을 만들었어! 🌱 🎒 가방에서 심어 보자.'); }}>만들기</button>
+      </span>
+    </div>
+  );
 }
 
 /** 밭 칸 하나: 빈 칸이면 가방에서 골라 놓기, 놓여 있으면 가방으로 */
