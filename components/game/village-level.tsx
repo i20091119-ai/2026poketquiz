@@ -13,14 +13,14 @@ import { DIR_TEXT, GRID } from '@/lib/village-level';
 type Level = ChildView['village']['level'];
 type RegionView = Level['regions'][number];
 
-/** 위쪽: 🏡 Lv.N ⭐ 지금/다음 · 🔑 · ❓ */
+/** 위쪽: 🏡 Lv.N 🏠 마을점수 지금/다음 · 🔑 · ❓ (2026-11-14: 별 ⭐은 배틀 힘 ★과 헷갈려서 🏠 마을점수로) */
 export function VillageLevelBar({ level, width, onKeys, onHelp }: { level: Level; width: number; onKeys: () => void; onHelp: () => void }) {
   const pct = level.next ? Math.min(100, Math.round((level.into / level.next) * 100)) : 100;
   return (
     <div className="village-level" style={{ width }} aria-label={`마을 레벨 ${level.level}`}>
       <b>🏡 Lv.{level.level}</b>
       <span className="village-level-bar" aria-hidden><i style={{ width: `${pct}%` }} /></span>
-      <small>{level.next ? `⭐ ${level.into}/${level.next}` : '⭐ 최고 레벨!'}</small>
+      <small>{level.next ? `🏠 ${level.into}/${level.next}` : '🏠 최고 레벨!'}</small>
       {level.keys > 0 && <button className="village-key-btn" onClick={onKeys} aria-label={`열쇠 ${level.keys}개, 눌러서 땅 열기`}>🔑 {level.keys}</button>}
       <button className="village-help-btn" onClick={onHelp} aria-label="마을 레벨 안내">❓</button>
     </div>
@@ -66,7 +66,7 @@ export function KeyChooser({ level, open, busy, first, onUnlock, onClose }: {
     <Dialog open={open} onOpenChange={o => { if (!o && !busy) onClose(); }}>
       <DialogContent className="reward-dialog village-keys">
         <DialogTitle>{level.keys > 0 ? `🔑 열쇠가 ${level.keys}개 있어!` : '🔑 열쇠가 없어'}</DialogTitle>
-        <DialogDescription>{level.keys > 0 ? '어느 땅을 열까? 노란 칸 중에서 하나를 골라 줘.' : '마을에서 별을 모아 레벨을 올리면 열쇠가 생겨.'}</DialogDescription>
+        <DialogDescription>{level.keys > 0 ? '어느 땅을 열까? 노란 칸 중에서 하나를 골라 줘.' : '마을에서 🏠 마을점수를 모아 레벨을 올리면 열쇠가 생겨.'}</DialogDescription>
         <MiniMap regions={level.regions} pick={pick} onPick={level.keys > 0 ? setPick : undefined} />
         <div className="village-key-list">
           {choices.map(r => (
@@ -96,18 +96,18 @@ export function LevelGuide({ open, level, onClose }: { open: boolean; level: Lev
   const pages = [
     <>
       <p className="intro-title">🏡 마을 레벨이 생겼어!</p>
-      <p className="intro-text">마을에서 여러 가지 일을 하면<br /><b>⭐ 별</b>을 받아.</p>
-      <p className="intro-text">별이 모이면 <b>마을 레벨</b>이 올라가!</p>
-      <p className="intro-text small">마을 위쪽 막대에서 별이 얼마나 모였는지 볼 수 있어.</p>
+      <p className="intro-text">마을에서 여러 가지 일을 하면<br /><b>🏠 마을점수</b>를 받아.</p>
+      <p className="intro-text">마을점수가 모이면 <b>마을 레벨</b>이 올라가!</p>
+      <p className="intro-text small">마을 위쪽 막대에서 마을점수가 얼마나 모였는지 볼 수 있어.</p>
     </>,
     <>
-      <p className="intro-title">⭐ 별 받는 방법</p>
+      <p className="intro-title">🏠 마을점수 받는 방법</p>
       <ul className="village-guide-list">
-        <li>🐾 처음 보는 손님 만나기 <b>⭐{s.guest}</b></li>
-        <li>🏕️ 서식지에 손님이 찾아온 날 <b>서식지마다 ⭐{s.habitat}</b></li>
-        <li>🔨 서식지·꾸미기 물건 만들기 <b>⭐{s.make}</b></li>
-        <li>⚪ 볼·묘목 만들기 <b>⭐{s.ball}</b></li>
-        <li>🍎 열매 따기 <b>⭐{s.harvest}</b></li>
+        <li>🐾 처음 보는 손님 만나기 <b>🏠{s.guest}</b></li>
+        <li>🏕️ 서식지에 손님이 찾아온 날 <b>서식지마다 🏠{s.habitat}</b></li>
+        <li>🔨 서식지·꾸미기 물건 만들기 <b>🏠{s.make}</b></li>
+        <li>⚪ 볼·묘목 만들기 <b>🏠{s.ball}</b></li>
+        <li>🍎 열매 따기 <b>🏠{s.harvest}</b></li>
       </ul>
       <p className="intro-text small">마을은 오늘 미션을 끝내야 열려. 공부하고 놀러 오자!</p>
     </>,
@@ -125,7 +125,7 @@ export function LevelGuide({ open, level, onClose }: { open: boolean; level: Lev
     <>
       <p className="intro-title">📈 지금 내 마을</p>
       <p className="intro-text">마을 레벨 <b>{level.level}</b> · 연 땅 <b>{level.regions.filter(r => r.status === 'open').length}</b> / {level.regions.length}</p>
-      <p className="intro-text">{level.next ? <>다음 레벨까지 ⭐ <b>{level.next - level.into}개</b> 남았어!</> : '최고 레벨이야! 대단해!'}</p>
+      <p className="intro-text">{level.next ? <>다음 레벨까지 🏠 마을점수 <b>{level.next - level.into}개</b> 남았어!</> : '최고 레벨이야! 대단해!'}</p>
       {level.keys > 0 && <p className="intro-text">지금 <b>🔑 열쇠 {level.keys}개</b>가 있어. 바로 열어 보자!</p>}
       <p className="intro-text small">마을 위쪽 ❓를 누르면 이 안내를 다시 볼 수 있어.</p>
     </>,

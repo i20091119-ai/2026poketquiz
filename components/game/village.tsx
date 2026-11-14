@@ -17,6 +17,7 @@ import { GATHER_ROCKS, MAILBOX, TREE_SPOTS, WORKBENCH } from '@/lib/village-craf
 import type { PotionKind } from '@/lib/game-config';
 import { KeyChooser, LevelGuide, LockedRegions, useLevelPopups, VillageLevelBar } from './village-level';
 import { isOpenCell, lockedText } from '@/lib/village-level';
+import { GuestbookSheet } from './village-guestbook';
 import { CatchGame, FunIntro, funIntroSeen, ToolsTab, type CatchResult } from './village-fun';
 import { TOOL_INFO, TOOLS, type ToolKey } from '@/lib/village-tools';
 import { ASSETS } from '@/lib/assets';
@@ -57,7 +58,7 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 }
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
-type Sheet = null | 'make' | 'bag' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
+type Sheet = null | 'make' | 'bag' | 'book' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
 type MakeTab = 'habitat' | DecorTab | 'tools';
 type DecorPlacing = { item: DecorKey; variant: number };
 
@@ -150,7 +151,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     return () => { window.clearTimeout(first); window.clearInterval(t); };
   }, [inside, hasNet, v.cells, v.terrain]);
 
-  // 들어가기: 열려 있으면 한 번 villageEnter (손님을 도감 "만남"에)
+  // 들어가기: 열려 있으면 한 번 villageEnter (손님을 📖 방명록에)
   useEffect(() => {
     if (inside || !v.open || enterFailed) return;
     let cancelled = false;
@@ -446,6 +447,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
         <div className="village-mats" aria-label="재료">
           <button className="secondary small" onClick={() => setSheet('workbench')}>🔨 제작대{craft.balls.length ? ` · 볼 ${craft.balls.length}` : ''}</button>
           <button className="secondary small" onClick={() => setSheet('make')}>🔨 만들기</button>
+          <button className="secondary small" onClick={() => setSheet('book')}>📖 방명록</button>
           <button className="secondary small village-bag-btn" onClick={() => setSheet('bag')}>🎒 가방{bagCount + decorBagCount + craft.saplings + craft.balls.length ? ` ${bagCount + decorBagCount + craft.saplings + craft.balls.length}` : ''}</button>
         </div>
         <div className="village-pad" aria-label="움직이기">
@@ -476,6 +478,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
             : sheet === 'plant' ? <PlantSheet onPick={k => { setSheet(null); setPlacing(null); setDecorPlacing(null); setPlanting(k); }} />
             : sheet === 'make' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast} onHelp={() => { setSheet(null); setFunOpen(true); }}
               onOpenBag={() => setSheet('bag')} />
+            : sheet === 'book' ? <GuestbookSheet book={v.guestbook} />
             : sheet === 'bag' ? <BagSheet view={view} busy={busy} onMake={() => setSheet('make')}
               onPlace={k => { setSheet(null); setDecorPlacing(null); setPlanting(null); setPlacing(k); }}
               onPlaceDecor={k => { setSheet(null); setPlacing(null); setPlanting(null); setDecorPlacing({ item: k, variant: 0 }); }}

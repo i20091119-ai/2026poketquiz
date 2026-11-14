@@ -48,8 +48,8 @@ export function PokedexTab({ view, busy, ...actions }: { view: ChildView; busy: 
 
 /** 기본 도감: "포켓몬 도감 ○ / 1025". 내 포켓몬 카드 화면(기본)과 만난 포켓몬 그림 화면을 바꿔 볼 수 있어요. 이로치는 이로치 도감에 따로 모여요. */
 function BasicDex({ view, busy, ...actions }: { view: ChildView; busy: boolean } & DexActions) {
-  const [showDex, setShowDex] = useState<false | 'dex' | 'met'>(false);
-  const met = useMemo(() => [...view.met].sort((a, b) => a - b), [view.met]);
+  // 2026-11-14: 마을 손님 "만남"은 도감이 아니라 마을 📖 방명록으로 옮김
+  const [showDex, setShowDex] = useState<false | 'dex'>(false);
   const [trading, setTrading] = useState<string | null>(null);
   const tradePokemon = view.owned.find(p => p.uid === trading) ?? null;
   const dex = useMemo(() => [...view.dex].sort((a, b) => a - b), [view.dex]);
@@ -63,25 +63,10 @@ function BasicDex({ view, busy, ...actions }: { view: ChildView; busy: boolean }
         </div>
         <div className="dex-buttons">
           <button className="secondary" onClick={() => setShowDex(v => (v === 'dex' ? false : 'dex'))}>{showDex === 'dex' ? '내 포켓몬 보기' : '만난 포켓몬 전체 보기'}</button>
-          {met.length > 0 && <button className="secondary" onClick={() => setShowDex(v => (v === 'met' ? false : 'met'))}>{showDex === 'met' ? '내 포켓몬 보기' : `🏡 마을 손님 ${met.length}`}</button>}
         </div>
       </section>
 
-      {showDex === 'met' ? (
-        <>
-          <p className="muted dex-howto">포켓몬 마을에 놀러 온 손님이야. 내 포켓몬은 아니지만 또 놀러 올 수 있어!</p>
-          <div className="dex-grid">
-            {met.map(id => (
-              <div className="dex-cell" key={id} style={{ position: 'relative' }}>
-                <span className="dex-met">🏡 만남</span>
-                <PokemonImage id={id} />
-                <small>{dexNo(id)}</small>
-                <span>{species(id).name}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      ) : showDex ? (
+      {showDex ? (
         <div className="dex-grid">
           {dex.map(id => (
             <div className="dex-cell" key={id}>

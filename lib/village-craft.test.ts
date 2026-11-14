@@ -189,44 +189,41 @@ test('반짝돌: 이틀 뒤 복습 문제를 첫 시도에 맞히면 +1 (그냥 
   assert.equal(state.village!.study!.sparkle, 1);
 });
 
-test('제작대: 레시피마다 한 종류 열매·재료를 빼고 볼을 만듦, 모자라면 무엇이 몇 개 모자란지', () => {
+test('제작대: 열매는 종류 상관없이 합쳐서(많이 가진 것부터, 골라서도), 몬스터볼에도 반짝돌, 모자라면 무엇이 몇 개 모자란지', () => {
   reset();
   const bank = makeBank();
   const state = started(bank);
   finishDaily(state, bank);
   const v = state.village!;
-  fill(state, 'apple', 12);
+  v.study = { iron: 0, sparkle: 0 };
+  fill(state, 'apple', 6);
   fill(state, 'fire', 5);
   v.mats.stone = 2;
-  // 몬스터볼: 사과열매 10 + 돌멩이 3 → 돌멩이 1개 모자람
-  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke', berry: 'apple' }, ctx(bank)), /돌멩이 1개가 더 필요해/);
-  // 열매는 한 종류만 셈 (사과 12 + 불꽃 5라도 불꽃으로는 5개 모자람)
+  // 몬스터볼: 열매 10 + 돌멩이 3 + 반짝돌 1 (2026-11-14) → 돌멩이 1개·반짝돌 1개 모자람
+  assert.deepEqual(recipeCost('poke'), { berry: 10, stone: 3, iron: 0, sparkle: 1 });
+  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke' }, ctx(bank)), /돌멩이 1개, 반짝돌 1개가 더 필요해/);
   v.mats.stone = 10;
-  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke', berry: 'fire' }, ctx(bank)), /5개.*더 필요해/);
-  applyAction(state, { type: 'villageMake', recipe: 'poke', berry: 'apple' }, ctx(bank));
-  assert.equal(count(state, 'apple'), 2);
-  assert.equal(count(state, 'fire'), 5);
+  v.study = { iron: 0, sparkle: 3 };
+  // 사과 6 + 불꽃 5 = 11개 → 합쳐서 10개 (많이 가진 사과부터)
+  applyAction(state, { type: 'villageMake', recipe: 'poke' }, ctx(bank));
+  assert.equal(count(state, 'apple'), 0);
+  assert.equal(count(state, 'fire'), 1);
   assert.equal(v.mats.stone, 7);
-  assert.equal(v.craftedBalls!.length, 1);
-  // 슈퍼볼: 철이 모자라면 공부 안내
-  fill(state, 'apple', 30);
-  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'great', berry: 'apple' }, ctx(bank)), /철 2개가 더 필요해! \(트레이너 훈련/);
-  v.study = { iron: 2, sparkle: 0 };
-  applyAction(state, { type: 'villageMake', recipe: 'great', berry: 'apple' }, ctx(bank));
-  assert.equal(v.study.iron, 0);
-  // 하이퍼볼: 열매 99 + 반짝돌 1
-  fill(state, 'star', 99);
-  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'ultra', berry: 'star' }, ctx(bank)), /반짝돌 1개가 더 필요해! \(이틀 뒤 복습/);
+  assert.equal(v.study.sparkle, 2);
+  assert.deepEqual(v.craftLog![0].berries, { apple: 6, fire: 4 });
+  // 아이가 고른 대로 (합이 맞아야 함)
+  fill(state, 'apple', 12);
+  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'poke', berries: { apple: 5 } }, ctx(bank)), /열매 수가 맞지 않아요/);
+  applyAction(state, { type: 'villageMake', recipe: 'poke', berries: { apple: 9, fire: 1 } }, ctx(bank));
+  assert.deepEqual([count(state, 'apple'), count(state, 'fire')], [3, 0]);
+  // 열매가 모자라면 "열매 n개"
+  assert.throws(() => applyAction(state, { type: 'villageMake', recipe: 'great' }, ctx(bank)), /열매 27개, 돌멩이 1개, 철 2개가 더 필요해! \(트레이너 훈련/);
+  // 하이퍼볼: 여러 종류 합쳐 99
+  fill(state, 'star', 50); fill(state, 'moon', 46);
   v.study = { iron: 0, sparkle: 1 };
-  applyAction(state, { type: 'villageMake', recipe: 'ultra', berry: 'star' }, ctx(bank));
-  assert.equal(count(state, 'star'), 0);
-  assert.deepEqual(v.craftedBalls!.map(b => b.kind), ['poke', 'great', 'ultra']);
-  assert.deepEqual(v.craftLog!.map(l => l.recipe), ['poke', 'great', 'ultra']);
-  // 레시피 숫자는 보호자가 바꿀 수 있음
-  setCraftRules({ pokeBerry: 1, pokeStone: 0 });
-  assert.deepEqual(recipeCost('poke'), { berry: 1, stone: 0, iron: 0, sparkle: 0 });
-  applyAction(state, { type: 'villageMake', recipe: 'poke', berry: 'fire' }, ctx(bank));
-  assert.equal(count(state, 'fire'), 4);
+  applyAction(state, { type: 'villageMake', recipe: 'ultra' }, ctx(bank));
+  assert.deepEqual([count(state, 'star'), count(state, 'moon'), count(state, 'apple')], [0, 0, 0]);
+  assert.deepEqual(v.craftedBalls!.map(b => b.kind), ['poke', 'poke', 'ultra']);
   reset();
 });
 
@@ -260,12 +257,12 @@ test('제작 볼 열기: 아직 도감에 없는 포켓몬만(전설·환상 없
   const bank = makeBank();
   const state = started(bank);
   for (let seed = 1; seed < 60; seed++) {
-    const f = pickCraftedSpecies(state, 'poke', seeded(seed))!;
+    const f = pickCraftedSpecies(state, 'poke', seeded(seed), 0)!;
     assert.ok(!state.dex.includes(f.id));
     assert.ok(f.tier <= 2);
     assert.ok(CATCH_POOLS[0].includes(f.id));
     assert.equal(f.shiny, false);
-    const g = pickCraftedSpecies(state, 'great', seeded(seed))!;
+    const g = pickCraftedSpecies(state, 'great', seeded(seed), 0)!;
     assert.ok(CATCH_POOLS[1].includes(g.id));
   }
   // 하이퍼볼 이로치 확률: 100%면 늘 이로치, 0%면 없음
@@ -368,7 +365,7 @@ test('도구: 재료로 낚싯대·잠자리채를 만들고, 15번 쓰면 부�
   reset();
 });
 
-test('잡으면: 낚시 = 물방울·진흙, 벌레 = 꽃잎·풀잎(가끔 열매), 포켓몬은 "만남"만 (가진 포켓몬은 그대로)', () => {
+test('잡으면: 낚시 = 물방울·진흙, 벌레 = 꽃잎·풀잎(가끔 열매), 포켓몬은 📖 방명록에만 (가진 포켓몬은 그대로)', () => {
   reset();
   const bank = makeBank();
   const state = started(bank);
@@ -382,7 +379,7 @@ test('잡으면: 낚시 = 물방울·진흙, 벌레 = 꽃잎·풀잎(가끔 열�
   assert.ok(['drop', 'mud'].includes(r.mat));
   assert.ok(species(r.met.species).types.includes('water'));
   assert.ok(species(r.met.species).tier < 3);
-  assert.ok(state.met!.includes(r.met.species));
+  assert.ok(state.village!.guestbook![String(r.met.species)]);
   assert.equal(r.met.fresh, true);
   const b = applyAction(state, { type: 'villageCatch', tool: 'net', x: 4, y: 10, hit: true, stay: true }, ctx(bank, TODAY, seeded(9))) as { mat: string; met: { species: number } };
   assert.ok(['petal', 'leaf'].includes(b.mat));

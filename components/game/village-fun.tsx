@@ -109,7 +109,7 @@ function CatchInner({ tool, onDone, onClose }: { tool: ToolKey; onDone: (hit: bo
       {result?.hit && result.mat && <div className="catch-got"><MaterialIcon kind={result.mat} scale={4} /></div>}
       {met && <div className="catch-met">
         <AnimMon species={met.species} scale={2} fallback={`/assets/pokemon/pixel/${met.species}.png`} />
-        <p><b>{species(met.species).name}</b>{met.fresh ? '를 처음 만났어! 도감 "만남"에 올렸어 ⭐+' : '를 또 만났어!'}</p>
+        <p><b>{species(met.species).name}</b>{met.fresh ? '를 처음 만났어! 📖 방명록에 남겼어 (🏠 마을점수 +)' : '를 또 만났어! 📖 방명록에 발자국 도장 🐾'}</p>
       </div>}
       {result && result.left > 0 && <p className="catch-left">{info.name} {result.left}번 더 쓸 수 있어</p>}
       <button className="primary big-button" disabled={phase === 'sending'} onClick={onClose}>좋아!</button>
@@ -175,7 +175,7 @@ export function FunIntro({ open, view, onClose }: { open: boolean; view: ChildVi
       <p className="intro-title">🎣 낚시 · 🦋 벌레잡기</p>
       <p className="intro-text">🎣 <b>물가</b>에 서면 &ldquo;낚시하기&rdquo; 버튼이 나와.<br />찌가 <b>퐁!</b> 하고 들어가면 바로 &ldquo;당겨!&rdquo;</p>
       <p className="intro-text">🦋 마을에 날아다니는 <b>벌레</b>를 눌러.<br />화살표가 <b>초록 칸</b>에 올 때 &ldquo;휘둘러!&rdquo;</p>
-      <p className="intro-text small">잡으면 재료나 열매를 받고, 가끔 포켓몬을 만나! 처음 만나면 ⭐ 별도 받아.</p>
+      <p className="intro-text small">잡으면 재료나 열매를 받고, 가끔 포켓몬을 만나! 만난 포켓몬은 📖 방명록에 남고, 처음이면 🏠 마을점수도 받아.</p>
     </>,
   ];
   const last = page === pages.length - 1;

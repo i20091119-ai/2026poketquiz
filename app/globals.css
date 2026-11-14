@@ -1337,3 +1337,24 @@ button.dim { opacity: .45; filter: grayscale(.6); }
 html, body { overscroll-behavior-y: none; }
 .village-screen { overscroll-behavior: contain; }
 .back-guard-toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 200; background: rgba(20, 30, 25, .9); color: #fff; padding: 10px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; max-width: calc(100% - 32px); text-align: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+.craft-berry.none { opacity: .4; }
+.berry-plan { display: flex; flex-direction: column; gap: 6px; }
+.berry-plan-row { display: grid; grid-template-columns: 32px 1fr auto 34px auto; align-items: center; gap: 6px; }
+.berry-plan-row b { text-align: center; font-size: 18px; }
+.berry-plan-sum { font-weight: 800; margin: 4px 0; color: #c0392b; }
+.berry-plan-sum.ok { color: #2a7a2a; }
+/* 📖 방명록 (2026-11-14) */
+.guestbook-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.guestbook-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border-radius: 12px; border: 2px solid #e6dcc0; background: #fffaf0; color: #253; font-size: 12px; min-height: 92px; justify-content: center; }
+.guestbook-cell.blank { background: #eef1ea; border-style: dashed; color: #9aa69a; font-size: 26px; font-weight: 800; }
+.guestbook-mon { height: 48px; display: grid; place-items: center; }
+.guest-page { display: flex; gap: 12px; align-items: center; }
+.guest-page p { margin: 2px 0; }
+.guest-page-mon { width: 96px; height: 96px; display: grid; place-items: center; background: #eef7ea; border-radius: 16px; flex: none; }
+.guest-from { font-size: 12px; opacity: .75; }
+.guest-stamps { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border-radius: 12px; background: #fdf3df; }
+.guest-stamps span { font-size: 20px; opacity: .18; filter: grayscale(1); }
+.guest-stamps span.on { opacity: 1; filter: none; transform: rotate(-12deg); }
+.guest-knows p, .guest-lines p { margin: 2px 0; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.guestbook-mon img { width: 48px; height: 48px; object-fit: contain; }
+.guest-page-mon img { width: 84px; height: 84px; object-fit: contain; }

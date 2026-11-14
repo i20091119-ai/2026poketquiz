@@ -471,7 +471,7 @@ export async function POST(request: Request) {
           await mutateState(state => { simVillageMats(state, 10); return { result: null, changed: true }; }, SIM_PLAYER);
           return json({ message: '시험용 기록에 재료를 종류마다 10개씩 넣었어요. 아이 화면을 새로고침해 주세요.' });
         }
-        if (['berries', 'berry99', 'study', 'stone', 'reviewDue', 'dexFull', 'levelUp', 'levelReset', 'tools', 'toolsAlmost'].includes(op)) {
+        if (['berries', 'berry99', 'study', 'stone', 'reviewDue', 'dexFull', 'levelUp', 'levelReset', 'tools', 'toolsAlmost', 'legacyMet', 'bookGuests', 'missionWeek'].includes(op)) {
           await loadGrowthRules();
           const bank = op === 'reviewDue' ? await activeBank() : null;
           const { result: msg } = await mutateState(state => ({ result: simVillageCraft(state, op, bank, today), changed: true }), SIM_PLAYER);

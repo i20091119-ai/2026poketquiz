@@ -35,13 +35,13 @@ export function VillageReport({ village }: { village: VillageOverview }) {
   return (
     <section className="panel parent-section">
       <h2>🏡 포켓몬 마을</h2>
-      <p className="muted">오늘의 미션(또는 복습)을 끝내면 열려요. 재료는 정답(확률)·미션 끝·마을에서 줍기로만 모이고, 볼·열매·전설 조각으로는 바뀌지 않아요. 손님은 &ldquo;만남&rdquo;이라 가진 포켓몬에 들어가지 않아요.</p>
+      <p className="muted">오늘의 미션(또는 복습)을 끝내면 열려요. 재료는 정답(확률)·미션 끝·마을에서 줍기로만 모이고, 볼·열매·전설 조각으로는 바뀌지 않아요. 손님·낚시·벌레잡기에서 만난 포켓몬은 마을 📖 방명록에 남고, 가진 포켓몬·도감에는 들어가지 않아요.</p>
       <div className="parent-summary">
         <span>오늘 {village.open ? '열림' : '잠김(미션 전)'}</span>
         <span>오늘 마을 {used}분{village.time.allowedMinutes !== null ? ` / ${village.time.allowedMinutes}분` : ''}</span>
         <span>지금까지 받은 재료 {village.gained}개</span>
-        <span>만난 손님 {village.met}마리</span>
-        {village.level && <span>🏡 마을 레벨 {village.level.level} (⭐ {village.level.next ? `${village.level.into}/${village.level.next}` : '최고'})</span>}
+        <span>📖 방명록 {village.met}마리</span>
+        {village.level && <span>🏡 마을 레벨 {village.level.level} (🏠 마을점수 {village.level.next ? `${village.level.into}/${village.level.next}` : '최고'})</span>}
       </div>
       {!village.started ? <p className="muted">아직 마을에 들어간 적이 없어요.</p> : <>
         <p>재료: {MATERIALS.map(k => `${MATERIAL_INFO[k].name} ${village.mats[k]}`).join(' · ')}</p>
@@ -185,7 +185,7 @@ export function VillageSimTools({ busy, call, reload }: { busy: boolean; call: C
         <button className="secondary small" disabled={busy} onClick={() => void run('dexFull')}>보통~희귀 포켓몬 도감 다 채우기(볼 대체 확인)</button>
       </div>
       <b>🏡 마을 레벨 시험</b>
-      <p className="muted">별을 채워 다음 레벨로 올리면 🔑 열쇠가 1개 생기고, 아이 화면 마을에서 열 땅을 고르는 창이 떠요(지금 열린 땅에 붙은 왼쪽·오른쪽·아래 중 하나).</p>
+      <p className="muted">마을점수를 채워 다음 레벨로 올리면 🔑 열쇠가 1개 생기고, 아이 화면 마을에서 열 땅을 고르는 창이 떠요(지금 열린 땅에 붙은 왼쪽·오른쪽·아래 중 하나).</p>
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('levelUp')}>다음 레벨로</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('levelReset')}>레벨 1로 되돌리기</button>
@@ -194,6 +194,12 @@ export function VillageSimTools({ busy, call, reload }: { busy: boolean; call: C
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('tools')}>낚싯대·잠자리채 새것으로</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('toolsAlmost')}>한 번만 더 쓰면 부서지게</button>
+      </div>
+      <b>📖 방명록 · 반짝돌 · 철 시험 (2026-11-14 규칙)</b>
+      <div className="button-row">
+        <button className="secondary small" disabled={busy} onClick={() => void run('legacyMet')}>예전 &ldquo;만남&rdquo; 기록 만들기(옮기기 확인)</button>
+        <button className="secondary small" disabled={busy} onClick={() => void run('bookGuests')}>방명록에 도감 없는 손님 3마리</button>
+        <button className="secondary small" disabled={busy} onClick={() => void run('missionWeek')}>지난주 미션 5일로(철 확인)</button>
       </div>
     </div>
   );

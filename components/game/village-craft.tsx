@@ -24,10 +24,23 @@ export const IronIcon = ({ scale = 2 }: { scale?: number }) => <ObjectSprite kin
 export const SparkleIcon = ({ scale = 2 }: { scale?: number }) => <ObjectSprite kind="matSparkle" scale={scale} />;
 
 /** 모자란 것을 초1 말로 (다 있으면 null) — 엔진의 craftShortage와 같은 말 */
-export function shortageText(craft: Craft, stone: number, berry: PotionKind, cost: RecipeCost): string | null {
+/** 가진 열매 합 (종류 상관없이) */
+export const berryTotal = (craft: Craft) => BERRY_KINDS.reduce((a, k) => a + (craft.berries[k] ?? 0), 0);
+/** 쓸 열매 정하기: 많이 가진 것부터 (엔진 berryPlan과 같은 순서) */
+export function autoBerryPlan(craft: Craft, need: number): Partial<Record<PotionKind, number>> {
+  const plan: Partial<Record<PotionKind, number>> = {};
+  let left = need;
+  for (const k of [...BERRY_KINDS].sort((a, b) => (craft.berries[b] ?? 0) - (craft.berries[a] ?? 0))) {
+    if (left <= 0) break;
+    const n = Math.min(left, craft.berries[k] ?? 0);
+    if (n > 0) { plan[k] = n; left -= n; }
+  }
+  return plan;
+}
+export function shortageText(craft: Craft, stone: number, cost: RecipeCost): string | null {
   const need: string[] = [];
-  const b = craft.berries[berry] ?? 0;
-  if (b < cost.berry) need.push(`${POTIONS[berry].label} ${cost.berry - b}개`);
+  const b = berryTotal(craft);
+  if (b < cost.berry) need.push(`열매 ${cost.berry - b}개`);
   if (stone < cost.stone) need.push(`돌멩이 ${cost.stone - stone}개`);
   if (craft.iron < cost.iron) need.push(`철 ${cost.iron - craft.iron}개`);
   if (craft.sparkle < cost.sparkle) need.push(`반짝돌 ${cost.sparkle - craft.sparkle}개`);
@@ -47,18 +60,19 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
 }) {
   const craft = view.village.craft;
   const stone = view.village.mats.stone;
-  const most = [...BERRY_KINDS].sort((a, b) => (craft.berries[b] ?? 0) - (craft.berries[a] ?? 0))[0];
-  const [berry, setBerry] = useState<PotionKind>(most);
   const [note, setNote] = useState('');
+  // 열매 고르기 단계: 많이 가진 것부터 자동으로 채운 뒤 +/−로 바꿀 수 있음
+  const [planning, setPlanning] = useState<{ recipe: RecipeKey; plan: Partial<Record<PotionKind, number>> } | null>(null);
   const [making, setMaking] = useState<RecipeKey | null>(null);
   const [made, setMade] = useState<{ recipe: RecipeKey; ballId?: string } | null>(null);
   const treesFull = craft.trees.length + craft.saplings >= craft.treeMax;
 
-  async function make(recipe: RecipeKey) {
+  async function make(recipe: RecipeKey, berries: Partial<Record<PotionKind, number>>) {
     setNote('');
+    setPlanning(null);
     setMaking(recipe);
     const [r] = await Promise.all([
-      act<{ message: string; ballId?: string }>({ type: 'villageMake', recipe, berry, stay: true }),
+      act<{ message: string; ballId?: string }>({ type: 'villageMake', recipe, berries, stay: true }),
       new Promise(res => window.setTimeout(res, 900)), // 뚝딱뚝딱 연출
     ]);
     setMaking(null);
@@ -74,10 +88,37 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       {made.recipe === 'sapling'
         ? <><p className="village-sheet-note">마을의 빈 나무 자리에 심으면 다음 날부터 열매가 열려.</p>
           <button className="primary glow" onClick={onPlant}>🌱 심으러 가기</button></>
-        : <><p className="village-sheet-note">열면 아직 못 만난 포켓몬이 나와! 가방에 넣어 두고 나중에 열어도 돼.</p>
+        : <><p className="village-sheet-note">열면 아직 도감에 없는 포켓몬이 나와! 📖 방명록에 온 친구가 먼저 나와. 가방에 넣어 두고 나중에 열어도 돼.</p>
           {ball && onOpenBall && <button className="primary glow" onClick={() => onOpenBall(ball)}>지금 열어 보기!</button>}</>}
       <button className="secondary" onClick={() => setMade(null)}>제작대로 돌아가기</button>
     </div>;
+  }
+
+  if (planning) {
+    const need = craft.recipes[planning.recipe].berry;
+    const sum = BERRY_KINDS.reduce((a, k) => a + (planning.plan[k] ?? 0), 0);
+    const set = (k: PotionKind, d: number) => setPlanning(p => {
+      if (!p) return p;
+      const now = p.plan[k] ?? 0;
+      const next = Math.max(0, Math.min(craft.berries[k] ?? 0, now + d));
+      if (d > 0 && sum >= need) return p;
+      return { ...p, plan: { ...p.plan, [k]: next } };
+    });
+    return <>
+      <h3>🍎 어떤 열매를 쓸까?</h3>
+      <p className="village-sheet-note">{RECIPE_INFO[planning.recipe].name}에는 열매 <b>{need}개</b>가 필요해. 종류는 섞어도 돼! 많이 가진 열매부터 골라 두었어.</p>
+      <div className="berry-plan">{BERRY_KINDS.filter(k => (craft.berries[k] ?? 0) > 0).map(k => (
+        <div key={k} className="berry-plan-row">
+          <BerryIcon kind={k} /><span>{POTIONS[k].label} <small>({craft.berries[k]}개 있음)</small></span>
+          <button className="secondary small" aria-label="빼기" onClick={() => set(k, -1)}>−</button>
+          <b>{planning.plan[k] ?? 0}</b>
+          <button className="secondary small" aria-label="더하기" onClick={() => set(k, 1)}>+</button>
+        </div>
+      ))}</div>
+      <p className={'berry-plan-sum' + (sum === need ? ' ok' : '')}>{sum} / {need}개 {sum === need ? '✅' : sum < need ? `(${need - sum}개 더 골라 줘)` : ''}</p>
+      <button className="primary big-button" disabled={busy || sum !== need} onClick={() => void make(planning.recipe, planning.plan)}>🔨 만들기!</button>
+      <button className="secondary" onClick={() => setPlanning(null)}>제작대로 돌아가기</button>
+    </>;
   }
 
   return <>
@@ -87,21 +128,21 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
       <span><IronIcon scale={1} /> 철 <b>{craft.iron}</b></span>
       <span><SparkleIcon scale={1} /> 반짝돌 <b>{craft.sparkle}</b></span>
     </div>
-    <p className="village-sheet-note">어떤 열매로 만들까? (한 종류만 써요)</p>
-    <div className="craft-berries" role="radiogroup" aria-label="열매 고르기">
+    <p className="village-sheet-note">열매는 <b>종류 상관없이 합쳐서</b> 써. 지금 열매 <b>{berryTotal(craft)}개</b></p>
+    <div className="craft-berries" aria-label="가진 열매">
       {BERRY_KINDS.map(k => (
-        <button key={k} role="radio" aria-checked={berry === k} className={'craft-berry' + (berry === k ? ' on' : '')} onClick={() => { setBerry(k); setNote(''); }}>
+        <span key={k} className={'craft-berry' + ((craft.berries[k] ?? 0) ? '' : ' none')}>
           <BerryIcon kind={k} /><small>{POTIONS[k].label}</small><b>{craft.berries[k] ?? 0}/{craft.berryCap}</b>
-        </button>
+        </span>
       ))}
     </div>
     <div className="village-recipes">
       {RECIPES.map(k => {
         const cost = craft.recipes[k];
-        const short = shortageText(craft, stone, berry, cost);
+        const short = shortageText(craft, stone, cost);
         const blocked = k === 'sapling' && treesFull ? `지금은 열매나무를 ${craft.treeMax}그루까지 키울 수 있어! 마을 레벨이 오르면 자리가 늘어나.` : null;
         const parts: { key: string; icon: React.ReactNode; have: number; need: number }[] = [
-          { key: 'berry', icon: <BerryIcon kind={berry} size={20} />, have: craft.berries[berry] ?? 0, need: cost.berry },
+          { key: 'berry', icon: <span aria-label="열매">🍎</span>, have: berryTotal(craft), need: cost.berry },
           { key: 'stone', icon: <MaterialIcon kind="stone" scale={1} />, have: stone, need: cost.stone },
           { key: 'iron', icon: <IronIcon scale={1} />, have: craft.iron, need: cost.iron },
           { key: 'sparkle', icon: <SparkleIcon scale={1} />, have: craft.sparkle, need: cost.sparkle },
@@ -114,7 +155,7 @@ export function WorkbenchSheet({ view, busy, act, onToast, onOpenBall, onPlant }
               <small>{k === 'sapling' ? `열매나무 ${craft.trees.length}그루${craft.saplings ? ` · 묘목 ${craft.saplings}개` : ''} (최대 ${craft.treeMax})` : RECIPE_INFO[k].note}</small></span>
             <span className="village-recipe-btns">
               <button className={'primary small' + (short || blocked ? ' dim' : '')} disabled={busy} aria-disabled={!!(short || blocked)}
-                onClick={() => { if (short || blocked) setNote(blocked ?? short!); else void make(k); }}>만들기</button>
+                onClick={() => { if (short || blocked) setNote(blocked ?? short!); else { setNote(''); setPlanning({ recipe: k, plan: autoBerryPlan(craft, cost.berry) }); } }}>만들기</button>
             </span>
           </div>
         );
@@ -170,7 +211,7 @@ export function CraftIntro({ open, view, onClose }: { open: boolean; view: Child
     <>
       <p className="intro-title">공부로 얻는 재료</p>
       <div className="feed-intro-pics"><IronIcon scale={4} /><SparkleIcon scale={4} /></div>
-      <p className="intro-text"><b>철</b>은 훈련, <b>반짝돌</b>은 복습 문제를 맞히면 받아</p>
+      <p className="intro-text"><b>철</b>은 훈련이나 미션 5일, <b>반짝돌</b>은 복습 문제를 맞히거나 미션을 하나도 안 틀리면 받아</p>
     </>,
     <>
       <p className="intro-title">열매 99개의 꿈</p>
