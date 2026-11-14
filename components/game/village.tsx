@@ -51,7 +51,7 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
       <span className="village-strip-icon">{v.open ? '🏡' : '🔒'}</span>
       <span className="village-strip-text">
         <b>포켓몬 마을</b>
-        <small>{v.open ? (v.guests.length ? `손님 ${v.guests.length}마리가 놀러 왔어!` : '마을이 열렸어! 놀러 가자') : `오늘 미션을 끝내면 열려요 (${v.mission.done}/${v.mission.total})`}</small>
+        <small>{v.open ? (v.guests.length ? `손님 ${v.guests.length}마리가 놀러 왔어!` : '마을이 열렸어! 놀러 가자') : `오늘 미션을 끝내면 열려 (${v.mission.done}/${v.mission.total})`}</small>
       </span>
     </button>
   );
@@ -320,8 +320,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           {v.open ? <p className="village-lock-text">{enterFailed
             ? (v.time.allowedMinutes !== null && v.time.usedSeconds >= v.time.allowedMinutes * 60 ? '⏰ 오늘 마을 시간은 끝났어. 내일 또 놀러 오자!' : '마을에 들어가지 못했어. 닫고 다시 눌러 줘.')
             : '마을로 들어가는 중…'}</p> : <>
-            <p className="village-lock-text">🔒 오늘 미션을 끝내면 열려요</p>
-            {m.review && <p className="village-lock-sub">📚 오늘은 복습하는 날! 복습을 끝내도 열려요.</p>}
+            <p className="village-lock-text">🔒 오늘 미션을 끝내면 열려</p>
+            {m.review && <p className="village-lock-sub">📚 오늘은 복습하는 날! 복습을 끝내도 열려.</p>}
             <div className="village-lock-bar"><Progress value={m.total ? (m.done / m.total) * 100 : 0} /><span>{m.done} / {m.total || '?'}</span></div>
           </>}
           <button className="primary" onClick={close}>{v.open ? '닫기' : '미션 하러 가기'}</button>
@@ -534,7 +534,7 @@ function CraftSheet({ view, busy, act, onToast }: {
         const need = Object.entries(info.need).map(([k, n]) => `${CRAFT_INFO[k as CraftKey].name} ${n}`).join(' + ');
         return <small key={h}>{info.emoji} <b>{info.name}</b> = {need} → {info.typeText} 손님</small>;
       })}
-      <small><MaterialIcon kind="twig" scale={1} /> 나뭇가지는 🧰 도구(낚싯대·잠자리채)를 만들 때 써요!</small>
+      <small><MaterialIcon kind="twig" scale={1} /> 나뭇가지는 🧰 도구(낚싯대·잠자리채)를 만들 때 써!</small>
     </div>
   </>;
 }
@@ -547,13 +547,15 @@ function SaplingRecipe({ view, busy, act, onToast }: { view: ChildView; busy: bo
   const stone = view.village.mats.stone;
   const full = c.trees.length + c.saplings >= c.treeMax;
   const short = [berries < cost.berry && `열매 ${cost.berry - berries}개`, stone < cost.stone && `돌멩이 ${cost.stone - stone}개`].filter(Boolean).join(', ');
-  const why = full ? `지금은 열매나무를 ${c.treeMax}그루까지 키울 수 있어! 열쇠로 새 땅을 열면 자리가 늘어나.` : short ? `${short}가 더 필요해!` : null;
+  const fullText = `나무 자리가 꽉 찼어 (나무 ${c.trees.length}${c.saplings ? ` + 가방 ${c.saplings}` : ''})`;
+  const why = full ? `${fullText}. 열쇠로 새 땅을 열면 자리가 늘어나!` : short ? `${short}가 더 필요해!` : null;
   return (
     <div className={'village-recipe' + (why ? ' short' : '')}>
       <span className="village-recipe-icon"><ObjectSprite kind="sapling" scale={3} /></span>
       <span><b>🌳 열매나무 묘목</b>
-        <small className="village-cost"><span className={berries >= cost.berry ? 'ok' : 'lack'}>🍎 {berries}/{cost.berry}</span><span className={stone >= cost.stone ? 'ok' : 'lack'}><MaterialIcon kind="stone" scale={1} /> {stone}/{cost.stone}</span></small>
-        <small>열매나무 {c.trees.length}그루{c.saplings ? ` · 묘목 ${c.saplings}개` : ''} (최대 {c.treeMax}) · 열매는 섞어서 써</small></span>
+        <small className="village-cost"><span className={berries >= cost.berry ? 'ok' : 'lack'}><span className="cost-word">열매</span> {berries}/{cost.berry}</span><span className={stone >= cost.stone ? 'ok' : 'lack'}><MaterialIcon kind="stone" scale={1} /> {stone}/{cost.stone}</span></small>
+        <small>열매나무 {c.trees.length}그루{c.saplings ? ` · 묘목 ${c.saplings}개` : ''} (최대 {c.treeMax}) · 열매는 섞어서 써</small>
+        {full && <b className="recipe-why">🌳 {fullText}</b>}</span>
       <span className="village-recipe-btns">
         <button className={'primary small' + (why ? ' dim' : '')} disabled={busy} aria-disabled={!!why}
           onClick={async () => { if (why) { onToast(why); return; } const r = await act<{ message: string }>({ type: 'villageMake', recipe: 'sapling', stay: true }); if (r) onToast('열매나무 묘목을 만들었어! 🌱 🎒 가방에서 심어 보자.'); }}>만들기</button>
@@ -651,7 +653,7 @@ function DecorTakeSheet({ view, at, busy, act, onToast, onDone }: {
   const d = i >= 0 ? view.village.decor[i] : null;
   const t = d ? -1 : terrainIndexAt(view.village.terrain, at.x, at.y);
   const ground = t >= 0 ? DECOR_ITEMS.find(k => DECOR_INFO[k].ground === view.village.terrain[t].ground) : undefined;
-  if (!d && !ground) return <p className="village-sheet-note">여기에는 꾸미기 물건이 없어요.</p>;
+  if (!d && !ground) return <p className="village-sheet-note">여기에는 꾸미기 물건이 없어.</p>;
   const take = async () => { const r = await act<{ message: string }>({ type: 'decorTake', x: at.x, y: at.y, stay: true }); if (r) { onToast(r.message); onDone(); } };
   if (!d && ground) return <>
     <h3><DecorIcon item={ground} /> {DECOR_INFO[ground].name}</h3>

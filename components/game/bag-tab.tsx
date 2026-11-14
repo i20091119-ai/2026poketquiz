@@ -47,7 +47,7 @@ export function BagTab({ view, busy, onOpenBall, onUsePotion }: {
 
       {crafted.length > 0 && (
         <section className="panel bag">
-          <h3>🔨 제작 볼 {crafted.length}개 <small>마을 제작대에서 만든 볼이야. 아직 못 만난 포켓몬이 나와!</small></h3>
+          <h3>🔮 제작 볼 {crafted.length}개 <small>마을 제작대에서 만든 볼이야. 아직 도감에 없는 포켓몬이 나와! 마을에서 만난 포켓몬이 먼저 나와.</small></h3>
           <div className="bag-list">
             {crafted.map(b => (
               <button key={b.id} className="bag-ball" disabled={busy} onClick={() => onOpenBall({ id: b.id, kind: b.kind, crafted: true })}>

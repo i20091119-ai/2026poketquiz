@@ -1,6 +1,6 @@
 // 화면에 보여 주는 버전 이름. 새 기능을 올릴 때 여기 숫자와 아래 "바뀐 것(UPDATES)"만 고치면 됩니다.
 // 날짜는 인터넷에 올릴 때(만들 때) 자동으로 들어갑니다 (vite.config.ts 의 __BUILD_DATE__).
-export const APP_VERSION = '1.38';
+export const APP_VERSION = '1.39';
 
 /** 하루치 바뀐 것. date는 'YYYY-MM-DD', version은 그날 마지막으로 올린 버전 이름 */
 export interface UpdateDay {
@@ -20,9 +20,9 @@ export interface UpdateDay {
 export const UPDATES: UpdateDay[] = [
   {
     date: '2026-11-14',
-    version: '1.38',
+    version: '1.39',
     items: [
-      '🔮 제작대는 볼만(묘목은 🔨 만들기), 마을 포켓몬 그림 작게·서로 안 겹치게',
+      '🔮 제작대는 볼만(묘목은 만들기), 열매 수는 글자로·글씨 크게, 마을 말투는 반말로',
       '📖 방명록(손님 기록)·🏠 마을점수, 볼 열매는 섞어 쓰기, 반짝돌·철 얻는 곳 추가',
       '🎣 낚시·🦋 벌레잡기: 낚싯대·잠자리채를 만들어 15번 사용, 재료·열매·포켓몬 만남',
       '🏡 마을 레벨: 레벨마다 🔑 열쇠로 붙은 땅 하나를 골라 열어요 (15구역, 안내 5장)',

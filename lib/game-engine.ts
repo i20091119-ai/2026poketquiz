@@ -1263,7 +1263,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
 
     case 'villageEnter': {
       needStarter();
-      if (!villageOpenToday(state, ctx.today)) fail('오늘 미션을 끝내면 마을이 열려요.');
+      if (!villageOpenToday(state, ctx.today)) fail('오늘 미션을 끝내면 마을이 열려!');
       villageTimeCheck(state, ctx.today);
       const v = village(state);
       v.enteredDate = ctx.today;
@@ -1279,9 +1279,9 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const rules = villageRules();
       const spots = dayPickups(ctx.today, rules.pickPerDay, villageOpen(state));
       const found = spots.find(p => p.spot === action.spot);
-      if (!found) fail('여기에는 재료가 없어요.');
+      if (!found) fail('여기에는 재료가 없어.');
       if (v.picked?.date !== ctx.today) v.picked = { date: ctx.today, spots: [] };
-      if (v.picked.spots.includes(action.spot)) fail('이미 주웠어요.');
+      if (v.picked.spots.includes(action.spot)) fail('이미 주웠어.');
       if (v.picked.spots.length >= rules.pickPerDay) fail('오늘은 다 주웠어! 내일 또 떨어져 있을 거야.');
       if ((v.mats[found.kind] ?? 0) >= rules.matCap) fail(`${eunNeun(MATERIAL_INFO[found.kind].name)} 가방에 가득 찼어! (최대 ${rules.matCap}개)`);
       v.picked.spots.push(action.spot);
@@ -1291,7 +1291,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'villageCraft': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!CRAFTS.includes(action.item)) fail('만들 것을 다시 골라 주세요.');
+      if (!CRAFTS.includes(action.item)) fail('만들 것을 다시 골라 줘.');
       const info = CRAFT_INFO[action.item];
       const cost = Object.entries(info.cost) as [MaterialKey, number][];
       const short = cost.find(([k, n]) => (v.mats[k] ?? 0) < n);
@@ -1303,11 +1303,11 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'villagePlace': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!Number.isInteger(action.cell) || action.cell < 0 || action.cell >= CELL_COUNT) fail('놓을 칸을 다시 골라 주세요.');
-      if (!CRAFTS.includes(action.item)) fail('놓을 것을 다시 골라 주세요.');
-      if (v.cells[action.cell]) fail('이미 놓여 있어요.');
+      if (!Number.isInteger(action.cell) || action.cell < 0 || action.cell >= CELL_COUNT) fail('놓을 칸을 다시 골라 줘.');
+      if (!CRAFTS.includes(action.item)) fail('놓을 것을 다시 골라 줘.');
+      if (v.cells[action.cell]) fail('이미 놓여 있어.');
       { const p = cellPos(action.cell); if (!isOpenCell(p.x, p.y, villageOpen(state))) fail(lockedText(p.x, p.y)); }
-      if ((v.items[action.item] ?? 0) < 1) fail(`${iGa(CRAFT_INFO[action.item].name)} 가방에 없어요. 먼저 만들어 보자!`);
+      if ((v.items[action.item] ?? 0) < 1) fail(`${iGa(CRAFT_INFO[action.item].name)} 가방에 없어. 먼저 만들어 보자!`);
       v.items[action.item] = (v.items[action.item] ?? 0) - 1;
       v.cells[action.cell] = action.item;
       const made = updateHabitats(v, ctx.today);
@@ -1316,7 +1316,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villageTake': {
       const v = villageAccess(state, ctx.today, action.stay, random);
       const item = Number.isInteger(action.cell) ? v.cells[action.cell] : null;
-      if (!item) fail('여기에는 아무것도 없어요.');
+      if (!item) fail('여기에는 아무것도 없어.');
       v.cells[action.cell] = null;
       v.items[item] = (v.items[item] ?? 0) + 1;
       updateHabitats(v, ctx.today);
@@ -1324,7 +1324,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'decorCraft': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!DECOR_ITEMS.includes(action.item)) fail('만들 것을 다시 골라 주세요.');
+      if (!DECOR_ITEMS.includes(action.item)) fail('만들 것을 다시 골라 줘.');
       const info = DECOR_INFO[action.item];
       const bag = v.decorBag ??= {};
       if ((bag[action.item] ?? 0) >= DECOR_BAG_MAX) fail(`${iGa(info.name)} 가방에 가득 찼어! 먼저 마을에 놓아 보자.`);
@@ -1338,22 +1338,22 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'decorPlace': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!DECOR_ITEMS.includes(action.item)) fail('놓을 것을 다시 골라 주세요.');
+      if (!DECOR_ITEMS.includes(action.item)) fail('놓을 것을 다시 골라 줘.');
       const info = DECOR_INFO[action.item];
       const bag = v.decorBag ??= {};
       const decor = v.decor ??= [];
       const terrain = v.terrain ??= [];
-      if ((bag[action.item] ?? 0) < 1) fail(`${iGa(info.name)} 가방에 없어요. 먼저 만들어 보자!`);
+      if ((bag[action.item] ?? 0) < 1) fail(`${iGa(info.name)} 가방에 없어. 먼저 만들어 보자!`);
       const x = Number(action.x), y = Number(action.y);
-      if (!Number.isInteger(x) || !Number.isInteger(y)) fail('놓을 자리를 다시 골라 주세요.');
+      if (!Number.isInteger(x) || !Number.isInteger(y)) fail('놓을 자리를 다시 골라 줘.');
       if (info.ground) {
         // 땅 바꾸기: 그 칸의 땅을 바꿈
-        if (terrain.length >= TERRAIN_MAX) fail(`땅은 ${TERRAIN_MAX}칸까지 바꿀 수 있어요. 한 칸을 되돌리고 다시 해 보자.`);
+        if (terrain.length >= TERRAIN_MAX) fail(`땅은 ${TERRAIN_MAX}칸까지 바꿀 수 있어. 한 칸을 되돌리고 다시 해 보자.`);
         const problem = decorSpotProblem(decor, terrain, action.item, null, x, y, villageOpen(state));
         if (problem) fail(problem);
         terrain.push({ x, y, ground: info.ground });
       } else {
-        if (decor.length >= DECOR_MAX) fail(`마을에는 ${DECOR_MAX}개까지 놓을 수 있어요. 하나를 가방에 넣고 다시 놓아 보자.`);
+        if (decor.length >= DECOR_MAX) fail(`마을에는 ${DECOR_MAX}개까지 놓을 수 있어. 하나를 가방에 넣고 다시 놓아 보자.`);
         const variant = Number.isInteger(action.variant) && action.variant! >= 0 && action.variant! < info.variants.length ? action.variant! : 0;
         const problem = decorSpotProblem(decor, terrain, action.item, info.variants[variant], x, y, villageOpen(state));
         if (problem) fail(problem);
@@ -1376,7 +1376,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       }
       // 땅 바꾸기 되돌리기 (위에 물건이 있으면 먼저 치워야 함)
       const t = terrainIndexAt(terrain, x, y);
-      if (t < 0) fail('여기에는 꾸미기 물건이 없어요.');
+      if (t < 0) fail('여기에는 꾸미기 물건이 없어.');
       if (decor.some(d => decorCells(d).some(c => c.x === x && c.y === y))) fail('위에 놓은 물건을 먼저 가방에 넣어 줘.');
       const [cell] = terrain.splice(t, 1);
       const item = DECOR_ITEMS.find(k => DECOR_INFO[k].ground === cell.ground);
@@ -1388,7 +1388,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       const v = villageAccess(state, ctx.today, action.stay, random);
       const trees = ensureTrees(state, v, ctx.today);
       const tree = trees.find(t => t.spot === action.spot);
-      if (!tree) fail('여기에는 열매나무가 없어요.');
+      if (!tree) fail('여기에는 열매나무가 없어.');
       if (v.harvested?.date !== ctx.today) v.harvested = { date: ctx.today, spots: [] };
       if (v.harvested.spots.includes(tree.spot)) fail('이 나무는 오늘 다 땄어! 내일 또 열려.');
       if (!treeGrown(tree, ctx.today)) fail('오늘 심은 나무야. 내일부터 열매가 열려!');
@@ -1402,7 +1402,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'villageGather': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!Number.isInteger(action.rock) || !GATHER_ROCKS[action.rock]) fail('여기에는 바위가 없어요.');
+      if (!Number.isInteger(action.rock) || !GATHER_ROCKS[action.rock]) fail('여기에는 바위가 없어.');
       if (!isOpenCell(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y, villageOpen(state))) fail(lockedText(GATHER_ROCKS[action.rock].x, GATHER_ROCKS[action.rock].y));
       const limit = craftRules().stoneDaily;
       if (v.gathered?.date !== ctx.today) v.gathered = { date: ctx.today, n: 0 };
@@ -1417,7 +1417,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villageTalk': {
       const v = villageAccess(state, ctx.today, action.stay, random);
       const guest = v.guests?.date === ctx.today ? v.guests.list.find(g => g.plot === action.plot) : undefined;
-      if (!guest) fail('지금은 손님이 없어요.');
+      if (!guest) fail('지금은 손님이 없어.');
       if (v.talked?.date !== ctx.today) v.talked = { date: ctx.today, plots: [] };
       const name = species(guest.species).name;
       if (v.talked.plots.includes(action.plot)) return { gift: null, message: `${name}: 오늘 정말 즐거웠어!` };
@@ -1450,7 +1450,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     }
     case 'villageMake': {
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!RECIPES.includes(action.recipe)) fail('만들 것을 다시 골라 주세요.');
+      if (!RECIPES.includes(action.recipe)) fail('만들 것을 다시 골라 줘.');
       const info = RECIPE_INFO[action.recipe];
       const cost = recipeCost(action.recipe);
       const treeMax = treeSpotsOpen(villageOpen(state)).length;
@@ -1483,8 +1483,8 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
       if ((v.saplings ?? 0) < 1) fail('묘목이 없어. 제작대에서 열매나무 묘목을 먼저 만들어 보자!');
       if (!BERRY_KINDS.includes(action.berry)) fail('어떤 열매나무로 키울지 골라 줘.');
       const trees = ensureTrees(state, v, ctx.today);
-      if (!Number.isInteger(action.spot) || !TREE_SPOTS[action.spot]) fail('여기에는 심을 수 없어요.');
-      if (!treeSpotsOpen(villageOpen(state)).includes(action.spot)) fail(isOpenCell(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y, villageOpen(state)) ? '여기에는 심을 수 없어요.' : lockedText(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y));
+      if (!Number.isInteger(action.spot) || !TREE_SPOTS[action.spot]) fail('여기에는 심을 수 없어.');
+      if (!treeSpotsOpen(villageOpen(state)).includes(action.spot)) fail(isOpenCell(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y, villageOpen(state)) ? '여기에는 심을 수 없어.' : lockedText(TREE_SPOTS[action.spot].x, TREE_SPOTS[action.spot].y));
       if (trees.some(t => t.spot === action.spot)) fail('여기에는 벌써 나무가 있어.');
       trees.push({ spot: action.spot, berry: action.berry, since: ctx.today });
       v.saplings = (v.saplings ?? 0) - 1;
@@ -1493,7 +1493,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'toolCraft': {
       // 낚싯대·잠자리채 만들기 (하나씩만 가짐, 부서지면 다시 만듦)
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!TOOLS.includes(action.tool)) fail('만들 도구를 다시 골라 주세요.');
+      if (!TOOLS.includes(action.tool)) fail('만들 도구를 다시 골라 줘.');
       const info = TOOL_INFO[action.tool];
       if ((v.tools?.[action.tool] ?? 0) > 0) fail(`${iGa(info.name)} 벌써 있어! 다 쓰면 다시 만들 수 있어.`);
       const cost = Object.entries(toolCost(action.tool)) as [MaterialKey, number][];
@@ -1507,12 +1507,12 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villageCatch': {
       // 낚시(물 칸)·벌레잡기(열린 땅): 쓸 때마다 1번 닳고, 맞히면 재료(가끔 열매) + 낮은 확률로 포켓몬 만남
       const v = villageAccess(state, ctx.today, action.stay, random);
-      if (!TOOLS.includes(action.tool)) fail('도구를 다시 골라 주세요.');
+      if (!TOOLS.includes(action.tool)) fail('도구를 다시 골라 줘.');
       const info = TOOL_INFO[action.tool];
       const left = v.tools?.[action.tool] ?? 0;
       if (left < 1) fail(`${iGa(info.name)} 없어! 🔨 만들기의 🧰 도구에서 만들어 보자.`);
       const x = Number(action.x), y = Number(action.y);
-      if (!Number.isInteger(x) || !Number.isInteger(y) || !isOpenCell(x, y, villageOpen(state))) fail('여기서는 할 수 없어요.');
+      if (!Number.isInteger(x) || !Number.isInteger(y) || !isOpenCell(x, y, villageOpen(state))) fail('여기서는 할 수 없어.');
       if (action.tool === 'rod' && groundAt(x, y, v.cells, v.terrain) !== 'water') fail('낚시는 물가에서만 할 수 있어!');
       const rest = left - 1;
       v.tools = { ...v.tools, [action.tool]: rest };
@@ -1565,7 +1565,7 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'openCraftedBall': {
       const v = state.village;
       const index = v?.craftedBalls?.findIndex(b => b.id === action.id) ?? -1;
-      if (!v || index < 0) fail('볼을 찾을 수 없어요.');
+      if (!v || index < 0) fail('볼을 찾을 수 없어.');
       const [ball] = v.craftedBalls!.splice(index, 1);
       const log = v.craftLog?.find(l => l.ballId === ball.id);
       const found = pickCraftedSpecies(state, ball.kind, random, ctx.shinyChance?.[ball.kind]);
@@ -2359,7 +2359,7 @@ export function berryPlan(state: GameState, need: number, want?: Partial<Record<
   if (want) {
     const entries = Object.entries(want).filter(([k, n]) => BERRY_KINDS.includes(k as PotionKind) && Number.isInteger(n) && (n as number) > 0) as [PotionKind, number][];
     const ok = entries.reduce((a, [, n]) => a + n, 0) === need && entries.every(([k, n]) => berryOf(state, k) >= n);
-    if (!ok) fail('쓸 열매 수가 맞지 않아요. 다시 골라 주세요.');
+    if (!ok) fail('쓸 열매 수가 맞지 않아. 다시 골라 줘.');
     return Object.fromEntries(entries);
   }
   const plan: Partial<Record<PotionKind, number>> = {};
@@ -2447,10 +2447,10 @@ function villageTimeCheck(state: GameState, today: string) {
  * 나가면 다시 잠김 (들어가기는 villageEnter가 오늘 열렸는지 봄).
  */
 function villageAccess(state: GameState, today: string, stay: boolean | undefined, random: Random): VillageState {
-  if (!state.partner) fail('먼저 첫 파트너를 골라 주세요.');
+  if (!state.partner) fail('먼저 첫 파트너를 골라 줘.');
   const v = village(state);
   const inside = !!stay && (v.enteredDate === today || v.enteredDate === shiftDate(today, -1));
-  if (!villageOpenToday(state, today) && !inside) fail('오늘 미션을 끝내면 마을이 열려요.');
+  if (!villageOpenToday(state, today) && !inside) fail('오늘 미션을 끝내면 마을이 열려!');
   if (!inside || v.enteredDate === today) villageTimeCheck(state, today);
   syncVillage(state, today, random);
   meetGuests(state, today);
