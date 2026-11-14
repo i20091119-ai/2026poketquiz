@@ -1225,3 +1225,7 @@ img.anim-mon.still { width: 120px; height: 120px; bottom: -14px; }
 .decor-cost-table input { width: 52px; }
 .table-wrap { overflow-x: auto; max-width: 100%; }
 .village-placing > button { flex: none; white-space: nowrap; }
+/* 만들기 창 세 칸 (2026-11-14) */
+.village-make-tabs { display: flex; gap: 6px; }
+.village-make-tab { flex: 1; padding: 8px 4px; border: 2px solid #d9e4cb; border-radius: 12px; background: #fff; font: inherit; font-weight: 800; font-size: 14px; color: #3b5a3f; }
+.village-make-tab.on { border-color: #4f9a3d; background: #eaf7e2; color: #1f4a1a; }

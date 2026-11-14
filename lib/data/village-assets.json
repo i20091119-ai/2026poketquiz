@@ -9,7 +9,7 @@
   "objects": {
    "file": "/assets/village/objects.png",
    "width": 160,
-   "height": 160
+   "height": 176
   }
  },
  "ground": {
@@ -78,6 +78,28 @@
    "kind": "inner",
    "source": "outdoor",
    "label": "물가 안쪽 모서리"
+  },
+  "stoneSet": {
+   "rect": [
+    32,
+    32,
+    32,
+    32
+   ],
+   "kind": "set",
+   "source": "outdoor",
+   "label": "돌길 테두리 세트(흙길 모양 + 돌 무늬)"
+  },
+  "stoneIn": {
+   "rect": [
+    64,
+    32,
+    32,
+    32
+   ],
+   "kind": "inner",
+   "source": "outdoor",
+   "label": "돌길 안쪽 모서리"
   }
  },
  "objects": {
@@ -607,10 +629,40 @@
    "source": "isaiah",
    "label": "벤치"
   },
-  "matLeaf": {
+  "bushBig": {
    "rect": [
     112,
     128,
+    32,
+    32
+   ],
+   "cells": [
+    2,
+    2
+   ],
+   "foot": null,
+   "source": "armm",
+   "label": "큰 덤불 숲(초록 풀숲 서식지 완성)"
+  },
+  "bushSmall": {
+   "rect": [
+    144,
+    128,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "source": "armm",
+   "label": "작은 덤불(꾸미기)"
+  },
+  "matLeaf": {
+   "rect": [
+    0,
+    160,
     16,
     16
    ],
@@ -625,8 +677,8 @@
   },
   "matTwig": {
    "rect": [
-    128,
-    128,
+    16,
+    160,
     16,
     16
    ],
@@ -641,8 +693,8 @@
   },
   "matPetal": {
    "rect": [
-    144,
-    128,
+    32,
+    160,
     16,
     16
    ],
@@ -655,10 +707,42 @@
    "source": "outdoor",
    "label": "재료: 꽃잎"
   },
+  "matStone": {
+   "rect": [
+    48,
+    160,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "재료: 돌멩이"
+  },
+  "matMud": {
+   "rect": [
+    64,
+    160,
+    16,
+    16
+   ],
+   "cells": [
+    1,
+    1
+   ],
+   "foot": null,
+   "flat": true,
+   "source": "outdoor",
+   "label": "재료: 진흙"
+  },
   "matDrop": {
    "rect": [
-    0,
-    144,
+    80,
+    160,
     16,
     16
    ],
@@ -719,6 +803,12 @@
    "by": "Catch Challenger (색 고침: Sanglorian)",
    "license": "CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0)",
    "url": "https://github.com/alphaonex86/CatchChallenger-datapack"
+  },
+  "armm": {
+   "name": "Tuxemon \"Objects\" (둥근 덤불, 마을 나무색으로 바꿈)",
+   "by": "ArMM1998",
+   "license": "CC0 1.0 (출처 표시 안 해도 됨)",
+   "url": "https://wiki.tuxemon.org/index.php?title=File:Objects_by_ArMM1998.png"
   },
   "isaiah": {
    "name": "Tuxemon \"Outdoor odds and ends\"",

@@ -87,8 +87,8 @@ test('마을: 하루 줍기 3개, 종류별 최대 20개', () => {
   for (const p of spots) applyAction(state, { type: 'villagePick', spot: p.spot }, ctx(bank));
   assert.throws(() => applyAction(state, { type: 'villagePick', spot: spots[0].spot }, ctx(bank)), GameError);
   assert.equal(childView(state, bank, TODAY).village.pickLeft, 0);
-  state.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20 };
-  const s2 = started(bank); finishDaily(s2, bank); s2.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20 };
+  state.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20, stone: 20, mud: 20 };
+  const s2 = started(bank); finishDaily(s2, bank); s2.village!.mats = { leaf: 20, drop: 20, petal: 20, twig: 20, stone: 20, mud: 20 };
   assert.throws(() => applyAction(s2, { type: 'villagePick', spot: spots[0].spot }, ctx(bank)), /가득/);
 });
 

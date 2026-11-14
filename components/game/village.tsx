@@ -13,8 +13,8 @@ import {
 } from '@/lib/village';
 import { AnimMon } from './anim-mon';
 import { blockedCells, PLAYER } from '@/lib/village-map';
-import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, type DecorKey } from '@/lib/village-decor';
-import { CraftIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
+import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
+import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
 const VIEW_ROWS = 9;
@@ -45,7 +45,8 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 }
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
-type Sheet = null | 'bag' | 'decor' | { cell: number } | { decorAt: { x: number; y: number } };
+type Sheet = null | 'bag' | { cell: number } | { decorAt: { x: number; y: number } };
+type MakeTab = 'habitat' | DecorTab;
 type DecorPlacing = { item: DecorKey; variant: number };
 
 type ScreenProps = {
@@ -76,13 +77,15 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   const [placing, setPlacing] = useState<CraftKey | null>(null);
   // 꾸미기 놓기 모드: 놓을 수 있는 풀밭 칸이 반짝이고, 누르면 놓기
   const [decorPlacing, setDecorPlacing] = useState<DecorPlacing | null>(null);
+  // 만들기 창에서 마지막으로 본 칸 (서식지·꾸미기·땅 바꾸기)
+  const [makeTab, setMakeTab] = useState<MakeTab>('habitat');
   const [toast, setToast] = useState('');
   const [bubble, setBubble] = useState<{ id: string; text: string } | null>(null);
   const [timeUp, setTimeUp] = useState(false);
   const [enterFailed, setEnterFailed] = useState(false);
   const localSeconds = useRef(0);
   // 걸을 수 없는 칸 = 지도(집·나무·물) + 꾸미기 물건(울타리·벤치 등)
-  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor)]), [v.decor]);
+  const blocked = useMemo(() => new Set([...MAP_BLOCKED, ...decorBlocked(v.decor, v.terrain)]), [v.decor, v.terrain]);
   const blockedRef = useRef(blocked);
   useEffect(() => { blockedRef.current = blocked; });
 
@@ -173,15 +176,18 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
   // 꾸미기: 놓을 수 있는 칸 (서준이·파트너가 서 있는 칸은 빼고)
   const decorTargets = useMemo(() => {
     if (!decorPlacing) return [];
-    const kind = DECOR_INFO[decorPlacing.item].variants[decorPlacing.variant];
+    const info = DECOR_INFO[decorPlacing.item];
+    const kind = info.ground ? null : info.variants[decorPlacing.variant];
     const out: { x: number; y: number }[] = [];
     for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
-      if (decorSpotProblem(v.decor, decorPlacing.item, kind, x, y)) continue;
-      if (decorCells({ kind, x, y }).some(c => (c.x === pos.x && c.y === pos.y) || (c.x === follow.x && c.y === follow.y))) continue;
+      if (decorSpotProblem(v.decor, v.terrain, decorPlacing.item, kind, x, y)) continue;
+      // 서준이·파트너가 서 있는 칸은 빼고 (물 칸이나 막히는 물건이 발밑에 생기지 않게)
+      const cells = kind ? decorCells({ kind, x, y }) : [{ x, y }];
+      if (cells.some(c => (c.x === pos.x && c.y === pos.y) || (c.x === follow.x && c.y === follow.y))) continue;
       out.push({ x, y });
     }
     return out;
-  }, [decorPlacing, v.decor, pos, follow]);
+  }, [decorPlacing, v.decor, v.terrain, pos, follow]);
   async function placeDecorAt(x: number, y: number) {
     if (!decorPlacing || busy) return;
     const { item, variant } = decorPlacing;
@@ -224,7 +230,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       </div>
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
-          <VillageGround tile={TILE} cells={v.cells} decor={v.decor} />
+          <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} />
           <div className="village-world" style={{ top: TOP_ROWS * TILE, width: MAP_W * TILE, height: MAP_H * TILE }}>
           {/* 밭 칸: 누르면 놓기·되가져오기 */}
           {Array.from({ length: CELL_COUNT }, (_, cell) => {
@@ -238,7 +244,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
             );
           })}
           {/* 놓은 꾸미기 물건: 누르면 가방에 넣기 (놓기 중이 아닐 때) */}
-          {!decorPlacing && !placing && v.decor.flatMap(d => decorCells(d)).map(c => (
+          {!decorPlacing && !placing && [...v.decor.flatMap(d => decorCells(d)), ...v.terrain.filter(t => decorIndexAt(v.decor, t.x, t.y) < 0)].map(c => (
             <button key={'dt' + c.x + ',' + c.y} className="village-decor-hit" style={{ left: c.x * TILE, top: c.y * TILE, width: TILE, height: TILE }}
               aria-label="꾸미기 물건 (누르면 가방으로)" onClick={() => setSheet({ decorAt: c })} />
           ))}
@@ -287,7 +293,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
         </div>}
         {decorPlacing && <div className="village-placing" role="status">
           <span>
-            <ObjectSprite kind={DECOR_INFO[decorPlacing.item].variants[decorPlacing.variant]} scale={1} /> 반짝이는 칸을 눌러 <b>{DECOR_INFO[decorPlacing.item].name}</b> 놓기! (남은 {v.decorBag[decorPlacing.item]}개)
+            <DecorIcon item={decorPlacing.item} variant={decorPlacing.variant} scale={1} /> 반짝이는 칸을 눌러 <b>{DECOR_INFO[decorPlacing.item].name}</b> 놓기! (남은 {v.decorBag[decorPlacing.item]}개)
             {DECOR_INFO[decorPlacing.item].variants.length > 1 && <span className="village-variants" aria-label="모양 고르기">
               {DECOR_INFO[decorPlacing.item].variants.map((k, i) => (
                 <button key={k} className={'village-variant' + (i === decorPlacing.variant ? ' on' : '')} aria-label={`모양 ${i + 1}`}
@@ -304,8 +310,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
       <div className="village-controls" style={{ width: VIEW_COLS * TILE }}>
         <div className="village-mats" aria-label="재료">
           {MATERIALS.map(k => <span key={k} className="village-mat" title={MATERIAL_INFO[k].name}><MaterialIcon kind={k} /><b>{v.mats[k]}</b></span>)}
-          <button className="secondary small" onClick={() => setSheet('bag')}>🔨 만들기{bagCount ? ` · 가방 ${bagCount}` : ''}</button>
-          <button className="secondary small" onClick={() => { setPlacing(null); setSheet('decor'); }}>🎨 꾸미기{decorBagCount ? ` · 가방 ${decorBagCount}` : ''}</button>
+          <button className="secondary small" onClick={() => setSheet('bag')}>🔨 만들기{bagCount + decorBagCount ? ` · 가방 ${bagCount + decorBagCount}` : ''}</button>
         </div>
         <div className="village-pad" aria-label="움직이기">
           <span />
@@ -323,8 +328,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds }: ScreenProps) {
 
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
-          {sheet === 'bag' ? <CraftSheet view={view} busy={busy} act={act} onToast={setToast} onPlace={k => { setSheet(null); setDecorPlacing(null); setPlacing(k); }} />
-            : sheet === 'decor' ? <DecorSheet view={view} busy={busy} act={act} onToast={setToast} onPlace={k => { setSheet(null); setPlacing(null); setDecorPlacing({ item: k, variant: 0 }); }} />
+          {sheet === 'bag' ? <MakeSheet tab={makeTab} onTab={setMakeTab} view={view} busy={busy} act={act} onToast={setToast}
+              onPlace={k => { setSheet(null); setDecorPlacing(null); setPlacing(k); }}
+              onPlaceDecor={k => { setSheet(null); setPlacing(null); setDecorPlacing({ item: k, variant: 0 }); }} />
             : 'decorAt' in sheet ? <DecorTakeSheet view={view} at={sheet.decorAt} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
             : <CellSheet view={view} cell={sheet.cell} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />}
           <button className="secondary" onClick={() => setSheet(null)}>닫기</button>
@@ -340,8 +346,7 @@ function CraftSheet({ view, busy, act, onToast, onPlace }: {
 }) {
   const v = view.village;
   return <>
-    <h3>🔨 만들기</h3>
-    <p className="village-sheet-note">재료로 만들고 <b>🌱 밭에 놓기</b>를 눌러 봐! 밭(점선 네모 4칸)을 채우면 서식지가 돼.</p>
+    <p className="village-sheet-note">재료로 만들고 <b>🌱 밭에 놓기</b>를 눌러 봐! 밭(점선 네모 4칸)을 채우면 서식지가 되고, 다음 날 손님이 와.</p>
     <div className="village-recipes">
       {CRAFTS.map(k => {
         const info = CRAFT_INFO[k];
@@ -399,24 +404,47 @@ function CellSheet({ view, cell, busy, act, onToast, onDone }: {
   </>;
 }
 
-/** 꾸미기: 재료로 꾸미기 물건 만들기 → 가방, 🌱 놓기로 마을 풀밭에 */
-function DecorSheet({ view, busy, act, onToast, onPlace }: {
-  view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onPlace: (k: DecorKey) => void;
+/** 꾸미기 물건·땅 바꾸기 그림 */
+function DecorIcon({ item, variant = 0, scale = 2 }: { item: DecorKey; variant?: number; scale?: number }) {
+  const info = DECOR_INFO[item];
+  return info.ground ? <GroundIcon ground={info.ground} scale={scale} title={info.name} /> : <ObjectSprite kind={info.variants[variant]} scale={scale} />;
+}
+
+/** 만들기 창 하나에 세 칸: 🌱 서식지(밭) · 🎨 꾸미기(풀밭) · ⛰️ 땅 바꾸기(풀밭) — 2026-11-14 부모님: 만들기·꾸미기가 헷갈려서 합침 */
+const MAKE_TABS: { key: MakeTab; label: string }[] = [{ key: 'habitat', label: '🌱 서식지' }, { key: 'decor', label: '🎨 꾸미기' }, { key: 'ground', label: '⛰️ 땅 바꾸기' }];
+function MakeSheet({ tab, onTab, view, busy, act, onToast, onPlace, onPlaceDecor }: {
+  tab: MakeTab; onTab: (t: MakeTab) => void; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void;
+  onPlace: (k: CraftKey) => void; onPlaceDecor: (k: DecorKey) => void;
+}) {
+  return <>
+    <h3>🔨 만들기</h3>
+    <div className="village-make-tabs" role="tablist">
+      {MAKE_TABS.map(t => <button key={t.key} role="tab" aria-selected={tab === t.key} className={'village-make-tab' + (tab === t.key ? ' on' : '')} onClick={() => onTab(t.key)}>{t.label}</button>)}
+    </div>
+    {tab === 'habitat' ? <CraftSheet view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlace} />
+      : <DecorSheet tab={tab} view={view} busy={busy} act={act} onToast={onToast} onPlace={onPlaceDecor} />}
+  </>;
+}
+
+/** 꾸미기·땅 바꾸기: 재료로 만들기 → 가방, 🌱 놓기로 마을 풀밭에 */
+function DecorSheet({ tab, view, busy, act, onToast, onPlace }: {
+  tab: DecorTab; view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onPlace: (k: DecorKey) => void;
 }) {
   const v = view.village;
   return <>
-    <h3>🎨 꾸미기</h3>
-    <p className="village-sheet-note">재료로 꾸미기 물건을 만들고 <b>🌱 놓기</b>를 눌러 마을 풀밭에 놓아 봐! 놓은 물건을 누르면 가방으로 돌아와.</p>
+    <p className="village-sheet-note">{tab === 'decor'
+      ? <>재료로 꾸미기 물건을 만들고 <b>🌱 놓기</b>를 눌러 마을 풀밭에 놓아 봐! 놓은 물건을 누르면 가방으로 돌아와.</>
+      : <>풀밭을 연못·흙길·돌길로 바꿔 봐! 옆에 붙여 놓으면 이어져. 바꾼 칸을 누르면 풀밭으로 되돌릴 수 있어.</>}</p>
     <div className="village-recipes">
-      {DECOR_ITEMS.map(k => {
+      {DECOR_ITEMS.filter(k => DECOR_INFO[k].tab === tab).map(k => {
         const info = DECOR_INFO[k];
         const cost = Object.entries(v.decorCosts[k]) as [MaterialKey, number][];
         const can = cost.every(([m, n]) => v.mats[m] >= n);
         return (
           <div key={k} className="village-recipe">
-            <span className="village-recipe-icon"><ObjectSprite kind={info.variants[0]} scale={2} /></span>
+            <span className="village-recipe-icon"><DecorIcon item={k} /></span>
             <span><b>{info.name}</b><small className="village-cost">{cost.map(([m, n]) => <span key={m}><MaterialIcon kind={m} scale={1} /> {MATERIAL_INFO[m].name} {n}</span>)}</small>
-              <small>가방에 {v.decorBag[k]}개{info.onWater ? ' · 연못 물 위에만' : ''}</small></span>
+              <small>가방에 {v.decorBag[k]}개{info.note ? ` · ${info.note}` : ''}</small></span>
             <span className="village-recipe-btns">
               <button className="primary small" disabled={busy || !can} onClick={async () => { const r = await act<{ message: string }>({ type: 'decorCraft', item: k, stay: true }); if (r) onToast(r.message); }}>만들기</button>
               {v.decorBag[k] > 0 && <button className="secondary small glow" disabled={busy} onClick={() => onPlace(k)}>🌱 놓기</button>}
@@ -434,10 +462,18 @@ function DecorTakeSheet({ view, at, busy, act, onToast, onDone }: {
 }) {
   const i = decorIndexAt(view.village.decor, at.x, at.y);
   const d = i >= 0 ? view.village.decor[i] : null;
-  if (!d) return <p className="village-sheet-note">여기에는 꾸미기 물건이 없어요.</p>;
+  const t = d ? -1 : terrainIndexAt(view.village.terrain, at.x, at.y);
+  const ground = t >= 0 ? DECOR_ITEMS.find(k => DECOR_INFO[k].ground === view.village.terrain[t].ground) : undefined;
+  if (!d && !ground) return <p className="village-sheet-note">여기에는 꾸미기 물건이 없어요.</p>;
+  const take = async () => { const r = await act<{ message: string }>({ type: 'decorTake', x: at.x, y: at.y, stay: true }); if (r) { onToast(r.message); onDone(); } };
+  if (!d && ground) return <>
+    <h3><DecorIcon item={ground} /> {DECOR_INFO[ground].name}</h3>
+    <p className="village-sheet-note">풀밭으로 되돌릴까? {DECOR_INFO[ground].name}은 가방에 다시 들어가.</p>
+    <button className="primary" disabled={busy} onClick={take}>풀밭으로 되돌리기</button>
+  </>;
   return <>
-    <h3><ObjectSprite kind={d.kind} scale={2} /> {DECOR_INFO[d.item].name}</h3>
+    <h3><ObjectSprite kind={d!.item === 'bush' ? 'bushSmall' : d!.kind} scale={2} /> {DECOR_INFO[d!.item].name}</h3>
     <p className="village-sheet-note">가방에 다시 넣을까? 다른 곳에 다시 놓을 수 있어.</p>
-    <button className="primary" disabled={busy} onClick={async () => { const r = await act<{ message: string }>({ type: 'decorTake', x: at.x, y: at.y, stay: true }); if (r) { onToast(r.message); onDone(); } }}>가방에 넣기</button>
+    <button className="primary" disabled={busy} onClick={take}>가방에 넣기</button>
   </>;
 }

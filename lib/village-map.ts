@@ -10,8 +10,11 @@ export const TILE_PX = assets.tile;
 /** 마을을 걷는 아이 캐릭터 (2026-11-13 부모님: 포켓로그처럼 서준이가 마을에 있어야 함). 그림은 assets.players */
 export const PLAYER = { name: '서준', sprite: 'seojun' as keyof typeof assets.players };
 
-/** 땅 종류: 풀 / 흙길 / 밭(흙, 서식지를 만드는 곳) / 물 */
-export type GroundKind = 'grass' | 'path' | 'soil' | 'water';
+/** 땅 종류: 풀 / 흙길 / 밭(흙, 서식지를 만드는 곳) / 물 / 돌길(땅 바꾸기로만) */
+export type GroundKind = 'grass' | 'path' | 'soil' | 'water' | 'stone';
+/** 땅 바꾸기(2026-11-14): 아이가 풀밭 칸을 물·흙길·돌길로 바꾼 것 (지도 기록 위에 덮어씀) */
+export type TerrainGround = 'water' | 'path' | 'stone';
+export type TerrainCell = { x: number; y: number; ground: TerrainGround };
 const LEGEND: Record<string, GroundKind> = { '.': 'grass', '=': 'path', s: 'soil', '~': 'water' };
 export const GROUND_LEGEND = LEGEND;
 
@@ -76,8 +79,10 @@ export function plotCellAt(x: number, y: number): number {
   const p = PLOTS.findIndex(q => x >= q.x && x <= q.x + 1 && y >= q.y && y <= q.y + 1);
   return p < 0 ? -1 : p * 4 + (y - PLOTS[p].y) * 2 + (x - PLOTS[p].x);
 }
-/** 지금 보이는 땅: 밭에 물웅덩이를 놓으면 그 칸은 물 (붙어 있으면 하나의 연못처럼 이어짐) */
-export function groundAt(x: number, y: number, cells: (CraftKey | null)[] = []): GroundKind {
+/** 지금 보이는 땅: 땅 바꾸기로 바꾼 칸, 밭에 물웅덩이를 놓은 칸은 물 (붙어 있으면 하나의 연못처럼 이어짐) */
+export function groundAt(x: number, y: number, cells: (CraftKey | null)[] = [], terrain: TerrainCell[] = []): GroundKind {
+  const t = terrain.find(c => c.x === x && c.y === y);
+  if (t) return t.ground;
   const g = baseGround(x, y);
   if (g === 'soil') { const c = plotCellAt(x, y); if (c >= 0 && cells[c] === 'puddle') return 'water'; }
   return g;
@@ -88,8 +93,18 @@ export function placedObject(item: CraftKey | null, cell: number): ObjectKind | 
   const list = item ? PLACED_OBJECT[item] : undefined;
   return list ? list[cell % list.length] : null;
 }
+/** 밭에 놓은 것들 → 물건 층. 밭 4칸이 모두 풀숲이면(초록 풀숲 서식지) 큰 덤불 숲 하나로 (2026-11-14 부모님) */
+export function plotObjects(cells: (CraftKey | null)[]): MapObject[] {
+  const out: MapObject[] = [];
+  PLOTS.forEach((p, plot) => {
+    const four = [0, 1, 2, 3].map(i => cells[plot * 4 + i] ?? null);
+    if (four.every(c => c === 'bush')) { out.push({ kind: 'bushBig', x: p.x, y: p.y }); return; }
+    four.forEach((item, i) => { const kind = placedObject(item, plot * 4 + i); if (kind) out.push({ kind, x: p.x + (i % 2), y: p.y + Math.floor(i / 2) }); });
+  });
+  return out;
+}
 
-/** 걸을 수 없는 칸: 물건의 막힌 칸 + 지도 기록의 물 */
+/** 걸을 수 없는 칸: 물건의 막힌 칸 + 지도 기록의 물 (땅 바꾸기로 만든 물은 lib/village-decor.ts decorBlocked) */
 export function blockedCells(objects: MapObject[] = MAP_OBJECTS): Set<string> {
   const out = new Set<string>();
   for (const o of objects) {
@@ -107,6 +122,7 @@ export const AUTOTILE: Record<Exclude<GroundKind, 'grass'>, { set: string; inner
   path: { set: 'sand', inner: 'sandIn' },
   soil: { set: 'sand', inner: 'sandIn' },
   water: { set: 'shore', inner: 'shoreIn', base: 'water' },
+  stone: { set: 'stoneSet', inner: 'stoneIn' },
 };
 /**
  * 한 칸을 그릴 8px 조각 4개: [그림판 x, 그림판 y, 칸 안 x, 칸 안 y].

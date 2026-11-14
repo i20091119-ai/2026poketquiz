@@ -12,6 +12,8 @@
 | sandIn | 흙길 안쪽 모서리 | 1×1 (8px 조각 16개 세트) | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | shore | 물가 테두리 세트(모래 물가, 가운데 비어 물이 보임) | 1×1 (8px 조각 16개 세트) | 못 감(물) | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | shoreIn | 물가 안쪽 모서리 | 1×1 (8px 조각 16개 세트) | 못 감(물) | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
+| stoneSet | 돌길 테두리 세트(흙길 모양 + 돌 무늬) | 1×1 (8px 조각 16개 세트) | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
+| stoneIn | 돌길 안쪽 모서리 | 1×1 (8px 조각 16개 세트) | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 
 ## 물건 (objects.png, 배경 투명)
 
@@ -46,9 +48,13 @@
 | pot | 꽃 화분 | 1×1 | 못 감: 1×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
 | flowerBox | 꽃 상자 | 2×1 | 못 감: 2×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
 | bench | 벤치 | 2×1 | 못 감: 2×1칸 | Tuxemon "Outdoor odds and ends" | Isaiah658 | CC0 1.0 (출처 표시 안 해도 됨) |
+| bushBig | 큰 덤불 숲(초록 풀숲 서식지 완성) | 2×2 | 감 | Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) | ArMM1998 | CC0 1.0 (출처 표시 안 해도 됨) |
+| bushSmall | 작은 덤불(꾸미기) | 1×1 | 감 | Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) | ArMM1998 | CC0 1.0 (출처 표시 안 해도 됨) |
 | matLeaf | 재료: 풀잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matTwig | 재료: 나뭇가지 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matPetal | 재료: 꽃잎 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
+| matStone | 재료: 돌멩이 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
+| matMud | 재료: 진흙 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matDrop | 재료: 물방울 (임시, 다른 그림체) | 1×1 | 감 | Ninja Adventure Asset Pack | pixel-boy | CC0 1.0 |
 
 ## 캐릭터 (player.png, 배경 투명)
@@ -62,5 +68,6 @@
 - Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" — rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) — CC BY-SA 4.0 — https://github.com/Tuxemon/Tuxemon/blob/development/ATTRIBUTIONS.md
 - Tuxemon "Core Buildings" 중 "Inspired 16x16 Tiles" — RedVoxel (지붕 고침: Jaskrendix) — CC BY-SA 4.0 — https://opengameart.org/content/pokemon-inspired-16x16-tiles
 - Tuxemon "Postboy" 걷는 그림 (Catch Challenger 원작) — Catch Challenger (색 고침: Sanglorian) — CC BY 4.0 (Tuxemon 묶음 CC BY-SA 4.0) — https://github.com/alphaonex86/CatchChallenger-datapack
+- Tuxemon "Objects" (둥근 덤불, 마을 나무색으로 바꿈) — ArMM1998 — CC0 1.0 (출처 표시 안 해도 됨) — https://wiki.tuxemon.org/index.php?title=File:Objects_by_ArMM1998.png
 - Tuxemon "Outdoor odds and ends" — Isaiah658 — CC0 1.0 (출처 표시 안 해도 됨) — https://wiki.tuxemon.org/index.php?title=File:Outdoor_odds_and_ends_by_Isaiah658.png
 - Ninja Adventure Asset Pack — pixel-boy — CC0 1.0 — https://pixel-boy.itch.io/ninja-adventure-asset-pack

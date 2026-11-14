@@ -5,9 +5,9 @@
 // 그림판: public/assets/village/ground.png·objects.png (16px 배수, 목록·출처 ASSETS.md), 화면에서는 정수 배(3배 = 48px).
 import { useEffect, useRef, type CSSProperties } from 'react';
 import assets from '@/lib/data/village-assets.json' with { type: 'json' };
-import { autotileQuarters, groundAt, MAP_OBJECTS, objectInfo, placedObject, type GroundKind, type MapObject, type ObjectKind } from '@/lib/village-map';
+import { autotileQuarters, groundAt, MAP_OBJECTS, objectInfo, plotObjects, type GroundKind, type MapObject, type ObjectKind, type TerrainCell, type TerrainGround } from '@/lib/village-map';
 import { decorImageAt, fenceKind, type DecorPlaced } from '@/lib/village-decor';
-import { cellPos, CRAFT_INFO, MAP_H, MAP_W, type CraftKey, type MaterialKey } from '@/lib/village';
+import { CRAFT_INFO, MAP_H, MAP_W, type CraftKey, type MaterialKey } from '@/lib/village';
 
 const T = assets.tile;
 const GROUND = assets.ground as Record<string, { rect: number[] }>;
@@ -83,41 +83,37 @@ function ObjectLayer({ objects, tile, y0 }: { objects: MapObject[]; tile: number
 }
 
 /** 마을: 땅 층 + 물건 층 (밭에 놓은 것까지). 좌표는 위쪽 숲 줄(TOP_ROWS)을 포함한 그림 좌표 */
-export function VillageGround({ tile, cells, decor = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[] }) {
-  const at = (x: number, y: number) => groundAt(x, y, cells);
-  const placed: MapObject[] = [];
-  cells.forEach((item, cell) => {
-    const kind = placedObject(item, cell);
-    if (!kind) return;
-    placed.push({ kind, ...cellPos(cell) });
-  });
+export function VillageGround({ tile, cells, decor = [], terrain = [] }: { tile: number; cells: (CraftKey | null)[]; decor?: DecorPlaced[]; terrain?: TerrainCell[] }) {
+  const at = (x: number, y: number) => groundAt(x, y, cells, terrain);
+  const version = cells.join(',') + '|' + terrain.map(t => `${t.x},${t.y},${t.ground}`).join(';');
   return (
     <div className="village-ground" aria-hidden>
-      <GroundLayer x0={0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={cells.join(',')} />
-      <ObjectLayer objects={[...MAP_OBJECTS, ...placed, ...decorObjects(decor)]} tile={tile} y0={-TOP_ROWS} />
+      <GroundLayer x0={0} y0={-TOP_ROWS} cols={MAP_W} rows={MAP_H + TOP_ROWS} scale={tile / T} at={at} version={version} />
+      <ObjectLayer objects={[...MAP_OBJECTS, ...plotObjects(cells), ...decorObjects(decor)]} tile={tile} y0={-TOP_ROWS} />
     </div>
   );
 }
 
 /** 꾸미기 물건 → 물건 층 (울타리는 이웃을 보고 모양을 고름) */
 export function decorObjects(decor: DecorPlaced[]): MapObject[] {
-  return decor.map(d => ({ kind: d.item === 'fence' ? fenceKind(decor, d.x, d.y) : d.kind, ...decorImageAt(d) }));
+  // 작은 덤불은 2026-11-14에 그림이 바뀜 (그 전에 놓은 'bush'도 작은 덤불로)
+  return decor.map(d => ({ kind: d.item === 'fence' ? fenceKind(decor, d.x, d.y) : d.item === 'bush' ? 'bushSmall' : d.kind, ...decorImageAt(d) }));
 }
 
 // ---------- 재료·만든 물건 아이콘 ----------
-const MATERIAL_OBJECT: Record<MaterialKey, ObjectKind> = { leaf: 'matLeaf', drop: 'matDrop', petal: 'matPetal', twig: 'matTwig' };
+const MATERIAL_OBJECT: Record<MaterialKey, ObjectKind> = { leaf: 'matLeaf', drop: 'matDrop', petal: 'matPetal', twig: 'matTwig', stone: 'matStone', mud: 'matMud' };
 export const MaterialIcon = ({ kind, scale = 2 }: { kind: MaterialKey; scale?: number }) => <ObjectSprite kind={MATERIAL_OBJECT[kind]} scale={scale} />;
-const puddleIconAt = (x: number, y: number): GroundKind => (x >= 0 && x < 2 && y >= 0 && y < 2 ? 'water' : 'grass');
+/** 땅 아이콘: 2×2 칸을 반 크기로 (한 칸만 그리면 테두리만 보여서) */
+export function GroundIcon({ ground, scale = 2, title }: { ground: TerrainGround; scale?: number; title?: string }) {
+  return (
+    <span title={title} style={{ display: 'inline-block', width: T * scale, height: T * scale, overflow: 'hidden', borderRadius: 4, verticalAlign: 'middle' }}>
+      <GroundLayer x0={0} y0={0} cols={2} rows={2} scale={scale / 2} at={(x, y) => (x >= 0 && x < 2 && y >= 0 && y < 2 ? ground : 'grass')} version={'icon-' + ground} />
+    </span>
+  );
+}
 /** 만든 물건 그림: 풀숲 = 덤불, 꽃밭 = 꽃, 물웅덩이 = 물가 테두리가 있는 물 한 칸 */
 export function CraftIcon({ kind, scale = 2 }: { kind: CraftKey; scale?: number }) {
-  if (kind === 'puddle') {
-    return (
-      // 작은 연못(물 2×2)을 반 크기로: 한 칸짜리 물은 모래 물가만 보여서
-      <span title={CRAFT_INFO[kind].name} style={{ display: 'inline-block', width: T * scale, height: T * scale, overflow: 'hidden', borderRadius: 4 }}>
-        <GroundLayer x0={0} y0={0} cols={2} rows={2} scale={scale / 2} at={puddleIconAt} version="puddle" />
-      </span>
-    );
-  }
+  if (kind === 'puddle') return <GroundIcon ground="water" scale={scale} title={CRAFT_INFO[kind].name} />;
   return <ObjectSprite kind={kind === 'bush' ? 'bush' : 'flowerPink'} scale={scale} title={CRAFT_INFO[kind].name} />;
 }
 

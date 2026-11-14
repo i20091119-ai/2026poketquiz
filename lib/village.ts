@@ -6,13 +6,16 @@ import { SPECIES } from './pokedex.ts';
 import type { TypeKey } from './game-config.ts';
 
 /** 재료 4종 */
-export const MATERIALS = ['leaf', 'drop', 'petal', 'twig'] as const;
+/** 재료 6종 (돌멩이·진흙은 2026-11-14 땅 바꾸기와 함께) */
+export const MATERIALS = ['leaf', 'drop', 'petal', 'twig', 'stone', 'mud'] as const;
 export type MaterialKey = typeof MATERIALS[number];
 export const MATERIAL_INFO: Record<MaterialKey, { name: string; emoji: string }> = {
   leaf: { name: '풀잎', emoji: '🌿' },
   drop: { name: '물방울', emoji: '💧' },
   petal: { name: '꽃잎', emoji: '🌸' },
   twig: { name: '나뭇가지', emoji: '🪵' },
+  stone: { name: '돌멩이', emoji: '🪨' },
+  mud: { name: '진흙', emoji: '🟫' },
 };
 
 /** 만들 수 있는 물건 (처음부터 모두 열림). 나뭇가지는 지금은 모으기만 */

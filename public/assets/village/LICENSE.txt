@@ -18,6 +18,9 @@
    Ninja Adventure Asset Pack by pixel-boy (https://pixel-boy.itch.io/ninja-adventure-asset-pack)
    License: CC0 1.0 Universal (public domain). Packed by scripts/pack-village-tiles.mjs
 
+   - Objects_by_ArMM1998.png (둥근 덤불, 마을 나무색으로 바꿈) by ArMM1998, Outdoor_odds_and_ends_by_Isaiah658.png (화분·꽃 상자·벤치) by Isaiah658 — 둘 다 CC0.
+   - 돌길 세트는 흙길 세트 모양에 core_outdoor_nature 의 돌 무늬를 입혀 만든 것 (CC BY-SA 4.0).
+
 3) player.png — 서준이 걷는 그림: Tuxemon "Postboy" overland sprite by Catch Challenger
    (https://github.com/alphaonex86/CatchChallenger-datapack, CC BY 4.0), palette changed by Sanglorian (Tuxemon, CC BY-SA 4.0).
 
