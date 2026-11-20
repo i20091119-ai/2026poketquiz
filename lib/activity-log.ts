@@ -39,6 +39,7 @@ export const LOG_KINDS = {
   star: '★ 배틀 힘 오름(먹이기·에너지 바꾸기·💗)',
   offline: '트레이너 훈련 기록(부모님이 적은 ●■▲·응원)',
   legend: '전설 조각·전설 지도(조각 얻음·단계·마스터볼)',
+  school: '제때 등교(교문 통과 시각·판정·손 체크·편지 재료)',
 } as const;
 
 export type Before = {

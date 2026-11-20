@@ -18,6 +18,7 @@ import { favoriteBerry, favoriteItem, GUESTBOOK_LINES_MAX, possibleGuests, type 
 import { choosableRegions, DIR_TEXT, isOpenCell, levelOfStars, lockedText, MAX_LEVEL, openRegions, REGIONS } from './village-level.ts';
 import { BERRY_KINDS, berryOfType, craftRules, ironForWeek, levelNeeds, treeSpotsOpen, RECIPE_INFO, RECIPES, recipeCost, GATHER_ROCKS, STUDY_MAT_INFO, TREE_SPOTS, type RecipeKey } from './village-craft.ts';
 import { CELL_COUNT, cellPos, CRAFT_INFO, CRAFTS, dayPickups, GUEST_LINES as GUEST_TALK, guestPool, HABITAT_INFO, habitatOf, MATERIALS, MATERIAL_INFO, PLOTS, villageMinutesAllowed, villageRules, type CraftKey, type HabitatKey, type MaterialKey } from './village.ts';
+import { ARRIVAL_MAX_DAYS_AGO, deadlineFor, letterTitle, normalizeTime, onTime, type SchoolRules } from './school.ts';
 import { hmToMinutes, LIMITED_EVENTS, leftLabel, limitedById, limitedPhase, limitedShinyMultiplier, minutesLeft, PIECE_INFO, type LimitedEventDef } from './limited-events.ts';
 
 export type Question = {
@@ -140,6 +141,8 @@ export type GameState = {
   retryOpen?: { date: string; ids: number[] };
   /** 포켓몬 마을 (lib/village.ts, 2026-11-13). 재료·만든 물건·밭·손님 */
   village?: VillageState;
+  /** 제때 등교 (2026-11-20, lib/school.ts): 날짜별 등교 판정 + 마을 우체통 편지. 없으면 빈 값 */
+  school?: SchoolState;
   /** 마을에서 만난 포켓몬 (손님). 가진 포켓몬(획득)과 따로, 도감에 "만남" 표시 */
   met?: number[];
 };
@@ -211,6 +214,11 @@ export type VillageState = {
   /** 서식지 손님 별을 받은 날 (하루 한 번) */
   guestStarDate?: string;
 };
+/** 등교 한 번: time = 교문 통과 시각(HH:MM, 손 체크면 null), deadline = 그날 기준 시각, source = gate(가족 대시보드)·parent(보호자 손 체크) */
+export type SchoolArrival = { time: string | null; ok: boolean; deadline: string; source: 'gate' | 'parent'; at: string; by?: string };
+/** 우체통 편지: 제때 등교한 날마다 하나, 아이가 기본 재료 6종 중 1개를 고르면 picked */
+export type SchoolLetter = { id: string; date: string; at: string; picked?: MaterialKey; pickedAt?: string };
+export type SchoolState = { arrivals: Record<string, SchoolArrival>; letters: SchoolLetter[] };
 /**
  * 기간 한정 이벤트(레인보우) 하나의 진행.
  * streak: 과목별 지금 연속으로 맞힌 수, used: 이번 연속에서 맞힌 문제(다시 풀기 문제를 고를 때 뺌),
@@ -1037,6 +1045,7 @@ export type Action =
   | { type: 'villageGather'; rock: number; stay?: boolean }
   | { type: 'villageTalk'; plot: number; stay?: boolean }
   | { type: 'villageMail'; stay?: boolean }
+  | { type: 'schoolLetterPick'; id: string; kind: MaterialKey; stay?: boolean }
   | { type: 'villageMake'; recipe: RecipeKey; berry?: PotionKind; berries?: Partial<Record<PotionKind, number>>; stay?: boolean }
   | { type: 'villagePlant'; spot: number; berry: PotionKind; stay?: boolean }
   | { type: 'openCraftedBall'; id: string }
@@ -1441,12 +1450,30 @@ export function applyAction(state: GameState, action: Action, ctx: Context) {
     case 'villageMail': {
       const v = villageAccess(state, ctx.today, action.stay, random);
       const mail = v.mail ?? [];
+      // 제때 등교 편지 (2026-11-20): 고르기는 화면에서 (schoolLetterPick)
+      const letters = schoolLetterView(state, ctx.today);
+      if (!mail.length && letters.length) return { iron: 0, letters, message: '📮 편지가 왔어!' };
       if (!mail.length) return { iron: 0, message: '아직 택배가 없어. 트레이너 훈련을 열심히 하거나, 한 주에 미션을 5일 끝내면 철이 와!' };
       const iron = mail.reduce((n, m) => n + m.amount, 0);
       v.study = { ...v.study, iron: (v.study?.iron ?? 0) + iron };
       v.mail = [];
       const why = [...new Set(mail.map(m => (m.from === 'mission' ? '미션을 열심히 끝낸' : '트레이너 훈련을 열심히 한')))].join(' 것과 ');
-      return { iron, message: `📦 택배가 왔어! 철 ${iron}개를 받았어. ${why} 덕분이야!` };
+      return { iron, letters, message: `📦 택배가 왔어! 철 ${iron}개를 받았어. ${why} 덕분이야!` };
+    }
+    case 'schoolLetterPick': {
+      // 제때 등교 편지: 기본 재료 6종(풀잎·물방울·꽃잎·나뭇가지·돌멩이·진흙) 중 1개 (반짝돌·철은 없음)
+      const v = villageAccess(state, ctx.today, action.stay, random);
+      const letter = state.school?.letters.find(l => l.id === action.id);
+      if (!letter) fail('편지를 다시 열어 줘.');
+      if (letter.picked) fail('이 편지 선물은 벌써 받았어.');
+      if (!MATERIALS.includes(action.kind)) fail('재료를 하나 골라 줘.');
+      const cap = villageRules().matCap;
+      if ((v.mats[action.kind] ?? 0) >= cap) fail(`${MATERIAL_INFO[action.kind].name}는 가방에 가득 찼어! (최대 ${cap}개) 다른 재료를 골라 줘.`);
+      v.mats[action.kind] = (v.mats[action.kind] ?? 0) + 1;
+      v.gained = (v.gained ?? 0) + 1;
+      letter.picked = action.kind;
+      letter.pickedAt = ctx.now;
+      return { kind: action.kind, message: `${MATERIAL_INFO[action.kind].emoji} ${eulReul(MATERIAL_INFO[action.kind].name)} 받았어! 내일도 제때 가 보자!` };
     }
     case 'villageMake': {
       const v = villageAccess(state, ctx.today, action.stay, random);
@@ -2574,6 +2601,58 @@ function hearLine(state: GameState, id: number, line: string) {
   if (!lines.includes(line) && lines.length < GUESTBOOK_LINES_MAX) lines.push(line);
 }
 /** 아이 화면용 마을 */
+// ---------- 제때 등교 (2026-11-20, lib/school.ts) ----------
+const schoolOf = (state: GameState): SchoolState => {
+  const s = state.school ??= { arrivals: {}, letters: [] };
+  s.arrivals ??= {}; s.letters ??= [];
+  return s;
+};
+/** 처음 등교 기록 날 (기준 시각 "처음 2주"를 셀 때) */
+export const schoolStartOf = (state: GameState): string | null => Object.keys(state.school?.arrivals ?? {}).sort()[0] ?? null;
+/** 아직 안 고른 편지 (오늘까지의 것, 오래된 것부터). 아이 화면·우체통 */
+export function schoolLetterView(state: GameState, today: string) {
+  return (state.school?.letters ?? []).filter(l => !l.picked && l.date <= today).sort((a, b) => a.date.localeCompare(b.date))
+    .map(l => ({ id: l.id, date: l.date, title: letterTitle(l.date, today) }));
+}
+export type ArrivalInput = { date: string; time?: string | null; source: 'gate' | 'parent'; by?: string };
+export type ArrivalResult = { status: 'recorded' | 'duplicate' | 'upgraded'; date: string; ok: boolean; time: string | null; deadline: string; letter: boolean };
+/**
+ * 등교 기록 하나. 같은 날 두 번째부터는 그대로(duplicate) — 단, 실패였던 날을 보호자가 손 체크하면 성공으로(upgraded).
+ * 성공이면 우체통 편지 하나 (그날 미션을 끝내고 마을에 들어가면 받음). 실패는 기록만 하고 아이 화면에는 아무것도 안 보임.
+ */
+export function recordArrival(state: GameState, input: ArrivalInput, today: string, rules: SchoolRules, now: string): ArrivalResult {
+  const { date } = input;
+  if (!isDate(date)) fail('날짜를 YYYY-MM-DD로 보내 주세요.');
+  if (date > today) fail('아직 오지 않은 날짜예요.');
+  if (shiftDate(date, ARRIVAL_MAX_DAYS_AGO) < today) fail(`${ARRIVAL_MAX_DAYS_AGO}일보다 오래된 등교 기록은 받지 않아요.`);
+  const time = input.source === 'gate' ? normalizeTime(input.time) : null;
+  if (input.source === 'gate' && !time) fail('교문 통과 시각을 HH:MM(또는 HH:MM:SS)으로 보내 주세요.');
+  const s = schoolOf(state);
+  const start = [schoolStartOf(state), date].filter((d): d is string => !!d).sort()[0];
+  const deadline = deadlineFor(rules, date, start);
+  const old = s.arrivals[date];
+  const giveLetter = () => { if (!s.letters.some(l => l.date === date)) s.letters.push({ id: nextId(state, 's'), date, at: now }); };
+  if (old) {
+    if (input.source === 'parent' && !old.ok) {
+      s.arrivals[date] = { ...old, ok: true, source: 'parent', at: now, by: input.by };
+      giveLetter();
+      return { status: 'upgraded', date, ok: true, time: old.time, deadline: old.deadline, letter: true };
+    }
+    return { status: 'duplicate', date, ok: old.ok, time: old.time, deadline: old.deadline, letter: false };
+  }
+  const ok = input.source === 'parent' ? true : onTime(time!, deadline);
+  s.arrivals[date] = { time, ok, deadline, source: input.source, at: now, ...(input.by ? { by: input.by } : {}) };
+  if (ok) giveLetter();
+  return { status: 'recorded', date, ok, time, deadline, letter: ok };
+}
+/** 보호자 화면·가족 대시보드: 최근 등교 기록 */
+export function schoolReport(state: GameState, today: string, rules: SchoolRules) {
+  const start = schoolStartOf(state);
+  const arrivals = Object.entries(state.school?.arrivals ?? {}).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 21)
+    .map(([date, a]) => ({ date, ...a, letter: state.school?.letters.find(l => l.date === date) ?? null }));
+  return { today: state.school?.arrivals[today] ?? null, deadlineToday: deadlineFor(rules, today, start ?? today), start, arrivals, rules };
+}
+
 export function villageView(state: GameState, today: string) {
   const v = state.village;
   const d = state.daily?.date === today ? state.daily : null;
@@ -2918,6 +2997,8 @@ export function childView(state: GameState, bank: ActiveBank | null, today: stri
     balls: state.balls,
     potions: state.potions ?? [],
     bank: bank ? { id: bank.id, title: bank.title } : null,
+    /** 제때 등교 편지 (마을 우체통, 아직 안 고른 것) */
+    schoolLetters: schoolLetterView(state, today),
     /** 포켓몬 마을 (오늘 미션을 끝내면 열림) */
     village: villageView(state, today),
     /** 마을에서 만난 포켓몬 (도감 "만남") */

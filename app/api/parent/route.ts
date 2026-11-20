@@ -22,7 +22,11 @@ import {
   setBattleEvolutionAllowed, setBattleLimitMinutes, setBattleRest, setGiftLimits, setGrade, setRestOpenDate, setSimClock, setSimDayOffset, SIM_PLAYER, updateBank, updateQuestion,
   getStrongOverrides, loadStrongOverrides, saveStrongOverrides, getGrowthRules, loadGrowthRules, saveGrowthRules, getOutingRules, saveOutingRules, getOfflineRules, saveOfflineRules, offlineRulesNow, recentBattleRuns, getVillageRules, saveVillageRules, loadVillageRules, getDecorCosts, saveDecorCosts, getCraftRules, saveCraftRules,
   getShinyChance, getSimShinyAll, appendActivity, readActivity, REAL_PLAYER, setShinyChance, setSimShinyAll, shinyChanceFor,
+  getSchoolRules, saveSchoolRules, schoolRulesNow, getFamilyCodeHash, setFamilyCodeHash,
 } from '@/lib/server/store';
+import { hashFamilyCode, newFamilyCode } from '@/lib/server/family';
+import { recordArrival, schoolReport } from '@/lib/game-engine';
+import { SCHOOL_DEFAULT, isHm, isDateStr, schoolRulesOf } from '@/lib/school';
 import { env } from 'cloudflare:workers';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +58,8 @@ async function overview(request: Request) {
   const [grade, banks, bank, { state }, battleHash, sim, battleLimit, battleEvolution, giftLimits, restRules, restOpen, strong, shinyChance, simShinyAll, growthRules, outingRules, offlineOverrides, battleRuns, villageOverrides] = await Promise.all([
     getGrade(), listBanks(), activeBank(), readState(player.id), getBattlePasswordHash(), simulationInfo(request), getBattleLimitMinutes(), getBattleEvolutionAllowed(), getGiftLimits(), getBattleRest(), getRestOpenDate(), loadStrongOverrides(), getShinyChance(), getSimShinyAll(), loadGrowthRules(), getOutingRules(), getOfflineRules(), recentBattleRuns(player.id), getVillageRules(),
   ]);
+  const [schoolOverrides, familyCodeHash] = await Promise.all([getSchoolRules(), getFamilyCodeHash()]);
+  const schoolRules = schoolRulesOf(schoolOverrides);
   const today = player.today;
   await loadVillageRules();
   const gate = await battleGate(player, state);
@@ -85,6 +91,15 @@ async function overview(request: Request) {
       candidates: OUTING_CANDIDATES, ownedSpecies: [...new Set(state.owned.map(p => p.species))], today,
     },
     /** 집 공부 기록·전설 조각: 달력 기록, 주간 합계·응원, 전설 지도, 규칙(지금 값·처음 값·바꾼 것) */
+    /** 가족 대시보드 창구·제때 등교 (2026-11-20) */
+    family: { codeSet: !!familyCodeHash },
+    school: {
+      ...schoolReport(state, today, schoolRules),
+      rules: { now: schoolRules, defaults: SCHOOL_DEFAULT, overrides: schoolOverrides },
+      /** 오늘 손 체크를 할 수 있는지 (그날 handCheckUntil 시각까지) */
+      handCheckOpen: player.clock.minutes <= Number(schoolRules.handCheckUntil.slice(0, 2)) * 60 + Number(schoolRules.handCheckUntil.slice(3)),
+      now: `${String(Math.floor(player.clock.minutes / 60)).padStart(2, '0')}:${String(player.clock.minutes % 60).padStart(2, '0')}`,
+    },
     offline: {
       ...offlineReport(state, today, offlineOverrides),
       rules: { now: offlineRulesOf(offlineOverrides), defaults: OFFLINE_DEFAULT, overrides: offlineOverrides, fields: OFFLINE_FIELDS },
@@ -478,6 +493,57 @@ export async function POST(request: Request) {
           return json({ message: `${msg} 아이 화면을 새로고침해 주세요.` });
         }
         throw new ParentError('시험 항목을 다시 골라 주세요.');
+      }
+      case 'familyCodeNew': {
+        // 가족 대시보드 접속 코드: 새로 만들면 예전 코드는 바로 못 씀. 코드는 이번 한 번만 보여 줌(서명값만 저장)
+        const code = newFamilyCode();
+        await setFamilyCodeHash(await hashFamilyCode(code));
+        return json({ message: '가족 접속 코드를 새로 만들었어요. 지금 한 번만 보여요. 가족 대시보드 설정에 붙여 넣어 주세요.', code });
+      }
+      case 'familyCodeDelete':
+        await setFamilyCodeHash(null);
+        return json({ message: '가족 접속 코드를 지웠어요. 이제 가족 대시보드는 연결되지 않아요.' });
+      case 'setSchoolRule': {
+        const key = String(body.key);
+        const rules = await getSchoolRules();
+        if (key === 'firstTime' || key === 'laterTime' || key === 'handCheckUntil') {
+          if (!isHm(body.value)) throw new ParentError('시각을 08:45처럼 넣어 주세요.');
+          rules[key] = String(body.value);
+        } else if (key === 'firstWeeks') {
+          const n = Number(body.value);
+          if (!Number.isInteger(n) || n < 0 || n > 52) throw new ParentError('주 수를 0~52로 넣어 주세요.');
+          rules.firstWeeks = n;
+        } else if (key === 'startDate') {
+          if (body.value !== '' && !isDateStr(body.value)) throw new ParentError('날짜를 2026-11-23처럼 넣어 주세요.');
+          rules.startDate = String(body.value);
+        } else throw new ParentError('바꿀 항목을 다시 골라 주세요.');
+        await saveSchoolRules(rules);
+        return json({ message: '제때 등교 기준을 저장했어요. 이미 받은 날의 판정은 그대로예요.' });
+      }
+      case 'resetSchoolRules':
+        await saveSchoolRules(null);
+        return json({ message: '제때 등교 기준을 처음 값(처음 2주 08:45, 그 뒤 08:40)으로 되돌렸어요.' });
+      case 'schoolHandCheck': {
+        // 보호자 손 체크: 오늘만, 그날 저녁(handCheckUntil)까지. 시뮬레이션 중이면 시험용 기록에
+        const player = await playerOf(request);
+        const rules = await schoolRulesNow();
+        const until = Number(rules.handCheckUntil.slice(0, 2)) * 60 + Number(rules.handCheckUntil.slice(3));
+        if (player.clock.minutes > until) throw new ParentError(`손 체크는 그날 ${rules.handCheckUntil}까지만 할 수 있어요.`);
+        const by = ['mom', 'dad'].includes(String(body.by)) ? String(body.by) : undefined;
+        const { result } = await mutateState(state => ({ result: recordArrival(state, { date: player.today, source: 'parent', by }, player.today, rules, new Date().toISOString()), changed: true }), player.id);
+        await appendActivity(player.id, player.today, [{ kind: 'school', data: { ...result, source: 'parent', by } }]);
+        return json({ message: result.status === 'duplicate' ? '오늘은 이미 제때 도착으로 적혀 있어요.' : '오늘 "제때 도착"으로 적었어요. 아이가 미션을 끝내고 마을에 들어가면 우체통 편지가 와요.' });
+      }
+      case 'simArrival': {
+        // 시험용: 가족 대시보드가 보낸 것처럼 (onTime 제때 · late 늦음 · yesterday 어제 제때)
+        if (!(await isSimulating(request))) throw new ParentError('시뮬레이션을 먼저 시작해 주세요.');
+        const { today } = await simClock();
+        const rules = await schoolRulesNow();
+        const op = String(body.op);
+        const date = op === 'yesterday' ? shiftDate(today, -1) : today;
+        const time = op === 'late' ? '08:58' : '08:31';
+        const { result } = await mutateState(state => ({ result: recordArrival(state, { date, time, source: 'gate' }, today, rules, new Date().toISOString()), changed: true }), SIM_PLAYER);
+        return json({ message: `시험용 기록: ${date} ${time} → ${result.status === 'duplicate' ? '이미 받은 날(한 번만)' : result.ok ? `제때 도착(기준 ${result.deadline}), 편지 생김` : `늦음(기준 ${result.deadline}), 아무 연출 없음`}` });
       }
       case 'resetOfflineRules':
         await saveOfflineRules(null);

@@ -1417,3 +1417,12 @@ button.day-box-tile:active { transform: scale(.95); }
 .day-box-result-items .reward-card small { display: none; }
 .day-box-result { grid-template-columns: 64px 1fr; padding: 4px 6px; }
 .day-boxes-dialog .intro-title { font-size: 22px; }
+
+/* ---------- 제때 등교 편지 (2026-11-20) ---------- */
+.school-letter { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: #fff8e1; border: 2px dashed #e5a100; word-break: keep-all; }
+.school-letter b { font-size: 18px; color: #7a4b00; }
+.school-letter p { margin: 0; font-size: 15px; }
+.school-letter small { color: #8a6d3b; }
+.school-letter-mats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.school-letter-mats .village-place-btn { min-width: 0; }
+.family-code { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px; border-radius: 10px; background: #f4f8ef; font-family: ui-monospace, monospace; font-size: 16px; }
