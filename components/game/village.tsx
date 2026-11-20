@@ -61,7 +61,7 @@ export function VillageStrip({ view, onOpen }: { view: ChildView; onOpen: () => 
 }
 
 type Walker = { id: string; species: number; shiny?: boolean; x: number; y: number; guest?: VillageGuest };
-type Sheet = null | 'make' | 'bag' | 'book' | 'workbench' | 'plant' | { cell: number } | { decorAt: { x: number; y: number } };
+type Sheet = null | 'make' | 'bag' | 'book' | 'workbench' | 'plant' | 'letter' | { cell: number } | { decorAt: { x: number; y: number } };
 type MakeTab = 'habitat' | DecorTab | 'tools';
 type DecorPlacing = { item: DecorKey; variant: number };
 
@@ -121,7 +121,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     if (!t.grown) return { kind: 'sapling', x: s.x, y: s.y + 2 };
     return { kind: t.ready ? (`fruitTree_${t.berry}` as MapObject['kind']) : 'treeRound', x: s.x, y: s.y };
   }), [craft.trees]);
-  const extraObjects = useMemo<MapObject[]>(() => [...treeObjects, ...(craft.mail > 0 ? [{ kind: 'mailboxFlag' as const, x: MAILBOX.x, y: MAILBOX.y }] : [])], [treeObjects, craft.mail]);
+  const extraObjects = useMemo<MapObject[]>(() => [...treeObjects, ...(craft.mail > 0 || view.schoolLetters.length > 0 ? [{ kind: 'mailboxFlag' as const, x: MAILBOX.x, y: MAILBOX.y }] : [])], [treeObjects, craft.mail, view.schoolLetters.length]);
   // 걸을 수 없는 칸 = 지도(집·나무·물) + 꾸미기 물건(울타리·벤치 등) + 다 자란 열매나무
   // 마을 레벨: 안 열린 구역은 걸을 수 없음 (안개 + 🔒 팻말)
   const openIds = useMemo(() => v.level.regions.filter(r => r.status === 'open').map(r => r.id), [v.level.regions]);
@@ -138,6 +138,29 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     const t = window.setTimeout(() => setFunOpen(true), 600);
     return () => window.clearTimeout(t);
   }, [inside, introOpen, pop.guide]);
+  // 제때 등교 편지 (2026-11-20): 마을에 들어오면 안내 팝업이 다 끝난 뒤 한 번 열어 줌 (우체통을 눌러도 열림)
+  const letterShown = useRef(false);
+  const letters = view.schoolLetters;
+  useEffect(() => {
+    if (!inside || letterShown.current || !letters.length || introOpen || pop.guide || funOpen || pop.chooser.open || sheet) return;
+    const t = window.setTimeout(() => { letterShown.current = true; setSheet('letter'); }, 900);
+    return () => window.clearTimeout(t);
+  }, [inside, letters.length, introOpen, pop.guide, funOpen, pop.chooser.open, sheet]);
+  // 서준이 위치 (가족 대시보드용): 마을 안에서 움직이면 잠시 뒤, 그리고 30초마다. 나가면 "나감"
+  useEffect(() => {
+    if (!inside) return;
+    const send = (inside: boolean) => fetch('/api/village/presence', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ inside, x: pos.x, y: pos.y }), keepalive: true }).catch(() => {});
+    const t = window.setTimeout(() => void send(true), 800);
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void send(true); }, 30_000);
+    return () => { window.clearTimeout(t); window.clearInterval(timer); };
+  }, [inside, pos.x, pos.y]);
+  const posRefP = useRef(pos);
+  useEffect(() => { posRefP.current = pos; });
+  useEffect(() => () => {
+    if (!inside) return;
+    const p = posRefP.current;
+    void fetch('/api/village/presence', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ inside: false, x: p.x, y: p.y }), keepalive: true }).catch(() => {});
+  }, [inside]);
   // 낚시·벌레잡기 놀이 창 (round = 새 판마다 처음부터)
   const [catching, setCatching] = useState<{ tool: ToolKey; x: number; y: number; bug?: number } | null>(null);
   const [round, setRound] = useState(0);
@@ -306,7 +329,11 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     if (craft.stoneLeft <= 0) { setToast(`오늘은 돌멩이를 다 캤어! (하루 ${craft.rules.stoneDaily}개) 내일 또 캘 수 있어.`); return; }
     await talk(await act<{ message: string }>({ type: 'villageGather', rock, stay: true }));
   }
-  async function openMail() { if (!busy) await talk(await act<{ message: string }>({ type: 'villageMail', stay: true })); }
+  async function openMail() {
+    if (busy) return;
+    const r = await act<{ message: string; iron?: number; letters?: unknown[] }>({ type: 'villageMail', stay: true });
+    if (r?.letters?.length) { if (r.iron) setToast(r.message); letterShown.current = true; setSheet('letter'); } else await talk(r);
+  }
   async function plantAt(spot: number) {
     if (!planting || busy) return;
     const r = await act<{ message: string }>({ type: 'villagePlant', spot, berry: planting, stay: true });
@@ -424,7 +451,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
             })}
             <button className="village-hit" style={{ left: WORKBENCH.x * TILE, top: WORKBENCH.y * TILE, width: objectInfo('workbench').cells[0] * TILE, height: objectInfo('workbench').cells[1] * TILE }}
               aria-label="제작대" onClick={() => setSheet('workbench')} />
-            <button className={'village-hit' + (craft.mail > 0 ? ' ready' : '')} style={{ left: MAILBOX.x * TILE, top: MAILBOX.y * TILE, width: TILE, height: 2 * TILE }}
+            <button className={'village-hit' + (craft.mail > 0 || letters.length > 0 ? ' ready' : '')} style={{ left: MAILBOX.x * TILE, top: MAILBOX.y * TILE, width: TILE, height: 2 * TILE }}
               aria-label="우편함" onClick={() => void openMail()} />
             {GATHER_ROCKS.map((r, i) => isOpenCell(r.x, r.y, openIds) && <button key={'rk' + i} className={'village-hit' + (craft.stoneLeft > 0 ? ' ready' : '')} style={{ left: r.x * TILE, top: r.y * TILE, width: TILE, height: TILE }}
               aria-label="바위 (돌멩이 캐기)" onClick={() => void gather(i)} />)}
@@ -533,7 +560,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
         onUnlock={async id => { const r = await act<{ message: string }>({ type: 'villageUnlock', region: id }); if (r) { setToast(r.message); pop.doneChooser(); } return !!r; }} />
       {sheet && <div className="village-sheet-back" onClick={() => setSheet(null)}>
         <div className="village-sheet" onClick={e => e.stopPropagation()}>
-          {sheet === 'workbench' ? <WorkbenchSheet view={view} busy={busy} act={act} onToast={setToast}
+          {sheet === 'letter' ? <LetterSheet view={view} busy={busy} act={act} onToast={setToast} onDone={() => setSheet(null)} />
+            : sheet === 'workbench' ? <WorkbenchSheet view={view} busy={busy} act={act} onToast={setToast}
               onOpenBall={onOpenBall ? b => { setSheet(null); onOpenBall(b); } : undefined}
               onPlant={() => setSheet('plant')} />
             : sheet === 'plant' ? <PlantSheet onPick={k => { setSheet(null); setPlacing(null); setDecorPlacing(null); setPlanting(k); }} />
@@ -771,5 +799,44 @@ function BagSheet({ view, busy, onMake, onPlace, onPlaceDecor, onPlant, onOpenBa
       <div className="bag-grid">{BERRY_KINDS.map(k => (
         <span key={k} className={'bag-item tool' + (c.berries[k] ? '' : ' none')}><img src={ASSETS.potion[k]} alt="" width={30} height={30} /><span>{POTIONS[k].label}</span><b>{c.berries[k] ?? 0}/{c.berryCap}</b></span>
       ))}</div></div>
+  </>;
+}
+
+/** 제때 등교 편지 (2026-11-20): 기본 재료 6종 중 하나 고르기 (반짝돌·철은 없음). 편지가 여러 장이면 한 장씩 */
+function LetterSheet({ view, busy, act, onToast, onDone }: {
+  view: ChildView; busy: boolean; act: <T>(a: Action) => Promise<T | null>; onToast: (s: string) => void; onDone: () => void;
+}) {
+  const letter = view.schoolLetters[0];
+  // 편지가 막 뜬 순간 걷던 손가락이 재료 칸을 누르지 않게 잠깐 막음
+  const [readyId, setReadyId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!letter) return;
+    const t = setTimeout(() => setReadyId(letter.id), 800);
+    return () => clearTimeout(t);
+  }, [letter?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!letter) return <><h3>📮 우체통</h3><p className="village-sheet-note">편지 선물을 다 받았어!</p></>;
+  const v = view.village;
+  return <>
+    <h3>📮 편지가 왔어!</h3>
+    <div className="school-letter">
+      <b>🏫 {letter.title}</b>
+      <p>학교에 늦지 않고 도착했구나! 정말 멋져. 선물로 마을 재료 하나를 골라 봐.</p>
+      {view.schoolLetters.length > 1 && <small>편지가 {view.schoolLetters.length}장 왔어. 한 장씩 열어 보자!</small>}
+    </div>
+    <div className="school-letter-mats">
+      {MATERIALS.map(k => {
+        const full = v.mats[k] >= v.rules.matCap;
+        return (
+          <button key={k} className="village-place-btn" disabled={busy || full || readyId !== letter.id} onClick={async () => {
+            const r = await act<{ message: string }>({ type: 'schoolLetterPick', id: letter.id, kind: k, stay: true });
+            if (r) { onToast(r.message); if (view.schoolLetters.length <= 1) onDone(); }
+          }}>
+            <MaterialIcon kind={k} />
+            <b>{MATERIAL_INFO[k].name}</b>
+            <small>{full ? '가득 찼어' : `${v.mats[k]}개 있어`}</small>
+          </button>
+        );
+      })}
+    </div>
   </>;
 }
