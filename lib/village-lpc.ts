@@ -43,12 +43,14 @@ export function seojunLayers(top: (typeof SEOJUN_TOPS)[number]['id'], hat: boole
   const head = face === 'child'
     ? [L('head', 'head_child_on_teen'), L('hair', 'hair_relm_child_brown_on_teen')]
     : [L('head', 'head_male_small'), ...(face === 'happy' ? [L('head', 'face_happy')] : []), L('hair', 'hair_plain_black')];
+  // 2026-11-20 부모님: "서준이 머리통만 조금 크게, 몸통은 어른보다 조금 작게" → 서준 그림은 모두 _sj (scripts 대신 시험이라 미리 만든 그림:
+  //   몸·옷은 아래쪽 줄 3개(41·47·53)를 빼서 3px 작게, 머리·머리카락·표정·모자는 가운데 세로 줄을 겹쳐 4px 넓게·이마 줄을 겹쳐 2px 높게)
   return softLayers([
     L('body', 'body_teen'), L('feet', 'shoes_thin_gray'), L('legs', 'shorts_thin_tan'),
     SEOJUN_TOPS.find(t => t.id === top)!.layer,
     ...head,
     ...(hat ? [SEOJUN_HAT.layer] : []),
-  ], soft);
+  ].map(l => ({ ...l, file: l.file.replace(/\.png$/, '_sj.png') })), soft);
 }
 
 /** 가족 (근처에 서 있거나 천천히 걸음). 하준 = LPC에서 가장 작은 "어린이" 몸 */
