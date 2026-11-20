@@ -56,5 +56,6 @@ export const LPC_FAMILY: (LpcPerson & { home: { dx: number; dy: number } })[] = 
   { id: 'hajun', name: '하준', home: { dx: -2, dy: 1 }, layers: [L('body', 'body_child'), L('legs', 'childpants_darkblue'), L('torso', 'childshirt_lightblue'), L('head', 'head_child'), L('hair', 'hair_relm_child_brown')] },
   // 엄마: 2026-11-20 부모님 "가슴 툭 튀어나옴 최악" → 어른 여자 몸 대신 청소년 몸(납작) + 청소년 긴팔
   { id: 'mom', name: '엄마', home: { dx: 2, dy: 2 }, layers: [L('body', 'body_teen'), L('feet', 'shoes_thin_gray'), L('legs', 'pants_thin_navy'), L('torso', 'longsleeve_teen_lavender'), L('head', 'head_female'), L('hair', 'hair_bob_chestnut')] },
-  { id: 'dad', name: '아빠', home: { dx: -1, dy: 3 }, layers: [L('body', 'body_male'), L('feet', 'shoes_male_black'), L('legs', 'pants_male_charcoal'), L('torso', 'tshirt_male_slate'), L('head', 'head_male'), L('hair', 'hair_plain_brown')] },
+  // 아빠: 2026-11-20 부모님 "몸이 너무 부각돼서 별로" → 어른 남자 몸 대신 청소년 몸 + 초록 긴팔
+  { id: 'dad', name: '아빠', home: { dx: -1, dy: 3 }, layers: [L('body', 'body_teen'), L('feet', 'shoes_thin_gray'), L('legs', 'pants_thin_charcoal'), L('torso', 'longsleeve_teen_forest'), L('head', 'head_male'), L('hair', 'hair_plain_brown')] },
 ];
