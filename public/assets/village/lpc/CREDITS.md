@@ -21,6 +21,10 @@
 | polo_teen_red.png | 반팔 폴로 | OGA-BY 3.0  | ElizaWy,JaidynReiman,Stephen Challener (Redshrike),Johannes Sjölund (wulax)  |
 | tshirt_male_slate.png | 티셔츠 | OGA-BY 3.0  | ElizaWy,JaidynReiman,Stephen Challener (Redshrike),Johannes Sjölund (wulax)  |
 | longsleeve_female_lavender.png | 긴팔 | OGA-BY 3.0,CC-BY-SA 3.0,GPL 3.0  | bluecarrot16,ElizaWy,JaidynReiman,Stephen Challener (Redshrike)  |
+| longsleeve_teen_lavender.png | 긴팔(청소년, 엄마) | OGA-BY 3.0,GPL 3.0  | bluecarrot16,ElizaWy,JaidynReiman,Stephen Challener (Redshrike),Johannes Sjölund (wulax)  |
+| head_child_on_teen.png | 머리(어린이, 서준 아이 얼굴: 4px 올림) | OGA-BY 3.0,CC-BY 3.0,GPL 3.0  | Stephen Challener (Redshrike),kheftel,bluecarrot16  |
+| hair_relm_child_brown_on_teen.png | 어린이 짧은 머리(서준 아이 얼굴: 4px 올림) | OGA-BY 3.0+,CC-BY 3.0+,GPL 3.0  | JaidynReiman  |
+| face_happy.png | 웃는 얼굴 표정 | CC-BY-SA 3.0,GPL 3.0  | JaidynReiman,Thane Brimhall (pennomi),laetissima,Stephen Challener (Redshrike)  |
 | shorts_thin_tan.png | 반바지 | OGA-BY 3.0  | ElizaWy,JaidynReiman,Johannes Sjölund (wulax),Stephen Challener (Redshrike)  |
 | pants_thin_navy.png | 긴바지 | OGA-BY 3.0,GPL 3.0,CC-BY-SA 3.0  | bluecarrot16,JaidynReiman,ElizaWy,Joe White,Matthew Krohn (makrohn),Johannes Sjölund (wulax),Stephen Challener (Redshrike)  |
 | pants_male_charcoal.png | 긴바지 | OGA-BY 3.0,GPL 3.0,CC-BY-SA 3.0  | bluecarrot16,JaidynReiman,ElizaWy,Matthew Krohn (makrohn),Johannes Sjölund (wulax),Stephen Challener (Redshrike)  |
