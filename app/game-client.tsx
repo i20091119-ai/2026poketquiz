@@ -21,6 +21,7 @@ import { FeedIntro, feedIntroSeen, markFeedIntroSeen } from '@/components/game/f
 import { LegendMap, LegendPickDialog, type LegendPickResult } from '@/components/game/legend';
 import { VillageScreen, VillageStrip } from '@/components/game/village';
 import { useBackGuard } from '@/components/back-guard';
+import { DayBoxesDialog, dayBoxHeading } from '@/components/game/day-boxes';
 import { markOfflineIntroSeen, markWeekSeen, OfflineIntro, offlineIntroSeen, StudyCalendarDialog, StudyStrip, WeekRecordDialog, weekSeen } from '@/components/game/offline';
 import { OutingCard, OutingGallery, OutingIntro, OutingNudge, OutingReward, OutingWriter, type OutingPieceResult } from '@/components/game/outing';
 import type { Action, Ball, ChildView, PublicGift, PublicQuestion } from '@/lib/game-engine';
@@ -89,6 +90,7 @@ export default function Game() {
   const [pickLater, setPickLater] = useState(false);
   const [dayBox, setDayBox] = useState<ChildView['offline']['boxes'][number] | null>(null);
   const [boxLater, setBoxLater] = useState<string[]>([]);
+  const [boxListOpen, setBoxListOpen] = useState(false); // 훈련 달력 "선물 상자 보기"
 
   const apply = useCallback((data: GameResponse) => { setStrongOverrides(data.strong); setGrowthRules(data.growth); setView(data.view); setSim(data.sim ?? null); setGate(data.battleGate ?? null); }, []);
   const refresh = useCallback((signal?: AbortSignal) =>
@@ -298,9 +300,11 @@ export default function Game() {
   const lastWeek = view.offline.lastWeek;
   const showWeek = !!lastWeek && studyCalm && offIntroSeen && !showOffIntro && weekDone !== lastWeek.start && !weekSeen(lastWeek.start);
   const autoPick = studyCalm && offIntroSeen && !showWeek && !!view.legend.pending && !pickLater;
-  const boxAsk = studyCalm && offIntroSeen && !showWeek && !autoPick ? view.offline.boxes.find(b => !boxLater.includes(b.id)) ?? null : null;
+  // 하루 선물 상자: 나중에 하지 않은 것을 한 창에 요일별로 (2026-11-20: 몰아서 적으면 여러 개)
+  const boxAsk = studyCalm && offIntroSeen && !showWeek && !autoPick ? view.offline.boxes.filter(b => !boxLater.includes(b.id)) : [];
+  const boxListBoxes = boxListOpen ? view.offline.boxes : boxAsk;
   // 먹이기 → 💗 안내: 다른 안내 팝업이 다 끝난 뒤 한 번
-  const showFeedIntro = studyCalm && offIntroSeen && !showOffIntro && !showWeek && !autoPick && !boxAsk && !feedIntroStored && !feedIntroDone;
+  const showFeedIntro = studyCalm && offIntroSeen && !showOffIntro && !showWeek && !autoPick && !boxAsk.length && !feedIntroStored && !feedIntroDone;
   const closeFeedIntro = () => { markFeedIntroSeen(); setFeedIntroDone(true); };
   const pickLegend = async (pick: number) => { setPickOpen(true); return act<LegendPickResult>({ type: 'legendPick', pick }); };
   const saveTeam = async (friends: string[]) => { const r = await act<{ message: string }>({ type: 'team', friends }); if (r) setNotice(r.message); return !!r; };
@@ -488,23 +492,20 @@ export default function Game() {
       {view.partner && lastWeek && <WeekRecordDialog key={'w' + lastWeek.start} view={view} open={showWeek}
         onDone={openPick => { markWeekSeen(lastWeek.start); setWeekDone(lastWeek.start); if (openPick) setPickOpen(true); }} />}
       <StudyCalendarDialog open={studyOpen} view={view} onClose={() => setStudyOpen(false)}
-        onOpenBox={() => { setStudyOpen(false); setDayBox(view.offline.boxes[0] ?? null); }} />
+        onOpenBox={() => { setStudyOpen(false); setBoxListOpen(true); }} />
       <LegendMap open={mapOpen} view={view} onClose={() => setMapOpen(false)} onPick={() => { setMapOpen(false); setPickOpen(true); }} />
       <LegendPickDialog key={'pick' + pickKey} open={pickOpen || autoPick} view={view} busy={busy} onPick={pickLegend}
         onClose={() => { setPickOpen(false); setPickLater(true); setPickKey(k => k + 1); }} />
-      <Dialog open={!!boxAsk} onOpenChange={o => { if (!o && boxAsk) setBoxLater(l => [...l, boxAsk.id]); }}>
-        <DialogContent className="reward-dialog">
-          <DialogTitle className="intro-title">{boxAsk?.kind === 'book' ? '📘 훈련 상자가 왔어!' : '🎁 선물 상자가 왔어!'}</DialogTitle>
-          <DialogDescription className="intro-text">{boxAsk && `${Number(boxAsk.date.slice(5, 7))}월 ${Number(boxAsk.date.slice(8))}일 훈련 ${boxAsk.mark === 'full' ? '●' : boxAsk.mark === 'some' ? '■' : '▲'} 선물이야!`}</DialogDescription>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="day-box-img" src={boxAsk?.kind === 'book' ? ASSETS.bookBox : ASSETS.boxClosed} alt="" />
-          <button className="primary big-button" onClick={() => { if (boxAsk) setDayBox(boxAsk); }}>열어 보기!</button>
-          <button className="secondary" onClick={() => { if (boxAsk) setBoxLater(l => [...l, boxAsk.id]); }}>나중에 (달력에서 열 수 있어)</button>
-        </DialogContent>
-      </Dialog>
+      <DayBoxesDialog open={(boxListOpen || boxAsk.length > 0) && !dayBox} boxes={boxListBoxes} busy={busy} act={act}
+        title={boxListOpen ? '🎁 훈련 선물 상자' : undefined}
+        onOpenOne={b => setDayBox(b)}
+        onLater={boxListOpen ? undefined : () => setBoxLater(l => [...l, ...boxAsk.map(b => b.id)])}
+        onClose={() => { setBoxListOpen(false); setBoxLater(l => [...l, ...boxAsk.map(b => b.id)]); }}
+        onOpenBalls={ids => { setBoxListOpen(false); setBallQueue(ids.map(id => view.balls.find(b => b.id === id)).filter((b): b is Ball => !!b)); }} />
       <RewardPicker
         key={dayBox ? 'day' + dayBox.id : 'day-none'}
         kind={dayBox ? (dayBox.kind === 'book' ? 'book' : 'home') : null}
+        heading={dayBox ? dayBoxHeading(dayBox) : undefined}
         picks={dayBox?.count ?? 1}
         initial={dayBox ? { items: dayBox.items, picks: dayBox.picks } : null}
         busy={busy}

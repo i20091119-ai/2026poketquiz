@@ -3,7 +3,7 @@
 // 위에서 내려다보는 도트 지도(16×16 타일을 3배 = 48px, 그림은 village-tiles.tsx), 화살표 버튼으로 서준이가 걷고
 // 파트너 포켓몬이 한 칸 뒤에서 따라와요(포켓로그처럼 트레이너 + 포켓몬). 화면은 서준이를 따라 움직여요.
 // 포켓몬은 포켓로그의 움직이는 도트 그림(anim-mon.tsx).
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Progress } from '@/components/ui/progress';
 import type { Action, ChildView, VillageGuest } from '@/lib/game-engine';
@@ -28,6 +28,8 @@ import { groundAt } from '@/lib/village-map';
 import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, WorkbenchSheet, type CraftedBall } from './village-craft';
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
+import { LpcWalker } from './village-lpc';
+import { LPC_FAMILY, LPC_REAL, softLayers, type LpcLayer } from '@/lib/village-lpc';
 
 /* eslint-disable @next/next/no-img-element */
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
@@ -71,6 +73,8 @@ type ScreenProps = {
   onClose: () => void;
   /** 마을 안에 있는지 (마을 시간 세기용) */
   onSeconds: (inside: boolean) => void;
+  /** [시험] LPC 사람 그림 (/village-demo 에서만): on이면 서준이를 겹친 층으로 그리고 가족 3명이 근처에, bar = 위쪽 시험 버튼 줄 */
+  lpcTest?: { on: boolean; seojun: LpcLayer[]; scale: number; soft: boolean; bar?: ReactNode };
 };
 /** 마을 화면 (전체 화면). 열 때마다 처음 자리에서 시작 */
 export function VillageScreen({ open, ...props }: ScreenProps & { open: boolean }) {
@@ -78,7 +82,7 @@ export function VillageScreen({ open, ...props }: ScreenProps & { open: boolean 
   return <VillageInner {...props} />;
 }
 /** 열려 있지 않으면 입구 그림 + 미션 진행 막대 */
-function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: ScreenProps) {
+function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest }: ScreenProps) {
   const v = view.village;
   // 들어와 있는 동안은 자정이 지나 잠겨도 계속 놀 수 있음 (나가면 잠김)
   const [inside, setInside] = useState(false);
@@ -185,6 +189,15 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
   useEffect(() => { if (!toast) return; const t = window.setTimeout(() => setToast(''), 2200); return () => window.clearTimeout(t); }, [toast]);
   useEffect(() => { if (!bubble) return; const t = window.setTimeout(() => setBubble(null), 2600); return () => window.clearTimeout(t); }, [bubble]);
 
+  // [시험] LPC 가족 자리 (아래 걷기 효과에서 씀)
+  // 사람 그림: 진짜 마을은 LPC 서준(2026-11-20 부모님: LPC로 바꿈, 시험에서 고른 모습 LPC_REAL). 시험용 마을은 위쪽 버튼으로 비교
+  const lpc = lpcTest ?? LPC_REAL;
+  const lpcOn = lpc.on;
+  // 가족(하준·엄마·아빠)은 아직 시험용 마을에서만
+  const showFamily = lpcOn && !!lpcTest;
+  const [family, setFamily] = useState(() => LPC_FAMILY.map(f => ({ id: f.id, x: START_POS.x + f.home.dx, y: START_POS.y + f.home.dy, dir: 'down' as 'down' | 'up' | 'left' | 'right', step: 0 })));
+  const familyRef = useRef<typeof family>([]);
+  useEffect(() => { familyRef.current = showFamily ? family : []; });
   // 돌아다니는 포켓몬: 모험 팀 + 오늘 손님 (손님은 자기 서식지 근처)
   const baseWalkers = useMemo<Walker[]>(() => [
     ...v.residents.slice(1, 3).map((r, i) => ({ id: 'r' + i, species: r.species, shiny: r.shiny, x: [4, 8][i], y: [9, 10][i] })),
@@ -200,7 +213,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     const t = window.setInterval(() => {
       const next: Record<string, { x: number; y: number }> = {};
       // 서준이·파트너·다른 포켓몬이 있는 칸에는 겹치지 않게 (2026-11-14 부모님: 파트너와 손님이 겹침)
-      const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y))]);
+      const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...familyRef.current.map(f => key(f.x, f.y))]);
       for (const w of walkersRef.current) {
         const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y)].includes(key(w.x, w.y))
           || walkersRef.current.some(o => o.id !== w.id && o.x === w.x && o.y === w.y);
@@ -220,6 +233,30 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
     }, 900);
     return () => window.clearInterval(t);
   }, [inside]);
+
+  // [시험] LPC 가족 (하준·엄마·아빠): 처음 자리 근처에 서 있다가 가끔 한 칸씩 천천히 걸음 (2칸 안에서만, 사람·포켓몬과 안 겹침)
+  useEffect(() => {
+    if (!inside || !showFamily) return;
+    const t = window.setInterval(() => {
+      setFamily(list => {
+        const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.map(f => key(f.x, f.y))]);
+        return list.map(f => {
+          const home = LPC_FAMILY.find(h => h.id === f.id)!.home;
+          const hx = START_POS.x + home.dx, hy = START_POS.y + home.dy;
+          const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y))].includes(key(f.x, f.y));
+          if (!crowded && Math.random() < 0.6) return f;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5)) {
+            const x = f.x + dx, y = f.y + dy;
+            if (!inMap(x, y) || blockedRef.current.has(key(x, y)) || taken.has(key(x, y)) || Math.abs(x - hx) > 2 || Math.abs(y - hy) > 2) continue;
+            taken.add(key(x, y));
+            return { ...f, x, y, step: f.step + 1, dir: (dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up') as 'down' | 'up' | 'left' | 'right' };
+          }
+          return f;
+        });
+      });
+    }, 1600);
+    return () => window.clearInterval(t);
+  }, [inside, showFamily]);
 
   const pickupAt = (x: number, y: number) => v.pickups.find(p => PICK_SPOTS[p.spot].x === x && PICK_SPOTS[p.spot].y === y);
   async function move(dx: number, dy: number) {
@@ -350,6 +387,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
         <button className="secondary small" onClick={close}>나가기</button>
       </div>
       <VillageLevelBar level={v.level} width={VIEW_COLS * TILE} onKeys={() => pop.openChooser()} onHelp={pop.openGuide} onGuide={() => setGuide('')} />
+      {lpcTest?.bar}
       <div className="village-view" style={{ width: VIEW_COLS * TILE, height: VIEW_ROWS * TILE }}>
         <div className="village-map" style={{ width: MAP_W * TILE, height: fullH, transform: `translate(${-cam.x}px, ${-cam.y}px)` }}>
           <VillageGround tile={TILE} cells={v.cells} decor={v.decor} terrain={v.terrain} extra={extraObjects} />
@@ -414,7 +452,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           {/* 돌아다니는 포켓몬 */}
           {walkers.map(w => (
             <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing || decorPlacing ? ' pass' : '')}
-              style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: 11 + w.y }}
+              style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: bubble?.id === w.id ? 200 : 11 + w.y }}
               onClick={() => void onMonTap(w)}
               aria-label={species(w.species).name}>
               <span className="village-shadow" />
@@ -430,11 +468,14 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
             <AnimMon species={partner.species} shiny={partner.shiny} scale={1} back={follow.dir === 'up'} flip={follow.dir === 'right'} fallback={pixelSrc(partner.species)} />
           </span>}
           {/* 서준이 */}
-          <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
+          {lpcOn ? <>
+            {showFamily && family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpc.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpc.scale} />; })}
+            <LpcWalker me name={PLAYER.name} layers={lpc.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} scale={lpc.scale} />
+          </> : <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
             <span className="village-shadow" />
             <span className="village-me-body"><PlayerSprite sprite={PLAYER.sprite} dir={dir} step={step} /></span>
             <span className="village-me-mark">{PLAYER.name}</span>
-          </span>
+          </span>}
           </div>
         </div>
         {placing && <div className="village-placing" role="status">
@@ -481,7 +522,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall }: Scree
           <button aria-label="아래로" onClick={() => void move(0, 1)}>▼</button>
           <span />
         </div>
-        <a className="village-credit" href="/assets/village/LICENSE.txt" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 포켓몬 그림: 포켓로그</a>
+        <a className="village-credit" href="/guide/credits.html" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 사람 그림: LPC 기여자들 (CC BY-SA 3.0 / OGA-BY 3.0) · 포켓몬 그림: 포켓로그</a>
       </div>
 
       <CraftIntro open={introOpen} view={view} onClose={closeIntro} />

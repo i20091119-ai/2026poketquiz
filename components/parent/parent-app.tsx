@@ -425,7 +425,14 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
 
-      {low === 'update' && <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />}
+      {low === 'update' && <>
+        <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />
+        <section className="panel parent-section">
+          <h2>🎨 그림 출처</h2>
+          <p className="muted">마을 사람(LPC)·땅·물건 그림을 그린 사람과 라이선스 전체 목록이에요.</p>
+          <a className="secondary small" href="/guide/credits.html" target="_blank" rel="noreferrer">그림 출처 열기</a>
+        </section>
+      </>}
 
       {low === 'dev' && <>
         <DevMenu part="sim" sim={overview.sim} shinyAll={overview.shiny.simAll} limitedEvents={overview.limitedEvents} busy={busy} call={call} reload={reload} />

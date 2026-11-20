@@ -1373,3 +1373,47 @@ html, body { overscroll-behavior-y: none; }
 .workbench-recipes .village-recipe b { font-size: 17px; }
 .cost-word { font-weight: 800; }
 .recipe-why { display: block; margin-top: 4px; font-size: 15px; color: #b5541a; }
+
+/* [시험] LPC 사람 그림 (/village-demo): 층을 겹쳐 그림, 2배(정수), 발을 칸 아래에 맞춤 */
+.lpc-person { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); pointer-events: none; }
+.lpc-layer { position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated; }
+.lpc-family-mark { background: #7c3aed; }
+.village-mon.lpc-npc { pointer-events: none; }
+.lpc-test-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 4px 8px 6px; }
+.lpc-test-bar button { border: 2px solid rgba(255,255,255,.5); background: rgba(255,255,255,.12); color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 800; }
+.lpc-test-bar button.on { background: #fde68a; color: #4a3500; border-color: #fde68a; }
+.lpc-test-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; color: #fff; font-size: 12px; font-weight: 800; }
+
+/* ---------- 훈련 하루 선물 상자: 요일 붙이기 (2026-11-20) ---------- */
+.day-box-heading { align-self: center; padding: 2px 12px; border-radius: 999px; background: #eef4ff; color: #1e3a8a; font-weight: 800; font-size: 14px; }
+.day-box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; width: 100%; }
+.day-box-tile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 2px solid #e2e8e0; border-radius: 14px; background: #fff; font: inherit; color: #26352d; }
+button.day-box-tile:active { transform: scale(.95); }
+.day-box-tile img { width: 48px; height: 48px; object-fit: contain; }
+.day-box-tile small { font-size: 11px; color: #64748b; }
+.day-box-label { font-size: 17px; font-weight: 900; letter-spacing: .5px; }
+.day-box-label.mark-full { color: #1d4ed8; }
+.day-box-label.mark-some { color: #b45309; }
+.day-box-label.mark-none { color: #64748b; }
+.day-box-tile.pop, .day-box-result.pop { animation: pop-in .4s cubic-bezier(.2, 1.6, .4, 1) both; }
+.day-box-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; width: 100%; max-height: 52vh; overflow-y: auto; }
+.day-box-result { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; padding: 6px; border-radius: 14px; background: #f8fafc; }
+.day-box-result-day { display: flex; flex-direction: column; align-items: center; }
+.day-box-result-day img { width: 36px; height: 36px; object-fit: contain; }
+.day-box-result-day small { font-size: 11px; color: #64748b; }
+.day-box-result-items { display: flex; gap: 6px; flex-wrap: wrap; }
+.day-box-result-items .reward-card { flex: 1; min-width: 0; padding: 6px; }
+.day-box-result-items .reward-card img { width: 40px; height: 40px; }
+.day-box-result-items .reward-card small { font-size: 11px; }
+.week-day { position: relative; }
+.week-day-box { width: 30px; height: 30px; object-fit: contain; margin-top: 2px; }
+.week-day-box.pop-up { animation: week-box-pop .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes week-box-pop { 0% { transform: translateY(-14px) scale(.2); opacity: 0; } 60% { transform: translateY(4px) scale(1.15); opacity: 1; } 100% { transform: none; } }
+.week-box-note { margin: 0; font-weight: 800; color: #b45309; }
+.study-day-box { position: absolute; right: 1px; top: 0; font-size: 11px; }
+.day-box-result-items .reward-card { flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; min-height: 0; padding: 6px 10px; text-align: left; }
+.day-box-result-items .reward-card img { width: 36px; height: 36px; flex: none; }
+.day-box-result-items .reward-card b { font-size: 15px; }
+.day-box-result-items .reward-card small { display: none; }
+.day-box-result { grid-template-columns: 64px 1fr; padding: 4px 6px; }
+.day-boxes-dialog .intro-title { font-size: 22px; }
