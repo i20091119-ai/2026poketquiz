@@ -1,8 +1,9 @@
-// [시험] 마을 사람 캐릭터를 LPC 그림으로 바꿔 보기 (2026-11-20 부모님 요청, /village-demo 에서만 씀)
+// 마을 사람 캐릭터 LPC 그림 (2026-11-20 부모님 요청: 시험용 마을 /village-demo 에서 비교한 뒤 진짜 마을 서준도 LPC로 바꿈 = LPC_REAL).
+// 가족(하준·엄마·아빠)과 옷·크기·얼굴 고르기는 아직 시험용 마을에서만.
 // 그림: Universal LPC Spritesheet Character Generator 의 걷기 그림(walk.png: 64×64 칸, 9장 × 4줄 = 위·왼쪽·아래·오른쪽)
 //       public/assets/village/lpc/ (출처·라이선스 = 같은 폴더 CREDITS.md / CREDITS.csv)
 // 옷은 한 장으로 합치지 않고 층(몸·신발·바지·윗옷·머리·머리카락·모자)을 따로 불러와 화면에서 겹쳐 그림 → 옷 바꿔 입히기 시험.
-// 실제 마을·아이 기록은 건드리지 않음.
+// 그림만 바꾸며 아이 기록은 건드리지 않음.
 
 export const LPC_FRAME = 64;
 /** 화면 배율: 마을 타일 16px × 3 = 48px. 2배 = 지금 서준(96px)과 키가 비슷(정수라 또렷) · 1.5배 = 한 칸 반 · 1배 = 한 칸.
@@ -63,3 +64,6 @@ export const LPC_FAMILY: (LpcPerson & { home: { dx: number; dy: number } })[] = 
   // 아빠: 2026-11-20 부모님 "몸이 너무 부각돼서 별로" → 어른 남자 몸 대신 청소년 몸 + 초록 긴팔
   { id: 'dad', name: '아빠', home: { dx: -1, dy: 3 }, layers: [L('body', 'body_teen'), L('feet', 'shoes_thin_gray'), L('legs', 'pants_thin_charcoal'), L('torso', 'longsleeve_teen_forest'), L('head', 'head_male'), L('hair', 'hair_plain_brown')] },
 ];
+
+/** 진짜 마을 서준 (시험에서 부모님이 고른 모습: 빨간 티셔츠 · 모자 없음 · 아이 얼굴 · 부드러운 테두리 · 1.5배) */
+export const LPC_REAL = { on: true, seojun: seojunLayers('tshirt', false, 'child', true), scale: LPC_SCALE_DEFAULT as number, soft: true };

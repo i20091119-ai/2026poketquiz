@@ -1,6 +1,6 @@
 // 화면에 보여 주는 버전 이름. 새 기능을 올릴 때 여기 숫자와 아래 "바뀐 것(UPDATES)"만 고치면 됩니다.
 // 날짜는 인터넷에 올릴 때(만들 때) 자동으로 들어갑니다 (vite.config.ts 의 __BUILD_DATE__).
-export const APP_VERSION = '1.42';
+export const APP_VERSION = '1.43';
 
 /** 하루치 바뀐 것. date는 'YYYY-MM-DD', version은 그날 마지막으로 올린 버전 이름 */
 export interface UpdateDay {
@@ -20,8 +20,12 @@ export interface UpdateDay {
 export const UPDATES: UpdateDay[] = [
   {
     date: '2026-11-20',
-    version: '1.42',
+    version: '1.43',
     items: [
+      '🎁 훈련 하루 상자에 요일·표시("월 ●")를 붙이고 한 번에 열기(결과는 요일별)',
+      '📅 지난주 훈련 기록: 7칸이 나온 뒤 ●·■ 칸에서 그날 상자가 하나씩 튀어나와요',
+      '🧑 마을 서준이 LPC 그림으로 바뀌었어요 (빨간 티셔츠·아이 얼굴·1.5배)',
+      '🎨 그림 출처 페이지(LPC 그린 사람·라이선스 전체): 마을 아래·설명서·업데이트 탭',
       '🧪 시험용 마을에 사람 그림 비교(지금 / LPC, 옷 바꿔 입히기, 크기·얼굴 고르기)',
     ],
   },

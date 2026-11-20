@@ -30,7 +30,7 @@ export function potionEffect(kind: PotionKind) {
   const types = potionTargets(kind);
   return `${types.length === TYPE_KEYS.length ? '모든 속성' : types.map(t => TYPE_INFO[t].label).join('·')} +${POTIONS[kind].amount}`;
 }
-function ItemView({ item }: { item: BoxItem }) {
+export function ItemView({ item }: { item: BoxItem }) {
   if (item.kind === 'potion') return <>
     <img src={ASSETS.potion[item.potion]} alt={POTIONS[item.potion].label} />
     <b>{POTIONS[item.potion].label}</b>
@@ -49,8 +49,10 @@ function ItemView({ item }: { item: BoxItem }) {
 }
 
 /** 3개 중 picks개 고르기 → 다 고르면 나머지도 공개 → 고른 것 중에 볼이 있으면 바로 열 수 있게 안내 */
-export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onClose, onOpenBalls }: {
+export function RewardPicker({ kind, subject, heading, picks, initial, busy, onPick, onClose, onOpenBalls }: {
   kind: RewardKind | null;
+  /** 제목 위 작은 이름표 (훈련 하루 상자: "월요일 ● 훈련") */
+  heading?: string;
   subject?: string;
   /** 고를 수 있는 개수 */
   picks: number;
@@ -83,6 +85,7 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
   return (
     <Dialog open={!!kind} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent className="reward-dialog">
+        {heading && <span className="day-box-heading">{heading}</span>}
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{done ? '고른 것만 가질 수 있어. 다른 것에는 뭐가 있었는지 볼까?' : copy.description}</DialogDescription>
         <div className="choice-row">

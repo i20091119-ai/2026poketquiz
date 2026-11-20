@@ -29,7 +29,7 @@ import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, Workbench
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 import { LpcWalker } from './village-lpc';
-import { LPC_FAMILY, softLayers, type LpcLayer } from '@/lib/village-lpc';
+import { LPC_FAMILY, LPC_REAL, softLayers, type LpcLayer } from '@/lib/village-lpc';
 
 /* eslint-disable @next/next/no-img-element */
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
@@ -190,10 +190,14 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
   useEffect(() => { if (!bubble) return; const t = window.setTimeout(() => setBubble(null), 2600); return () => window.clearTimeout(t); }, [bubble]);
 
   // [시험] LPC 가족 자리 (아래 걷기 효과에서 씀)
-  const lpcOn = !!lpcTest?.on;
+  // 사람 그림: 진짜 마을은 LPC 서준(2026-11-20 부모님: LPC로 바꿈, 시험에서 고른 모습 LPC_REAL). 시험용 마을은 위쪽 버튼으로 비교
+  const lpc = lpcTest ?? LPC_REAL;
+  const lpcOn = lpc.on;
+  // 가족(하준·엄마·아빠)은 아직 시험용 마을에서만
+  const showFamily = lpcOn && !!lpcTest;
   const [family, setFamily] = useState(() => LPC_FAMILY.map(f => ({ id: f.id, x: START_POS.x + f.home.dx, y: START_POS.y + f.home.dy, dir: 'down' as 'down' | 'up' | 'left' | 'right', step: 0 })));
   const familyRef = useRef<typeof family>([]);
-  useEffect(() => { familyRef.current = lpcOn ? family : []; });
+  useEffect(() => { familyRef.current = showFamily ? family : []; });
   // 돌아다니는 포켓몬: 모험 팀 + 오늘 손님 (손님은 자기 서식지 근처)
   const baseWalkers = useMemo<Walker[]>(() => [
     ...v.residents.slice(1, 3).map((r, i) => ({ id: 'r' + i, species: r.species, shiny: r.shiny, x: [4, 8][i], y: [9, 10][i] })),
@@ -232,7 +236,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
 
   // [시험] LPC 가족 (하준·엄마·아빠): 처음 자리 근처에 서 있다가 가끔 한 칸씩 천천히 걸음 (2칸 안에서만, 사람·포켓몬과 안 겹침)
   useEffect(() => {
-    if (!inside || !lpcOn) return;
+    if (!inside || !showFamily) return;
     const t = window.setInterval(() => {
       setFamily(list => {
         const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.map(f => key(f.x, f.y))]);
@@ -252,7 +256,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
       });
     }, 1600);
     return () => window.clearInterval(t);
-  }, [inside, lpcOn]);
+  }, [inside, showFamily]);
 
   const pickupAt = (x: number, y: number) => v.pickups.find(p => PICK_SPOTS[p.spot].x === x && PICK_SPOTS[p.spot].y === y);
   async function move(dx: number, dy: number) {
@@ -464,9 +468,9 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
             <AnimMon species={partner.species} shiny={partner.shiny} scale={1} back={follow.dir === 'up'} flip={follow.dir === 'right'} fallback={pixelSrc(partner.species)} />
           </span>}
           {/* 서준이 */}
-          {lpcOn && lpcTest ? <>
-            {family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpcTest.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpcTest.scale} />; })}
-            <LpcWalker me name={PLAYER.name} layers={lpcTest.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} scale={lpcTest.scale} />
+          {lpcOn ? <>
+            {showFamily && family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpc.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpc.scale} />; })}
+            <LpcWalker me name={PLAYER.name} layers={lpc.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} scale={lpc.scale} />
           </> : <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
             <span className="village-shadow" />
             <span className="village-me-body"><PlayerSprite sprite={PLAYER.sprite} dir={dir} step={step} /></span>
@@ -518,7 +522,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
           <button aria-label="아래로" onClick={() => void move(0, 1)}>▼</button>
           <span />
         </div>
-        <a className="village-credit" href="/assets/village/LICENSE.txt" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 포켓몬 그림: 포켓로그</a>
+        <a className="village-credit" href="/guide/credits.html" target="_blank" rel="noreferrer">마을 그림: Tuxemon 그림 작가들 (CC BY-SA) · 사람 그림: LPC 기여자들 (CC BY-SA 3.0 / OGA-BY 3.0) · 포켓몬 그림: 포켓로그</a>
       </div>
 
       <CraftIntro open={introOpen} view={view} onClose={closeIntro} />

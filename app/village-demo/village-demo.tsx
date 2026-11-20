@@ -93,6 +93,8 @@ export default function VillageDemo() {
   const [ball, setBall] = useState<QueuedBall | null>(null);
   // [시험] 사람 그림: 지금 캐릭터 / LPC (주소 ?lpc=1 이면 LPC로 시작), 서준 옷 바꿔 입히기
   const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') === '1'; } catch { return false; } });
+  // 주소 ?real=1: 진짜 마을과 똑같은 모습(LPC 서준만, 시험 버튼·띠 없음) — 설명서 그림 찍을 때 씀
+  const [real] = useState(() => { try { return new URLSearchParams(window.location.search).get('real') === '1'; } catch { return false; } });
   const [top, setTop] = useState<(typeof SEOJUN_TOPS)[number]['id']>('tshirt');
   const [hat, setHat] = useState(false);
   // 크기·얼굴·테두리 (2026-11-20 부모님: "너무 크다", "얼굴이 더 부드러운 건?") — 기본은 추천: 1.5배 · 아이 얼굴 · 부드러운 테두리
@@ -111,11 +113,11 @@ export default function VillageDemo() {
 
   return (
     <>
-      <div className="village-demo-band" role="note">🧪 시험용 마을이에요. 여기서 한 것은 저장되지 않아요 (새로고침하면 처음으로).</div>
+      {!real && <div className="village-demo-band" role="note">🧪 시험용 마을이에요. 여기서 한 것은 저장되지 않아요 (새로고침하면 처음으로).</div>}
       {notice && <div className="village-demo-band warn" role="status">{notice}</div>}
       <VillageScreen open view={view} busy={busy} act={act} onClose={() => router.push('/')} onSeconds={noop}
         onOpenBall={b => setBall({ id: b.id, kind: b.kind, crafted: true })}
-        lpcTest={{ on: lpc, seojun: seojunLayers(top, hat, face, soft), scale, soft, bar }} />
+        lpcTest={real ? undefined : { on: lpc, seojun: seojunLayers(top, hat, face, soft), scale, soft, bar }} />
       <BallDialog key={ball?.id ?? 'none'} ball={ball} busy={busy} onOpen={b => act<CatchResult>({ type: 'openCraftedBall', id: b.id })} onClose={() => setBall(null)} />
     </>
   );
