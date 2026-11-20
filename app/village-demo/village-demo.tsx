@@ -4,6 +4,7 @@
 // 아이의 진짜 기록·미리보기 기록 어디에도 저장되지 않고, 새로고침하면 처음 상태로 돌아가요.
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
+import { SEOJUN_HAT, SEOJUN_TOPS, seojunLayers } from '@/lib/village-lpc';
 import { VillageScreen } from '@/components/game/village';
 import { BallDialog, type CatchResult, type QueuedBall } from '@/components/game/rewards';
 import { applyAction, childView, initialState, secureRandom, syncVillage, todayKorea, type Action, type GameState } from '@/lib/game-engine';
@@ -90,13 +91,24 @@ export default function VillageDemo() {
   }, [state, today]);
   const noop = useCallback(() => undefined, []);
   const [ball, setBall] = useState<QueuedBall | null>(null);
+  // [시험] 사람 그림: 지금 캐릭터 / LPC (주소 ?lpc=1 이면 LPC로 시작), 서준 옷 바꿔 입히기
+  const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') === '1'; } catch { return false; } });
+  const [top, setTop] = useState<(typeof SEOJUN_TOPS)[number]['id']>('tshirt');
+  const [hat, setHat] = useState(false);
+  const bar = <div className="lpc-test-bar" role="group" aria-label="사람 그림 시험">
+    <button className={!lpc ? 'on' : ''} onClick={() => setLpc(false)}>지금 캐릭터</button>
+    <button className={lpc ? 'on' : ''} onClick={() => setLpc(true)}>LPC</button>
+    {lpc && SEOJUN_TOPS.map(t => <button key={t.id} className={top === t.id ? 'on' : ''} onClick={() => setTop(t.id)}>{t.label}</button>)}
+    {lpc && <button className={hat ? 'on' : ''} onClick={() => setHat(h => !h)}>🧢 {SEOJUN_HAT.label}</button>}
+  </div>;
 
   return (
     <>
       <div className="village-demo-band" role="note">🧪 시험용 마을이에요. 여기서 한 것은 저장되지 않아요 (새로고침하면 처음으로).</div>
       {notice && <div className="village-demo-band warn" role="status">{notice}</div>}
       <VillageScreen open view={view} busy={busy} act={act} onClose={() => router.push('/')} onSeconds={noop}
-        onOpenBall={b => setBall({ id: b.id, kind: b.kind, crafted: true })} />
+        onOpenBall={b => setBall({ id: b.id, kind: b.kind, crafted: true })}
+        lpcTest={{ on: lpc, seojun: seojunLayers(top, hat), bar }} />
       <BallDialog key={ball?.id ?? 'none'} ball={ball} busy={busy} onOpen={b => act<CatchResult>({ type: 'openCraftedBall', id: b.id })} onClose={() => setBall(null)} />
     </>
   );
