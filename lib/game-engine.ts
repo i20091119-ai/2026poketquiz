@@ -3304,6 +3304,15 @@ export function simOffline(state: GameState, op: string, ctx: LegendCtx): string
   const off = offlineOf(state);
   const lastStart = plusDays(weekStartOf(ctx.today), -7);
   switch (op) {
+    case 'weekBatch': {
+      // 부모님이 주 1회 몰아서 적은 것처럼 (2026-11-20): 지난주 ●●■●■●▲를 적고 하루 상자도 정하기 전으로 → 다음에 열면 상자 여러 개 + 주간 기록
+      const plan: DayMark[] = ['full', 'full', 'some', 'full', 'some', 'full', 'none'];
+      weekDates(lastStart).forEach((d, i) => { off.marks[d] = plan[i]; delete off.given[d]; });
+      off.boxes = off.boxes.filter(b => !weekDates(lastStart).includes(b.date));
+      off.weeks[lastStart] = { goal: rules.weekGoal, cheer: off.weeks[lastStart]?.cheer };
+      syncOffline(state, ctx);
+      return `지난주를 몰아서 적었어요(합계 ${weekScore(off.marks, lastStart)}). 하루 상자 ${off.boxes.filter(b => weekDates(lastStart).includes(b.date)).length}개가 생겼어요.`;
+    }
     case 'weekGood':
     case 'weekShort': {
       // 지난주를 채우고 정산 전으로 되돌림 → 다음에 아이 화면을 열면 주간 기록 팝업

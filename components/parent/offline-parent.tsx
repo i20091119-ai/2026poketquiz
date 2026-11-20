@@ -215,6 +215,7 @@ export function OfflineSimTools({ busy, call, reload }: { busy: boolean; call: C
       <div className="button-row">
         <button className="secondary small" disabled={busy} onClick={() => void run('weekGood')}>지난주 채우기: 조각 받는 주(●●■●■●▲ = 5)</button>
         <button className="secondary small" disabled={busy} onClick={() => void run('weekShort')}>지난주 채우기: 아쉬운 주(3½)</button>
+        <button className="secondary small" disabled={busy} onClick={() => void run('weekBatch')}>지난주 몰아서 적기(하루 상자 6개 생김)</button>
         <button className="secondary small" onClick={() => clearDevice('week')}>이 기기 주간 기록 다시 보기</button>
         <button className="secondary small" onClick={() => clearDevice('intro')}>이 기기 처음 안내 다시 보기</button>
       </div>

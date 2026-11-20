@@ -15,6 +15,11 @@ const shiftDay = (date: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** 주소에 ?rod=1 이면 낚싯대도 처음부터 (설명서 그림 찍기용, 보통은 만들어 보기) */
+function demoRod(): boolean {
+  try { return new URLSearchParams(window.location.search).get('rod') === '1'; } catch { return false; }
+}
+
 /** 시험용 마을 별 (주소 ?stars=숫자, 없으면 33: 들어가면 손님 별을 받아 레벨 2 바로 앞) */
 function demoStars(): number {
   try { const n = Number(new URLSearchParams(window.location.search).get('stars')); return Number.isFinite(n) && n > 0 ? n : 33; } catch { return 33; }
@@ -54,7 +59,7 @@ function demoState(today: string): GameState {
     mail: [{ id: 'k1', kind: 'iron', amount: 1, week: yesterday, at: now }],
     craftedBalls: [{ id: 'c1', kind: 'poke', made: yesterday }],
     // 낚시·벌레잡기: 잠자리채는 있고(15번), 낚싯대는 만들어 보기
-    tools: { net: 15 },
+    tools: demoRod() ? { rod: 15, net: 15 } : { net: 15 },
     // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=1200 처럼 붙이면 그만큼으로
     stars: demoStars(),
   } as unknown as GameState['village'];

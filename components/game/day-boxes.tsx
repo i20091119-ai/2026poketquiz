@@ -93,7 +93,7 @@ export function DayBoxesDialog({ open, boxes, title, busy, act, onOpenOne, onLat
       <DialogContent className="reward-dialog day-boxes-dialog">
         {phase === 'list' ? <>
           <DialogTitle className="intro-title">{title ?? '🎁 훈련 선물 상자가 왔어!'}</DialogTitle>
-          <DialogDescription className="intro-text">부모님이 적어 주신 훈련 날마다 상자가 하나씩 있어. 상자를 눌러 하나씩 열거나, 한 번에 열어 봐!</DialogDescription>
+          <DialogDescription className="intro-text">훈련한 날마다 상자가 하나씩! 눌러서 하나씩 열거나, 한 번에 열어 봐.</DialogDescription>
           <div className="day-box-grid">
             {sorted.map((b, i) => <DayBoxTile key={b.id} box={b} delay={i * 0.12} disabled={busy} onClick={() => onOpenOne(b)} />)}
           </div>

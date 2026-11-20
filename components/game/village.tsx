@@ -452,7 +452,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
           {/* 돌아다니는 포켓몬 */}
           {walkers.map(w => (
             <button key={w.id} className={'village-mon' + (w.guest ? ' guest' : '') + (placing || decorPlacing ? ' pass' : '')}
-              style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: 11 + w.y }}
+              style={{ left: w.x * TILE, top: w.y * TILE, width: TILE, height: TILE, zIndex: bubble?.id === w.id ? 200 : 11 + w.y }}
               onClick={() => void onMonTap(w)}
               aria-label={species(w.species).name}>
               <span className="village-shadow" />

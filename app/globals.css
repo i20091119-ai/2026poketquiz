@@ -1411,3 +1411,9 @@ button.day-box-tile:active { transform: scale(.95); }
 @keyframes week-box-pop { 0% { transform: translateY(-14px) scale(.2); opacity: 0; } 60% { transform: translateY(4px) scale(1.15); opacity: 1; } 100% { transform: none; } }
 .week-box-note { margin: 0; font-weight: 800; color: #b45309; }
 .study-day-box { position: absolute; right: 1px; top: 0; font-size: 11px; }
+.day-box-result-items .reward-card { flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; min-height: 0; padding: 6px 10px; text-align: left; }
+.day-box-result-items .reward-card img { width: 36px; height: 36px; flex: none; }
+.day-box-result-items .reward-card b { font-size: 15px; }
+.day-box-result-items .reward-card small { display: none; }
+.day-box-result { grid-template-columns: 64px 1fr; padding: 4px 6px; }
+.day-boxes-dialog .intro-title { font-size: 22px; }
