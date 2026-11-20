@@ -1377,9 +1377,9 @@ html, body { overscroll-behavior-y: none; }
 /* [시험] LPC 사람 그림 (/village-demo): 층을 겹쳐 그림, 2배(정수), 발을 칸 아래에 맞춤 */
 .lpc-person { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); pointer-events: none; }
 .lpc-layer { position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated; }
-.village-me.lpc .village-me-mark, .lpc-npc .village-me-mark { top: -60px; }
 .lpc-family-mark { background: #7c3aed; }
 .village-mon.lpc-npc { pointer-events: none; }
 .lpc-test-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 4px 8px 6px; }
 .lpc-test-bar button { border: 2px solid rgba(255,255,255,.5); background: rgba(255,255,255,.12); color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 800; }
 .lpc-test-bar button.on { background: #fde68a; color: #4a3500; border-color: #fde68a; }
+.lpc-test-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px; color: #fff; font-size: 12px; font-weight: 800; }

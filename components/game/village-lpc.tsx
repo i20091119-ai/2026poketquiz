@@ -2,7 +2,7 @@
 // [시험] LPC 사람 그림을 층으로 겹쳐 그리기 (lib/village-lpc.ts). /village-demo 에서만 씀.
 // 층마다 같은 걷기 그림판 크기(576×256)라, 모든 층에 같은 칸 위치를 주면 옷이 몸 동작을 그대로 따라감.
 import { useEffect, useRef, useState } from 'react';
-import { LPC_FRAME, LPC_ROW, LPC_SCALE, LPC_WALK_FRAMES, type LpcLayer } from '@/lib/village-lpc';
+import { LPC_FRAME, LPC_ROW, LPC_WALK_FRAMES, type LpcLayer } from '@/lib/village-lpc';
 
 type Dir = keyof typeof LPC_ROW;
 
@@ -23,8 +23,8 @@ export function useLpcWalk(step: number, ms = 55) {
 }
 
 /** 층을 겹친 LPC 사람 하나 (한 칸 48px 위에 발을 맞춤) */
-export function LpcSprite({ layers, dir, frame }: { layers: LpcLayer[]; dir: Dir; frame: number }) {
-  const size = LPC_FRAME * LPC_SCALE;
+export function LpcSprite({ layers, dir, frame, scale }: { layers: LpcLayer[]; dir: Dir; frame: number; scale: number }) {
+  const size = LPC_FRAME * scale;
   return (
     <span className="lpc-person" aria-hidden style={{ width: size, height: size }}>
       {layers.map(l => (
@@ -39,13 +39,15 @@ export function LpcSprite({ layers, dir, frame }: { layers: LpcLayer[]; dir: Dir
 }
 
 /** 마을 칸 위의 LPC 사람 (이름표 · 그림자). step이 바뀌면 걷는 장면 */
-export function LpcWalker({ name, layers, x, y, dir, step, tile, me }: { name: string; layers: LpcLayer[]; x: number; y: number; dir: Dir; step: number; tile: number; me?: boolean }) {
+export function LpcWalker({ name, layers, x, y, dir, step, tile, scale, me }: { name: string; layers: LpcLayer[]; x: number; y: number; dir: Dir; step: number; tile: number; scale: number; me?: boolean }) {
   const frame = useLpcWalk(step);
+  // 이름표: 머리 위 (그림 위쪽 13px은 빈칸, 발은 칸 아래 2px)
+  const markTop = -Math.max(30, Math.round((LPC_FRAME - 13) * scale - tile + 16));
   return (
     <span className={me ? 'village-me lpc' : 'village-mon lpc-npc'} style={{ left: x * tile, top: y * tile, width: tile, height: tile, zIndex: (me ? 12 : 11) + y }}>
       <span className="village-shadow" />
-      <LpcSprite layers={layers} dir={dir} frame={frame} />
-      <span className={me ? 'village-me-mark' : 'village-me-mark lpc-family-mark'}>{name}</span>
+      <LpcSprite layers={layers} dir={dir} frame={frame} scale={scale} />
+      <span className={me ? 'village-me-mark' : 'village-me-mark lpc-family-mark'} style={{ top: markTop }}>{name}</span>
     </span>
   );
 }

@@ -4,7 +4,7 @@
 // 아이의 진짜 기록·미리보기 기록 어디에도 저장되지 않고, 새로고침하면 처음 상태로 돌아가요.
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-import { SEOJUN_HAT, SEOJUN_TOPS, seojunLayers } from '@/lib/village-lpc';
+import { LPC_SCALE_DEFAULT, LPC_SCALES, SEOJUN_FACES, SEOJUN_HAT, SEOJUN_TOPS, seojunLayers, type LpcScale, type SeojunFace } from '@/lib/village-lpc';
 import { VillageScreen } from '@/components/game/village';
 import { BallDialog, type CatchResult, type QueuedBall } from '@/components/game/rewards';
 import { applyAction, childView, initialState, secureRandom, syncVillage, todayKorea, type Action, type GameState } from '@/lib/game-engine';
@@ -95,11 +95,18 @@ export default function VillageDemo() {
   const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') === '1'; } catch { return false; } });
   const [top, setTop] = useState<(typeof SEOJUN_TOPS)[number]['id']>('tshirt');
   const [hat, setHat] = useState(false);
+  // 크기·얼굴·테두리 (2026-11-20 부모님: "너무 크다", "얼굴이 더 부드러운 건?") — 기본은 추천: 1.5배 · 아이 얼굴 · 부드러운 테두리
+  const [scale, setScale] = useState<LpcScale>(LPC_SCALE_DEFAULT);
+  const [face, setFace] = useState<SeojunFace>('child');
+  const [soft, setSoft] = useState(true);
   const bar = <div className="lpc-test-bar" role="group" aria-label="사람 그림 시험">
     <button className={!lpc ? 'on' : ''} onClick={() => setLpc(false)}>지금 캐릭터</button>
     <button className={lpc ? 'on' : ''} onClick={() => setLpc(true)}>LPC</button>
     {lpc && SEOJUN_TOPS.map(t => <button key={t.id} className={top === t.id ? 'on' : ''} onClick={() => setTop(t.id)}>{t.label}</button>)}
     {lpc && <button className={hat ? 'on' : ''} onClick={() => setHat(h => !h)}>🧢 {SEOJUN_HAT.label}</button>}
+    {lpc && <span className="lpc-test-row">크기 {LPC_SCALES.map(n => <button key={n} className={scale === n ? 'on' : ''} onClick={() => setScale(n)}>{n}배</button>)}</span>}
+    {lpc && <span className="lpc-test-row">얼굴 {SEOJUN_FACES.map(f => <button key={f.id} className={face === f.id ? 'on' : ''} onClick={() => setFace(f.id)}>{f.label}</button>)}
+      <button className={soft ? 'on' : ''} onClick={() => setSoft(v => !v)}>부드러운 테두리</button></span>}
   </div>;
 
   return (
@@ -108,7 +115,7 @@ export default function VillageDemo() {
       {notice && <div className="village-demo-band warn" role="status">{notice}</div>}
       <VillageScreen open view={view} busy={busy} act={act} onClose={() => router.push('/')} onSeconds={noop}
         onOpenBall={b => setBall({ id: b.id, kind: b.kind, crafted: true })}
-        lpcTest={{ on: lpc, seojun: seojunLayers(top, hat), bar }} />
+        lpcTest={{ on: lpc, seojun: seojunLayers(top, hat, face, soft), scale, soft, bar }} />
       <BallDialog key={ball?.id ?? 'none'} ball={ball} busy={busy} onOpen={b => act<CatchResult>({ type: 'openCraftedBall', id: b.id })} onClose={() => setBall(null)} />
     </>
   );

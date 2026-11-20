@@ -29,7 +29,7 @@ import { CraftIntro, IronIcon, PlantSheet, SparkleIcon, useCraftIntro, Workbench
 import { DECOR_INFO, DECOR_ITEMS, decorBlocked, decorCells, decorIndexAt, decorSpotProblem, terrainIndexAt, type DecorKey, type DecorTab } from '@/lib/village-decor';
 import { CraftIcon, GroundIcon, MaterialIcon, ObjectSprite, PlayerSprite, TOP_ROWS, VillageEntrance, VillageGround } from './village-tiles';
 import { LpcWalker } from './village-lpc';
-import { LPC_FAMILY, type LpcLayer } from '@/lib/village-lpc';
+import { LPC_FAMILY, softLayers, type LpcLayer } from '@/lib/village-lpc';
 
 /* eslint-disable @next/next/no-img-element */
 export const TILE = 48; // 16px 타일 × 3 (정수 배)
@@ -74,7 +74,7 @@ type ScreenProps = {
   /** 마을 안에 있는지 (마을 시간 세기용) */
   onSeconds: (inside: boolean) => void;
   /** [시험] LPC 사람 그림 (/village-demo 에서만): on이면 서준이를 겹친 층으로 그리고 가족 3명이 근처에, bar = 위쪽 시험 버튼 줄 */
-  lpcTest?: { on: boolean; seojun: LpcLayer[]; bar?: ReactNode };
+  lpcTest?: { on: boolean; seojun: LpcLayer[]; scale: number; soft: boolean; bar?: ReactNode };
 };
 /** 마을 화면 (전체 화면). 열 때마다 처음 자리에서 시작 */
 export function VillageScreen({ open, ...props }: ScreenProps & { open: boolean }) {
@@ -465,8 +465,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
           </span>}
           {/* 서준이 */}
           {lpcOn && lpcTest ? <>
-            {family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={p.layers} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} />; })}
-            <LpcWalker me name={PLAYER.name} layers={lpcTest.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} />
+            {family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpcTest.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpcTest.scale} />; })}
+            <LpcWalker me name={PLAYER.name} layers={lpcTest.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} scale={lpcTest.scale} />
           </> : <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
             <span className="village-shadow" />
             <span className="village-me-body"><PlayerSprite sprite={PLAYER.sprite} dir={dir} step={step} /></span>
