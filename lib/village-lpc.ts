@@ -56,9 +56,9 @@ export function seojunLayers(top: (typeof SEOJUN_TOPS)[number]['id'], hat: boole
   ].map(l => ({ ...l, file: l.file.replace(/\.png$/, '_sj.png') })), soft);
 }
 
-/** 가족 (근처에 서 있거나 천천히 걸음). 하준 = LPC에서 가장 작은 "어린이" 몸. 옷 색(2026-11-20 부모님): 엄마 연핑크 · 하준 노랑 · 아빠 초록 그대로 */
+/** 가족 (근처에 서 있거나 천천히 걸음, 하준은 2026-11-21부터 하준이 집 앞). 하준 = LPC에서 가장 작은 "어린이" 몸. 옷 색(2026-11-20 부모님): 엄마 연핑크 · 하준 노랑 · 아빠 초록 그대로 */
 export const LPC_FAMILY: (LpcPerson & { home: { dx: number; dy: number } })[] = [
-  { id: 'hajun', name: '하준', home: { dx: -2, dy: 1 }, layers: [L('body', 'body_child'), L('legs', 'childpants_darkblue'), L('torso', 'childshirt_yellow'), L('head', 'head_child'), L('hair', 'hair_relm_child_brown')] },
+  { id: 'hajun', name: '하준', home: { dx: 7, dy: 1 }, layers: [L('body', 'body_child'), L('legs', 'childpants_darkblue'), L('torso', 'childshirt_yellow'), L('head', 'head_child'), L('hair', 'hair_relm_child_brown')] },
   // 엄마: 2026-11-20 부모님 "가슴 툭 튀어나옴 최악" → 어른 여자 몸 대신 청소년 몸(납작) + 청소년 긴팔
   { id: 'mom', name: '엄마', home: { dx: 2, dy: 2 }, layers: [L('body', 'body_teen'), L('feet', 'shoes_thin_gray'), L('legs', 'pants_thin_navy'), L('torso', 'longsleeve_teen_lightpink'), L('head', 'head_female'), L('hair', 'hair_bob_chestnut')] },
   // 아빠: 2026-11-20 부모님 "몸이 너무 부각돼서 별로" → 어른 남자 몸 대신 청소년 몸 + 초록 긴팔

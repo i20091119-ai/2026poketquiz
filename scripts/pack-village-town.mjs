@@ -123,6 +123,21 @@ async function restyle(setRect, texFile, texRect) {
   return png(set);
 }
 
+/** 하준이 집 (2026-11-21 부모님: 노란 벽·빨간 지붕): 집 그림에서 지붕·벽 색만 바꿈 */
+const HAJUN_HOUSE_COLORS = [
+  [[163, 60, 31], [214, 48, 40]], [[62, 31, 39], [128, 22, 30]], [[78, 48, 66], [150, 32, 42]], // 지붕 → 빨강
+  [[206, 164, 98], [252, 218, 92]], [[137, 96, 48], [226, 172, 48]], // 벽돌 → 노랑
+];
+async function recolor(file, rect, pairs) {
+  const img = await rawOf(file, rect);
+  for (let i = 0; i < img.data.length; i += 4) {
+    if (!img.data[i + 3]) continue;
+    const hit = pairs.find(([[r, g, b]]) => img.data[i] === r && img.data[i + 1] === g && img.data[i + 2] === b);
+    if (hit) [img.data[i], img.data[i + 1], img.data[i + 2]] = hit[1];
+  }
+  return png(img);
+}
+
 // ---------- 직접 그리기 (2026-11-14 열매·제작대) ----------
 const OUTLINE = [60, 40, 50];
 function canvas(w, h) { return { data: Buffer.alloc(w * h * 4), w, h }; }
@@ -237,6 +252,8 @@ async function crop(file, [x, y, w, h]) {
   const old = JSON.parse(readFileSync(path.join(root, 'lib', 'data', 'village-atlas.json'), 'utf8'));
   objects.push({ name: 'matDrop', file: 'ninja', rect: old.pieces.m_drop, cells: [1, 1], foot: null, flat: true, label: '재료: 물방울 (임시, 다른 그림체)' });
 }
+// 하준이 집 (맨 뒤에 붙여 예전 조각 자리가 안 바뀌게)
+objects.push({ name: 'houseHajun', file: BUILD, rect: [194, 310, 76, 90], cells: [5, 6], foot: [0, 3, 5, 3], label: '하준이 집 (노란 벽·빨간 지붕, 집 그림 색만 바꿈)', make: () => recolor(BUILD, [194, 310, 76, 90], HAJUN_HOUSE_COLORS) });
 
 /** 조각들을 16px 칸에 맞춰 한 장에 (가로 sheetW) */
 async function packSheet(list, sheetW, place) {

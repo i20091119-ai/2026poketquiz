@@ -29,7 +29,7 @@ function ready(): { state: GameState; bank: ActiveBank } {
   return { state, bank };
 }
 
-test('구역은 지도를 빈틈·겹침 없이 나누고(5×3), 처음 마을(12×20)은 위쪽 가운데에 예전 지도 그대로', () => {
+test('구역은 지도를 빈틈·겹침 없이 나누고(5×3), 처음 마을(20×20, 2026-11-21에 넓힘)은 위쪽 가운데에 예전 지도 그대로', () => {
   const seen = new Set<string>();
   for (const r of REGIONS) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
     assert.ok(!seen.has(`${x},${y}`), `겹침 ${x},${y}`);
@@ -38,9 +38,10 @@ test('구역은 지도를 빈틈·겹침 없이 나누고(5×3), 처음 마을(1
   assert.equal(seen.size, MAP_W * MAP_H);
   assert.equal(REGIONS.length, 15);
   const home = REGIONS.find(r => r.id === 'C1')!;
-  assert.deepEqual([home.x, home.y, home.w, home.h], [0, 0, 12, 20]);
-  assert.equal(-MAP_X0, MAP_X0 + MAP_W - 12, '처음 마을 왼쪽·오른쪽 폭이 같음');
-  const old = ['............', '............', '............', '............', '.....==.....', '.ss..==..ss.', '.ss..==..ss.', '.....==.....', '============', '.....==.....',
+  assert.deepEqual([home.x, home.y, home.w, home.h], [0, 0, 20, 20]);
+  assert.equal(-MAP_X0, MAP_X0 + MAP_W - 20, '처음 마을 왼쪽·오른쪽 폭이 같음');
+  // 예전 처음 마을(x 0~11) 그대로. 2026-11-21: x 11, y 4~7 만 하준이 집 문 앞 길(=)
+  const old = ['............', '............', '............', '............', '.....==....=', '.ss..==..ss=', '.ss..==..ss=', '.....==....=', '============', '.....==.....',
     '.....==.....', '.....==.....', '.....==.....', '.....==.ss..', '.....==.ss..', '.~~~.==.....', '.~~~.==.....', '.~~~.==.....', '.....==.....', '.....==.....'];
   old.forEach((row, y) => assert.equal(GROUND_ROWS[y].slice(-MAP_X0, -MAP_X0 + 12), row, `처음 마을 ${y}줄이 바뀜`));
 });
@@ -88,9 +89,9 @@ test('열쇠: 레벨이 오르면 1개 → 아이가 붙은 땅 하나를 골라
   const v = state.village!;
   v.stars = 0;
   assert.equal(villageKeys(state), 0);
-  assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', 14, 6) ?? '', /오른쪽 풀밭은 아직 잠겨/);
+  assert.match(decorSpotProblem([], [], 'flower', 'flowerRed', 22, 6) ?? '', /오른쪽 풀밭은 아직 잠겨/);
   v.decorBag = { flower: 2 };
-  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank)), /잠겨/);
+  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 22, y: 6, stay: true }, ctx(bank)), /잠겨/);
   assert.throws(() => applyAction(state, { type: 'villageUnlock', region: 'D1' }, ctx(bank)), /열쇠가 없어/);
   // 레벨 2 → 열쇠 1개
   simVillageCraft(state, 'levelUp', null, TODAY);
@@ -103,7 +104,7 @@ test('열쇠: 레벨이 오르면 1개 → 아이가 붙은 땅 하나를 골라
   applyAction(state, { type: 'villageUnlock', region: 'B1' }, ctx(bank));
   assert.deepEqual(villageOpen(state), ['C1', 'B1']);
   assert.equal(villageKeys(state), 0);
-  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 14, y: 6, stay: true }, ctx(bank)), /잠겨/);
+  assert.throws(() => applyAction(state, { type: 'decorPlace', item: 'flower', x: 22, y: 6, stay: true }, ctx(bank)), /잠겨/);
   applyAction(state, { type: 'decorPlace', item: 'flower', x: -4, y: 9, stay: true }, ctx(bank));
   v.items = { bush: 1 };
   applyAction(state, { type: 'villagePlace', cell: 16, item: 'bush', stay: true }, ctx(bank)); // 밭 4 = 왼쪽 숲

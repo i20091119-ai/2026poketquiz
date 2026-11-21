@@ -12,7 +12,7 @@ import { RARE_POKEMON } from './rare-pokemon.ts';
 import { DAY_MARKS, isDate, OFFLINE_DEFAULT, offlineRulesOf, plusDays, shortMessage, stageCandidates, stageNeed, weekDates, weekScore, weekStartOf, type DayBoxKind, type DayMark, type OfflineRules } from './offline.ts';
 import { addDays, charCount, cleanStep, OUTING_DEFAULT, outingPage, stepProblem, type Outing, type OutingRules } from './outing.ts';
 import { DECOR_BAG_MAX, DECOR_INFO, DECOR_ITEMS, DECOR_MAX, decorCells, decorCost, decorCostsNow, decorIndexAt, decorSpotProblem, TERRAIN_MAX, terrainIndexAt, type DecorKey, type DecorPlaced } from './village-decor.ts';
-import { groundAt, type TerrainCell } from './village-map.ts';
+import { groundAt, MAP_OBJECTS, objectInfo, type TerrainCell } from './village-map.ts';
 import { TOOL_INFO, toolCost, TOOLS, type ToolKey } from './village-tools.ts';
 import { favoriteBerry, favoriteItem, GUESTBOOK_LINES_MAX, possibleGuests, type Guestbook, type GuestbookEntry, type GuestSource } from './village-guestbook.ts';
 import { choosableRegions, DIR_TEXT, isOpenCell, levelOfStars, lockedText, MAX_LEVEL, openRegions, REGIONS } from './village-level.ts';
@@ -213,6 +213,8 @@ export type VillageState = {
   missionIronWeeks?: string[];
   /** 서식지 손님 별을 받은 날 (하루 한 번) */
   guestStarDate?: string;
+  /** 지도 판 (2026-11-21 v2 = 처음 마을 오른쪽에 8줄 끼움). 없으면 예전 지도(v1) 기록 → widenVillageMap 이 한 번 옮김 */
+  mapV?: number;
 };
 /** 등교 한 번: time = 교문 통과 시각(HH:MM, 손 체크면 null), deadline = 그날 기준 시각, source = gate(가족 대시보드)·parent(보호자 손 체크) */
 export type SchoolArrival = { time: string | null; ok: boolean; deadline: string; source: 'gate' | 'parent'; at: string; by?: string };
@@ -2337,7 +2339,7 @@ export function settleDailyCandy(state: GameState, today: string): CandyGift | n
 // ---------- 포켓몬 마을 (lib/village.ts) ----------
 /** 마을 기록 (없으면 만듦: 보기만으로는 만들지 않음) */
 function village(state: GameState): VillageState {
-  const v = state.village ??= { mats: {}, items: {}, cells: [], habitats: [] };
+  const v = state.village ??= { mats: {}, items: {}, cells: [], habitats: [], mapV: VILLAGE_MAP_VERSION };
   v.mats ??= {}; v.items ??= {}; v.cells ??= []; v.habitats ??= [];
   while (v.cells.length < CELL_COUNT) v.cells.push(null);
   while (v.habitats.length < PLOTS.length) v.habitats.push(null);
@@ -2346,6 +2348,48 @@ function village(state: GameState): VillageState {
   v.guestbook ??= Object.fromEntries((state.met ?? []).map(id => [String(id), { first: null, visits: 1, from: ['old'] } satisfies GuestbookEntry]));
   return v;
 }
+// ---------- 지도 판 옮기기 (2026-11-21 부모님: 처음 마을을 넓혀 서준이 집 옆에 하준이 집) ----------
+/** 지금 지도 판. v2 = 예전 x 11과 12 사이에 8줄을 끼워 넣은 지도 (lib/village-map.ts) */
+export const VILLAGE_MAP_VERSION = 2;
+/** 끼워 넣은 자리 (예전 x 가 이 값 이상이면 +MAP_INSERT_W) */
+export const MAP_INSERT_AT = 12;
+export const MAP_INSERT_W = 8;
+/** 땅 바꾸기 칸 → 가방 물건 */
+const TERRAIN_ITEM: Record<TerrainCell['ground'], DecorKey> = { water: 'pondTile', path: 'pathTile', stone: 'stoneTile' };
+/**
+ * 예전 지도(v1) 기록을 새 지도에 맞게 한 번만 옮김. 아무것도 지우지 않음.
+ * - 꾸미기·땅 바꾸기 중 예전 x ≥ 12 (오른쪽 구역) 는 +8 (밭·나무·줍기 자리는 번호로 기록해서 그대로)
+ * - 새로 세운 하준이 집 터(밟을 수 없는 칸)에 놓였던 것은 가방으로 돌려줌 (꾸미기 그 물건 / 땅 바꾸기 그 칸 물건, 가방 최대를 넘어도 그대로)
+ * 바뀌었으면 true. 보기만 하는 곳(가족 대시보드)은 복사본에 불러 보여 주기만 함
+ */
+export function widenVillageMap(state: GameState): boolean {
+  const v = state.village;
+  if (!v || (v.mapV ?? 1) >= VILLAGE_MAP_VERSION) return false;
+  const move = (x: number) => (x >= MAP_INSERT_AT ? x + MAP_INSERT_W : x);
+  const blocked = new Set(MAP_OBJECTS.filter(o => o.kind === 'houseHajun').flatMap(o => {
+    const f = objectInfo(o.kind).foot;
+    if (!f) return [];
+    return Array.from({ length: f[2] * f[3] }, (_, i) => `${o.x + f[0] + (i % f[2])},${o.y + f[1] + Math.floor(i / f[2])}`);
+  }));
+  const back = (item: DecorKey) => { v.decorBag ??= {}; v.decorBag[item] = (v.decorBag[item] ?? 0) + 1; };
+  if (v.decor) {
+    v.decor = v.decor.map(d => ({ ...d, x: move(d.x) })).filter(d => {
+      if (!decorCells(d).some(c => blocked.has(`${c.x},${c.y}`))) return true;
+      back(d.item);
+      return false;
+    });
+  }
+  if (v.terrain) {
+    v.terrain = v.terrain.map(t => ({ ...t, x: move(t.x) })).filter(t => {
+      if (!blocked.has(`${t.x},${t.y}`)) return true;
+      back(TERRAIN_ITEM[t.ground]);
+      return false;
+    });
+  }
+  v.mapV = VILLAGE_MAP_VERSION;
+  return true;
+}
+
 // ---------- 마을 레벨 (별 → 레벨 → 열린 구역) ----------
 /** 마을 별. 기록이 없으면 지금까지 한 일(만난 손님·완성된 서식지·놓은 꾸미기·바꾼 땅·제작 기록)로 계산 */
 export function villageStars(state: GameState): number {

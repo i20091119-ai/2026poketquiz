@@ -351,7 +351,7 @@ test('도구: 재료로 낚싯대·잠자리채를 만들고, 15번 쓰면 부�
   // 낚시는 물 칸에서만 (처음 마을 연못 x1~3, y15~17)
   assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'rod', x: 5, y: 9, hit: true, stay: true }, ctx(bank)), /물가에서만/);
   // 잠긴 땅은 안 됨
-  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'net', x: 14, y: 6, hit: true, stay: true }, ctx(bank)), /할 수 없어/);
+  assert.throws(() => applyAction(state, { type: 'villageCatch', tool: 'net', x: 22, y: 6, hit: true, stay: true }, ctx(bank)), /할 수 없어/);
   // 놓쳐도 1번 닳음
   const r0 = applyAction(state, { type: 'villageCatch', tool: 'rod', x: 2, y: 16, hit: false, stay: true }, ctx(bank)) as { hit: boolean; left: number };
   assert.deepEqual([r0.hit, r0.left], [false, 14]);

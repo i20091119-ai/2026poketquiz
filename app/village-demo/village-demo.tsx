@@ -62,6 +62,7 @@ function demoState(today: string): GameState {
     tools: demoRod() ? { rod: 15, net: 15 } : { net: 15 },
     // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=1200 처럼 붙이면 그만큼으로
     stars: demoStars(),
+    mapV: 2,
   } as unknown as GameState['village'];
   // 열매: 사과열매 32 · 불꽃열매 99(가득) · 별빛열매 40 · 얼음열매 12
   const berries = { apple: 32, fire: 99, star: 40, blue: 12 } as const;
@@ -96,8 +97,8 @@ export default function VillageDemo() {
   }, [state, today]);
   const noop = useCallback(() => undefined, []);
   const [ball, setBall] = useState<QueuedBall | null>(null);
-  // [시험] 사람 그림: 지금 캐릭터 / LPC (주소 ?lpc=1 이면 LPC로 시작), 서준 옷 바꿔 입히기
-  const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') === '1'; } catch { return false; } });
+  // [시험] 사람 그림: 지금 캐릭터 / LPC (2026-11-21부터 LPC로 시작 = 진짜 마을과 같음, 주소 ?lpc=0 이면 예전 캐릭터), 서준 옷 바꿔 입히기
+  const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') !== '0'; } catch { return true; } });
   // 주소 ?real=1: 진짜 마을과 똑같은 모습(LPC 서준만, 시험 버튼·띠 없음) — 설명서 그림 찍을 때 씀
   const [real] = useState(() => { try { return new URLSearchParams(window.location.search).get('real') === '1'; } catch { return false; } });
   const [top, setTop] = useState<(typeof SEOJUN_TOPS)[number]['id']>('tshirt');

@@ -68,6 +68,7 @@
 | matStone | 재료: 돌멩이 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matMud | 재료: 진흙 | 1×1 | 감 | Tuxemon "Core Outdoor" / "Core Outdoor Nature" / "Core Outdoor Water" | rubberduck (Buch·luke83·Past the Future·George_·Midi 원작 기반) | CC BY-SA 4.0 |
 | matDrop | 재료: 물방울 (임시, 다른 그림체) | 1×1 | 감 | Ninja Adventure Asset Pack | pixel-boy | CC0 1.0 |
+| houseHajun | 하준이 집 (노란 벽·빨간 지붕, 집 그림 색만 바꿈) | 5×6 | 못 감: 5×3칸 | Tuxemon "Core Buildings" 중 "Inspired 16x16 Tiles" | RedVoxel (지붕 고침: Jaskrendix) | CC BY-SA 4.0 |
 
 ## 캐릭터 (player.png, 배경 투명)
 
