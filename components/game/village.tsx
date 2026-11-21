@@ -231,14 +231,17 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
   const walkers = baseWalkers.map(w => ({ ...w, ...moved[w.id] }));
   const walkersRef = useRef(walkers);
   useEffect(() => { walkersRef.current = walkers; });
+  // 땅에 떨어진 재료 칸: 돌아다니는 포켓몬이 그 위에 서서 재료를 가리지(누르면 포켓몬이 눌리지) 않게 피함
+  const pickupCellsRef = useRef<string[]>([]);
+  useEffect(() => { pickupCellsRef.current = v.pickups.map(p => key(PICK_SPOTS[p.spot].x, PICK_SPOTS[p.spot].y)); });
   useEffect(() => {
     if (!inside) return;
     const t = window.setInterval(() => {
       const next: Record<string, { x: number; y: number }> = {};
       // 서준이·파트너·다른 포켓몬이 있는 칸에는 겹치지 않게 (2026-11-14 부모님: 파트너와 손님이 겹침)
-      const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...familyRef.current.map(f => key(f.x, f.y))]);
+      const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...familyRef.current.map(f => key(f.x, f.y)), ...pickupCellsRef.current]);
       for (const w of walkersRef.current) {
-        const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y)].includes(key(w.x, w.y))
+        const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...pickupCellsRef.current].includes(key(w.x, w.y))
           || walkersRef.current.some(o => o.id !== w.id && o.x === w.x && o.y === w.y);
         if (!crowded && Math.random() < 0.5) continue;
         const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
@@ -262,7 +265,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     if (!inside || !showFamily) return;
     const t = window.setInterval(() => {
       setFamily(list => {
-        const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.map(f => key(f.x, f.y))]);
+        const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.map(f => key(f.x, f.y)), ...pickupCellsRef.current]);
         return list.map(f => {
           const home = LPC_FAMILY.find(h => h.id === f.id)!.home;
           const hx = START_POS.x + home.dx, hy = START_POS.y + home.dy;
@@ -281,7 +284,20 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     return () => window.clearInterval(t);
   }, [inside, showFamily]);
 
-  const pickupAt = (x: number, y: number) => v.pickups.find(p => PICK_SPOTS[p.spot].x === x && PICK_SPOTS[p.spot].y === y);
+  // 줍기: 재료 칸에 올라서거나 바로 옆(대각선 포함)까지 가면 저절로, 재료를 눌러도 옆이면 바로 (2026-11-21 부모님: "돌 터치해도, 가까이 가도 안 주워짐")
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1;
+  const pickupNear = (x: number, y: number) => v.pickups.find(p => PICK_SPOTS[p.spot].x === x && PICK_SPOTS[p.spot].y === y)
+    ?? v.pickups.find(p => near(PICK_SPOTS[p.spot], { x, y }));
+  async function pickUp(p: (typeof v.pickups)[number]) {
+    if (v.pickLeft <= 0) { setToast('오늘은 다 주웠어! 내일 또 떨어져 있을 거야.'); return; }
+    const r = await act<{ message: string }>({ type: 'villagePick', spot: p.spot, stay: true });
+    if (r) setToast(r.message);
+  }
+  function tapPickup(p: (typeof v.pickups)[number]) {
+    if (busy || sheet) return;
+    if (near(PICK_SPOTS[p.spot], pos)) void pickUp(p);
+    else setToast(`${MATERIAL_INFO[p.kind].name}까지 조금 더 가까이 가 봐! 바로 옆에 가면 저절로 주워.`);
+  }
   async function move(dx: number, dy: number) {
     if (busy || sheet) return;
     const x = pos.x + dx, y = pos.y + dy;
@@ -291,12 +307,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     setStep(s => s + 1);
     setFollow({ x: pos.x, y: pos.y, dir: x > pos.x ? 'right' : x < pos.x ? 'left' : y > pos.y ? 'down' : 'up' });
     setPos({ x, y });
-    const p = pickupAt(x, y);
-    if (p) {
-      if (v.pickLeft <= 0) { setToast('오늘은 다 주웠어! 내일 또 떨어져 있을 거야.'); return; }
-      const r = await act<{ message: string }>({ type: 'villagePick', spot: p.spot, stay: true });
-      if (r) setToast(r.message);
-    }
+    const p = pickupNear(x, y);
+    if (p) await pickUp(p);
   }
   // 화면 위치: 지도 위쪽 숲 줄(TOP_ROWS)까지 포함한 그림 좌표
   const fullH = (MAP_H + TOP_ROWS) * TILE;
@@ -469,7 +481,8 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
           ))}
           {/* 땅에 떨어진 재료 */}
           {v.pickups.map(p => (
-            <span key={'p' + p.spot} className="village-pickup" style={{ left: PICK_SPOTS[p.spot].x * TILE, top: PICK_SPOTS[p.spot].y * TILE, width: TILE, height: TILE }} title={MATERIAL_INFO[p.kind].name}><MaterialIcon kind={p.kind} /></span>
+            <button key={'p' + p.spot} className="village-pickup" style={{ left: PICK_SPOTS[p.spot].x * TILE, top: PICK_SPOTS[p.spot].y * TILE, width: TILE, height: TILE, zIndex: 12 + PICK_SPOTS[p.spot].y }}
+              aria-label={`${MATERIAL_INFO[p.kind].name} 줍기`} title={MATERIAL_INFO[p.kind].name} onClick={() => tapPickup(p)}><MaterialIcon kind={p.kind} /></button>
           ))}
           {/* 날아다니는 벌레 (잠자리채가 있을 때) */}
           {hasNet && !placing && !decorPlacing && !planting && bugs.map(b => (
