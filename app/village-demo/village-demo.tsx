@@ -97,8 +97,8 @@ export default function VillageDemo() {
   }, [state, today]);
   const noop = useCallback(() => undefined, []);
   const [ball, setBall] = useState<QueuedBall | null>(null);
-  // [시험] 사람 그림: 지금 캐릭터 / LPC (주소 ?lpc=1 이면 LPC로 시작), 서준 옷 바꿔 입히기
-  const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') === '1'; } catch { return false; } });
+  // [시험] 사람 그림: 지금 캐릭터 / LPC (2026-11-21부터 LPC로 시작 = 진짜 마을과 같음, 주소 ?lpc=0 이면 예전 캐릭터), 서준 옷 바꿔 입히기
+  const [lpc, setLpc] = useState(() => { try { return new URLSearchParams(window.location.search).get('lpc') !== '0'; } catch { return true; } });
   // 주소 ?real=1: 진짜 마을과 똑같은 모습(LPC 서준만, 시험 버튼·띠 없음) — 설명서 그림 찍을 때 씀
   const [real] = useState(() => { try { return new URLSearchParams(window.location.search).get('real') === '1'; } catch { return false; } });
   const [top, setTop] = useState<(typeof SEOJUN_TOPS)[number]['id']>('tshirt');

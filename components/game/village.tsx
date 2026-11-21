@@ -77,6 +77,28 @@ type ScreenProps = {
   lpcTest?: { on: boolean; seojun: LpcLayer[]; scale: number; soft: boolean; bar?: ReactNode };
 };
 /** 마을 화면 (전체 화면). 열 때마다 처음 자리에서 시작 */
+/** 칸 길찾기 (위·아래·왼쪽·오른쪽). 시작 칸은 빼고 도착 칸까지, 못 가면 null */
+function findPath(from: { x: number; y: number }, to: { x: number; y: number }, ok: (x: number, y: number) => boolean): { x: number; y: number }[] | null {
+  const k = (x: number, y: number) => `${x},${y}`;
+  const prev = new Map<string, string | null>([[k(from.x, from.y), null]]);
+  const queue = [from];
+  while (queue.length) {
+    const c = queue.shift()!;
+    if (c.x === to.x && c.y === to.y) {
+      const path: { x: number; y: number }[] = [];
+      for (let cur: string | null = k(c.x, c.y); cur && cur !== k(from.x, from.y); cur = prev.get(cur) ?? null) { const [x, y] = cur.split(',').map(Number); path.unshift({ x, y }); }
+      return path;
+    }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = c.x + dx, y = c.y + dy;
+      if (prev.has(k(x, y)) || !ok(x, y)) continue;
+      prev.set(k(x, y), k(c.x, c.y));
+      queue.push({ x, y });
+    }
+  }
+  return null;
+}
+
 export function VillageScreen({ open, ...props }: ScreenProps & { open: boolean }) {
   if (!open) return null;
   return <VillageInner {...props} />;
@@ -216,11 +238,15 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
   // 사람 그림: 진짜 마을은 LPC 서준(2026-11-20 부모님: LPC로 바꿈, 시험에서 고른 모습 LPC_REAL). 시험용 마을은 위쪽 버튼으로 비교
   const lpc = lpcTest ?? LPC_REAL;
   const lpcOn = lpc.on;
-  // 가족(하준·엄마·아빠)은 아직 시험용 마을에서만
-  const showFamily = lpcOn && !!lpcTest;
+  // 가족: 진짜 마을은 하준만(2026-11-21 부모님: 평소엔 하준이 집 앞, 가끔 서준이 마을을 돌아다님), 엄마·아빠는 아직 시험용 마을에서만
+  const familyIds = useMemo(() => (!lpcOn ? [] : lpcTest ? LPC_FAMILY.map(f => f.id) : ['hajun']), [lpcOn, lpcTest]);
+  const showFamily = familyIds.length > 0;
   const [family, setFamily] = useState(() => LPC_FAMILY.map(f => ({ id: f.id, x: START_POS.x + f.home.dx, y: START_POS.y + f.home.dy, dir: 'down' as 'down' | 'up' | 'left' | 'right', step: 0 })));
+  const shownFamily = family.filter(f => familyIds.includes(f.id));
   const familyRef = useRef<typeof family>([]);
-  useEffect(() => { familyRef.current = showFamily ? family : []; });
+  useEffect(() => { familyRef.current = shownFamily; });
+  /** 하준 나들이: 가끔 집 앞을 떠나 마을 어딘가까지 걸어갔다가 잠깐 놀고 다시 집으로 */
+  const hajunTrip = useRef<{ phase: 'home' | 'out' | 'stay' | 'back'; path: { x: number; y: number }[]; stay: number }>({ phase: 'home', path: [], stay: 0 });
   // 돌아다니는 포켓몬: 모험 팀 + 오늘 손님 (손님은 자기 서식지 근처)
   const baseWalkers = useMemo<Walker[]>(() => [
     ...v.residents.slice(1, 3).map((r, i) => ({ id: 'r' + i, species: r.species, shiny: r.shiny, x: [4, 8][i], y: [9, 10][i] })),
@@ -257,29 +283,71 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
     return () => window.clearInterval(t);
   }, [inside]);
 
-  // [시험] LPC 가족 (하준·엄마·아빠): 처음 자리 근처에 서 있다가 가끔 한 칸씩 천천히 걸음 (2칸 안에서만, 사람·포켓몬과 안 겹침)
+  // LPC 가족: 집 앞(처음 자리) 근처에 서 있다가 가끔 한 칸씩 천천히 걸음 (사람·포켓몬과 안 겹침).
+  // 하준은 가끔(평균 1분에 한 번쯤) 열린 마을 안 먼 곳까지 걸어가 잠깐 놀다가 집 앞으로 돌아옴
   useEffect(() => {
     if (!inside || !showFamily) return;
+    let tick = 0;
     const t = window.setInterval(() => {
+      tick += 1;
       setFamily(list => {
-        const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.map(f => key(f.x, f.y))]);
+        const taken = new Set([key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y)), ...list.filter(f => familyIds.includes(f.id)).map(f => key(f.x, f.y))]);
+        const walkable = (x: number, y: number) => inMap(x, y) && !blockedRef.current.has(key(x, y));
+        const stepTo = (f: (typeof list)[number], x: number, y: number) => {
+          taken.delete(key(f.x, f.y)); taken.add(key(x, y));
+          return { ...f, x, y, step: f.step + 1, dir: (x > f.x ? 'right' : x < f.x ? 'left' : y > f.y ? 'down' : 'up') as 'down' | 'up' | 'left' | 'right' };
+        };
         return list.map(f => {
+          if (!familyIds.includes(f.id)) return f;
           const home = LPC_FAMILY.find(h => h.id === f.id)!.home;
           const hx = START_POS.x + home.dx, hy = START_POS.y + home.dy;
+          // 하준 나들이 (0.8초마다 한 칸)
+          if (f.id === 'hajun') {
+            const trip = hajunTrip.current;
+            if (trip.phase === 'home' && Math.random() < 1 / 75) {
+              const far: { x: number; y: number }[] = [];
+              for (let y = 0; y < 20; y++) for (let x = MAP_X0; x < MAP_X0 + MAP_W; x++) if (walkable(x, y) && Math.abs(x - hx) + Math.abs(y - hy) >= 6) far.push({ x, y });
+              const goal = far[Math.floor(Math.random() * far.length)];
+              const path = goal ? findPath(f, goal, walkable) : null;
+              if (path?.length) { trip.phase = 'out'; trip.path = path; }
+            }
+            if (trip.phase === 'out' || trip.phase === 'back') {
+              const next = trip.path[0];
+              if (!next) {
+                if (trip.phase === 'out') { trip.phase = 'stay'; trip.stay = 6 + Math.floor(Math.random() * 6); }
+                else trip.phase = 'home';
+                return f;
+              }
+              if (taken.has(key(next.x, next.y)) || !walkable(next.x, next.y)) {
+                // 길이 막혔으면 다시 찾기 (사람·포켓몬이 비키면 이어서)
+                const goal = trip.path[trip.path.length - 1];
+                trip.path = findPath(f, goal, (x, y) => walkable(x, y) && !taken.has(key(x, y))) ?? trip.path;
+                return f;
+              }
+              trip.path.shift();
+              return stepTo(f, next.x, next.y);
+            }
+            if (trip.phase === 'stay') {
+              trip.stay -= 1;
+              if (trip.stay <= 0) { const path = findPath(f, { x: hx, y: hy }, walkable); trip.phase = path?.length ? 'back' : 'home'; trip.path = path ?? []; return f; }
+            }
+          }
+          if (tick % 2) return f; // 집 앞에서는 1.6초마다
+          const range = f.id === 'hajun' && hajunTrip.current.phase === 'stay' ? 1 : 2;
+          const cx = f.id === 'hajun' && hajunTrip.current.phase === 'stay' ? f.x : hx, cy = f.id === 'hajun' && hajunTrip.current.phase === 'stay' ? f.y : hy;
           const crowded = [key(posRef.current.x, posRef.current.y), key(followRef.current.x, followRef.current.y), ...walkersRef.current.map(w => key(w.x, w.y))].includes(key(f.x, f.y));
           if (!crowded && Math.random() < 0.6) return f;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5)) {
             const x = f.x + dx, y = f.y + dy;
-            if (!inMap(x, y) || blockedRef.current.has(key(x, y)) || taken.has(key(x, y)) || Math.abs(x - hx) > 2 || Math.abs(y - hy) > 2) continue;
-            taken.add(key(x, y));
-            return { ...f, x, y, step: f.step + 1, dir: (dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : 'up') as 'down' | 'up' | 'left' | 'right' };
+            if (!walkable(x, y) || taken.has(key(x, y)) || Math.abs(x - cx) > range || Math.abs(y - cy) > range) continue;
+            return stepTo(f, x, y);
           }
           return f;
         });
       });
-    }, 1600);
+    }, 800);
     return () => window.clearInterval(t);
-  }, [inside, showFamily]);
+  }, [inside, showFamily, familyIds]);
 
   const pickupAt = (x: number, y: number) => v.pickups.find(p => PICK_SPOTS[p.spot].x === x && PICK_SPOTS[p.spot].y === y);
   async function move(dx: number, dy: number) {
@@ -496,7 +564,7 @@ function VillageInner({ view, busy, act, onClose, onSeconds, onOpenBall, lpcTest
           </span>}
           {/* 서준이 */}
           {lpcOn ? <>
-            {showFamily && family.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpc.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpc.scale} />; })}
+            {shownFamily.map(f => { const p = LPC_FAMILY.find(h => h.id === f.id)!; return <LpcWalker key={f.id} name={p.name} layers={softLayers(p.layers, lpc.soft)} x={f.x} y={f.y} dir={f.dir} step={f.step} tile={TILE} scale={lpc.scale} />; })}
             <LpcWalker me name={PLAYER.name} layers={lpc.seojun} x={pos.x} y={pos.y} dir={dir} step={step} tile={TILE} scale={lpc.scale} />
           </> : <span className="village-me" style={{ left: pos.x * TILE, top: pos.y * TILE, width: TILE, height: TILE, zIndex: 12 + pos.y }}>
             <span className="village-shadow" />
