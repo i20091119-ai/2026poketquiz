@@ -1,6 +1,6 @@
 import { afterAction, beforeAction, eventsChange, type LogEntry } from '@/lib/activity-log';
 import { daySummary } from '@/lib/activity-log';
-import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, syncOffline, syncOutings, syncVillage, type Action } from '@/lib/game-engine';
+import { applyAction, childView, ensureDaily, GameError, secureRandom, syncEvents, syncLimited, syncOffline, syncOutings, syncVillage, widenVillageMap, type Action } from '@/lib/game-engine';
 import { battleGate, type BattleGate } from '@/lib/server/battle-gate';
 import { playerOf, type Player } from '@/lib/server/player';
 import { activeBank, appendActivity, json, latestDefeat, loadGrowthRules, loadStrongOverrides, loadVillageRules, mutateState, offlineRulesNow, outingRulesNow, shinyChanceFor } from '@/lib/server/store';
@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     const shinyChance = await shinyChanceFor(player.id);
     let log: LogEntry[] = [];
     const { state } = await mutateState(state => {
+      const w = widenVillageMap(state); // 2026-11-21 지도 v2: 예전 마을 기록 자리를 한 번만 옮김 (아무것도 안 지움)
       const before = beforeAction(state, { type: 'quizTime', seconds: 0 }, today);
       const a = ensureDaily(state, bank, today, secureRandom);
       const b = syncEvents(state, bank, today); // 도전 이벤트 진도 (연속 기록 끊김·올클리어 완료)
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       const e = syncOffline(state, { today, now: new Date().toISOString(), random: secureRandom, shinyChance, offlineRules });
       const f = syncVillage(state, today, secureRandom); // 포켓몬 마을: 날이 바뀌면 손님이 바뀜
       log = safeLog(() => eventsChange(before, state));
-      return { result: null, changed: a || b || c || d || e || f };
+      return { result: null, changed: w || a || b || c || d || e || f };
     }, player.id);
     await appendActivity(player.id, today, log);
     // sim: 보호자 시뮬레이션 중이면 날짜 정보 (아이 화면 위에 띠를 보여 줌)
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
     const outingRules = action.type === 'outingAccept' ? await outingRulesNow() : undefined; // 나들이 보고서 규칙 (도전할래! 때 고정)
     let log: LogEntry[] = [];
     const { state, result } = await mutateState(state => {
+      widenVillageMap(state); // 지도 v2 (한 번만)
       const ctx = { bank, today, now: new Date().toISOString(), random: secureRandom, shinyChance, outingRules, offlineRules };
       const before = beforeAction(state, action, today);
       const result = applyAction(state, action, ctx);

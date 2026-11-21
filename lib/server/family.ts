@@ -4,7 +4,7 @@
 // - ?player=sim 이면 시험용 기록(보호자 시뮬레이션)과 그 "오늘"을 씀.
 import { env } from 'cloudflare:workers';
 import { nowKorea, type Clock } from '../battle-rest.ts';
-import { offlineView, schoolReport, villageView, type GameState } from '../game-engine.ts';
+import { offlineView, schoolReport, villageView, widenVillageMap, type GameState } from '../game-engine.ts';
 import { MARK_SYMBOL, weekDates, weekScore, weekStartOf, type OfflineRules } from '../offline.ts';
 import { species, shinyName } from '../pokedex.ts';
 import type { SchoolRules } from '../school.ts';
@@ -84,7 +84,8 @@ export async function familyStatus(request: Request, state: GameState, player: {
     unopenedBoxes: off.boxes.length,
   };
   training.reached = training.score >= training.goal;
-  // 마을
+  // 마을 (예전 지도 v1 기록이면 새 지도 자리로 옮겨 보여 줌: 읽은 복사본만, 저장 안 함)
+  widenVillageMap(state);
   const v = villageView(state, today);
   const presence = await getVillagePresence(player.id);
   const fresh = !!presence?.inside && Date.now() - Date.parse(presence.at) < PRESENCE_FRESH_MS;

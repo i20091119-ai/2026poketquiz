@@ -62,6 +62,7 @@ function demoState(today: string): GameState {
     tools: demoRod() ? { rod: 15, net: 15 } : { net: 15 },
     // 마을 레벨: 별 33개 + 들어갈 때 손님 별 = 레벨 2 바로 앞 (조금만 더 만들면 오른쪽 풀밭이 열림). 주소 끝에 ?stars=1200 처럼 붙이면 그만큼으로
     stars: demoStars(),
+    mapV: 2,
   } as unknown as GameState['village'];
   // 열매: 사과열매 32 · 불꽃열매 99(가득) · 별빛열매 40 · 얼음열매 12
   const berries = { apple: 32, fire: 99, star: 40, blue: 12 } as const;

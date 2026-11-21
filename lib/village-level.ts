@@ -4,12 +4,14 @@
 //   지금 열린 땅에 붙어 있는 것 하나를 골라서 엶. 계속 레벨이 오르면 바깥으로 계속 넓어짐.
 // - 지도 전체(lib/village.ts MAP_X0~, MAP_W × MAP_H)는 처음부터 있고, 안 열린 구역은 걷기·놓기 안 됨(안개 + 🔒 팻말).
 // - 왼쪽 땅은 x가 음수라 처음 마을(x 0~11, y 0~19)의 칸 번호는 그대로 (아이가 놓은 꾸미기·길·나무 자리가 안 움직임).
+// - 2026-11-21 지도 v2: 처음 마을을 x 0~19(가로 20)로 넓힘 = 예전 x 11과 12 사이에 8줄. 오른쪽 구역은 +8 (기록은 game-engine widenVillageMap).
 // - 레벨 = 마을 별(⭐) 누적. 별은 마을에서 한 일로 (숫자는 lib/village-craft.ts CRAFT_DEFAULT, 보호자 전체 설정).
 
 import { eunNeun } from './game-config.ts';
 
 /** 구역 격자: 가로 5칸(A~E) × 세로 3줄(1~3). 처음 마을 = C1 (위쪽 가운데) */
-const COLS = [{ x: -16, w: 8 }, { x: -8, w: 8 }, { x: 0, w: 12 }, { x: 12, w: 8 }, { x: 20, w: 8 }];
+// 2026-11-21 지도 v2: 가운데 줄(C)만 12 → 20칸 (서준이 집 + 하준이 집이 처음 마을 가운데). 오른쪽 D·E는 크기 그대로 8칸 밀림
+const COLS = [{ x: -16, w: 8 }, { x: -8, w: 8 }, { x: 0, w: 20 }, { x: 20, w: 8 }, { x: 28, w: 8 }];
 const ROWS = [{ y: 0, h: 20 }, { y: 20, h: 10 }, { y: 30, h: 10 }];
 const NAMES: Record<string, { name: string; emoji: string; about: string }> = {
   C1: { name: '처음 마을', emoji: '🏡', about: '서준이 집이 있는 곳' },
