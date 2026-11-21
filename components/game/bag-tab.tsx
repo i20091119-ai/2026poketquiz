@@ -16,12 +16,13 @@ const POTION_KINDS = Object.keys(POTIONS) as PotionKind[];
 /** 가방: 아직 열지 않은 볼과 모아 둔 아이템(열매·상처약) */
 export function BagTab({ view, busy, onOpenBall, onUsePotion }: {
   view: ChildView; busy: boolean;
-  onOpenBall: (ball: Ball) => void;
+  onOpenBall: (ball: Ball & { crafted?: boolean }) => void;
   onUsePotion: (potionId: string, uid: string) => Promise<boolean>;
 }) {
   const [feeding, setFeeding] = useState<PotionKind | null>(null);
   const counts = Object.fromEntries(POTION_KINDS.map(k => [k, view.potions.filter(p => p.kind === k).length])) as Record<PotionKind, number>;
-  const empty = !view.balls.length && !view.potions.length;
+  const crafted = view.village.craft.balls;
+  const empty = !view.balls.length && !view.potions.length && !crafted.length;
 
   return (
     <>
@@ -38,6 +39,19 @@ export function BagTab({ view, busy, onOpenBall, onUsePotion }: {
             {view.balls.map(b => (
               <button key={b.id} className="bag-ball" disabled={busy} onClick={() => onOpenBall(b)}>
                 <img src={ASSETS.ball[b.kind]} alt="" /><span>{BALLS[b.kind].label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {crafted.length > 0 && (
+        <section className="panel bag">
+          <h3>🔮 제작 볼 {crafted.length}개 <small>마을 제작대에서 만든 볼이야. 아직 도감에 없는 포켓몬이 나와! 마을에서 만난 포켓몬이 먼저 나와.</small></h3>
+          <div className="bag-list">
+            {crafted.map(b => (
+              <button key={b.id} className="bag-ball" disabled={busy} onClick={() => onOpenBall({ id: b.id, kind: b.kind, crafted: true })}>
+                <img src={ASSETS.ball[b.kind]} alt="" /><span>만든 {BALLS[b.kind].label}</span>
               </button>
             ))}
           </div>

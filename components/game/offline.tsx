@@ -8,6 +8,7 @@ import { GIFT_SENDERS } from '@/lib/game-config';
 import type { ChildView } from '@/lib/game-engine';
 import { halfText, MARK_SCORE, MARK_SYMBOL, plusDays, weekDates, weekStartOf, type DayMark } from '@/lib/offline';
 import { Gem, gemLeftText } from './legend';
+import { dayBoxImage } from './day-boxes';
 
 
 type WeekInfo = { goal: number; score: number; piece: boolean };
@@ -37,9 +38,11 @@ export function monthStats(month: string, marks: Record<string, DayMark>, weeks:
 }
 
 /** 월~일 7칸 + 오른쪽 "주" 칸. onDay를 주면 날짜를 누를 수 있음 (보호자 화면) */
-export function MonthCalendar({ month, today, marks, weeks, defaultGoal, onDay, busy }: {
+export function MonthCalendar({ month, today, marks, weeks, defaultGoal, onDay, busy, boxDates }: {
   month: string; today: string; marks: Record<string, DayMark>; weeks: Record<string, WeekInfo>; defaultGoal: number;
   onDay?: (date: string) => void; busy?: boolean;
+  /** 아직 안 연 하루 선물 상자가 있는 날 (아이 화면 달력에 🎁) */
+  boxDates?: Set<string>;
 }) {
   return (
     <div className="study-cal" role="grid" aria-label={`${month} 훈련 달력`}>
@@ -52,7 +55,7 @@ export function MonthCalendar({ month, today, marks, weeks, defaultGoal, onDay, 
           ...weekDates(ws).map(d => {
             const m = marks[d];
             const cls = 'study-day' + (monthOf(d) !== month ? ' other' : '') + (d === today ? ' today' : '') + (d > today ? ' future' : '') + (m ? ' mark-' + m : '');
-            const inner = <><span className="study-day-no">{Number(d.slice(8))}</span><span className="study-mark">{m ? MARK_SYMBOL[m] : ''}</span></>;
+            const inner = <><span className="study-day-no">{Number(d.slice(8))}</span><span className="study-mark">{m ? MARK_SYMBOL[m] : ''}</span>{boxDates?.has(d) && <span className="study-day-box" aria-label="안 연 상자">🎁</span>}</>;
             return onDay
               ? <button key={d} className={cls} disabled={busy || d > today} onClick={() => onDay(d)} aria-label={`${d} ${m ? MARK_SYMBOL[m] : '빈칸'}`}>{inner}</button>
               : <div key={d} className={cls}>{inner}</div>;
@@ -86,10 +89,10 @@ export function StudyCalendarDialog({ open, view, onClose, onOpenBox }: { open: 
           <b>{Number(month.slice(0, 4))}년 {Number(month.slice(5))}월</b>
           <button className="icon-button" aria-label="다음 달" onClick={() => setMonth(m => shiftMonth(m, 1))}><ChevronRight /></button>
         </div>
-        <MonthCalendar month={month} today={off.today} marks={off.marks} weeks={off.weeks} defaultGoal={off.weekGoal} />
+        <MonthCalendar month={month} today={off.today} marks={off.marks} weeks={off.weeks} defaultGoal={off.weekGoal} boxDates={new Set(off.boxes.map(b => b.date))} />
         <MarkLegend />
         <p className="study-month-stats">이번 달 <b className="mark-full">●</b> {stats.full}개 · 얻은 전설 조각 💎 {stats.pieces}개</p>
-        {off.boxes.length > 0 && <button className="primary glow" onClick={onOpenBox}>🎁 훈련 선물 상자 열기 ({off.boxes.length})</button>}
+        {off.boxes.length > 0 && <button className="primary glow" onClick={onOpenBox}>🎁 훈련 선물 상자 보기 ({off.boxes.length})</button>}
         <button className="secondary" onClick={onClose}>닫기</button>
       </DialogContent>
     </Dialog>
@@ -129,14 +132,25 @@ const shortDate = (d: string) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8
 export function WeekRecordDialog({ view, open, onDone }: { view: ChildView; open: boolean; onDone: (openPick: boolean) => void }) {
   const w = view.offline.lastWeek;
   const [shown, setShown] = useState(0); // 튀어나온 날 수 (0~7)
-  const [stage, setStage] = useState<'days' | 'result'>('days');
+  const [stage, setStage] = useState<'days' | 'boxes' | 'result'>('days');
+  // 그 주 ●·■ 날의 아직 안 연 하루 선물 상자 (2026-11-20: 7칸이 다 나온 뒤 그 칸에서 하나씩 튀어나옴)
+  const days = w ? weekDates(w.start) : [];
+  const dayBoxes = days.map(d => view.offline.boxes.find(b => b.date === d) ?? null);
+  const boxCount = dayBoxes.filter(Boolean).length;
+  const [boxShown, setBoxShown] = useState(0);
   useEffect(() => {
     if (!open || !w) return;
     if (shown < 7) { const t = window.setTimeout(() => setShown(n => n + 1), shown === 0 ? 700 : 450); return () => window.clearTimeout(t); }
-    const t = window.setTimeout(() => setStage('result'), 700);
-    return () => window.clearTimeout(t);
-  }, [open, w, shown]);
+    if (stage === 'days') { const t = window.setTimeout(() => setStage(boxCount ? 'boxes' : 'result'), 600); return () => window.clearTimeout(t); }
+    if (stage === 'boxes') {
+      if (boxShown < boxCount) { const t = window.setTimeout(() => setBoxShown(n => n + 1), 380); return () => window.clearTimeout(t); }
+      const t = window.setTimeout(() => setStage('result'), 700);
+      return () => window.clearTimeout(t);
+    }
+  }, [open, w, shown, stage, boxShown, boxCount]);
   if (!w) return null;
+  // 몇 번째로 튀어나오는 상자인지 (요일 순서)
+  const boxOrder = (i: number) => dayBoxes.slice(0, i).filter(Boolean).length;
   const running = w.marks.slice(0, shown).reduce((s, m) => s + (m ? MARK_SCORE[m] : 0), 0);
   const pct = Math.min(100, (running / w.goal) * 100);
   const st = view.legend.stages.find(s => s.stage === w.stage);
@@ -152,6 +166,8 @@ export function WeekRecordDialog({ view, open, onDone }: { view: ChildView; open
             <div key={i} className={'week-day' + (i < shown ? ' pop' : '')}>
               <small>{DOW[i]}</small>
               <span className={'study-mark big' + (m ? ' mark-' + m : '')}>{i < shown ? (m ? MARK_SYMBOL[m] : '·') : ''}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {dayBoxes[i] && stage !== 'days' && boxOrder(i) < boxShown && <img className="week-day-box pop-up" src={dayBoxImage(dayBoxes[i]!)} alt={`${DOW[i]} 상자`} />}
             </div>
           ))}
         </div>
@@ -165,9 +181,10 @@ export function WeekRecordDialog({ view, open, onDone }: { view: ChildView; open
               <Gem stage={w.stage} salt={st.salt} need={w.need} filled={filledAfter} fly={filledAfter - 1} glow={completes} size={120} /></div>}
             <p className="intro-text"><b>전설 조각을 얻었어!</b><br />{gemLeftText(filledAfter, w.need)}</p>
           </> : <p className="intro-text">{w.short}</p>}
+          {boxCount > 0 && <p className="week-box-note">🎁 훈련한 날마다 상자가 나왔어! ({boxCount}개)</p>}
           {w.cheer && <p className="week-cheer">💌 {GIFT_SENDERS[w.cheer.by]}: {w.cheer.text}</p>}
           <button className="primary big-button" onClick={() => onDone(completes && !!view.legend.pending)}>
-            {completes && view.legend.pending ? '✨ 마스터볼 열러 가기' : '이번 주도 훈련하자'}
+            {completes && view.legend.pending ? '✨ 마스터볼 열러 가기' : boxCount ? '🎁 상자 열러 가기' : '이번 주도 훈련하자'}
           </button>
         </div>}
       </DialogContent>
@@ -229,7 +246,7 @@ export function OfflineIntro({ open, view, onClose }: { open: boolean; view: Chi
         <div className="intro-dots">{slides.map((_, i) => <i key={i} className={i === page ? 'on' : ''} />)}</div>
         <div className="intro-buttons">
           <button className="primary big-button" onClick={() => (last ? onClose() : setPage(p => p + 1))}>{last ? '알았어!' : '다음'}</button>
-          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>앞으로</button>}
+          {page > 0 && <button className="secondary" onClick={() => setPage(p => p - 1)}>◀ 이전</button>}
         </div>
       </DialogContent>
     </Dialog>

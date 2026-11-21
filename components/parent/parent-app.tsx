@@ -15,6 +15,7 @@ import { aiRequestText } from '@/lib/question-import';
 import { UPDATES, versionLabel } from '@/lib/version';
 import { OutingCreate, OutingReports, OutingRulesEditor, type OutingOverview } from './outing-parent';
 import { OfflineRulesEditor, OfflineSimTools, StudyRecord, type OfflineOverview } from './offline-parent';
+import { FamilySettings, SchoolSection, SchoolSimTools, type FamilyOverview, type SchoolOverview } from './family-parent';
 import { VillageReport, VillageRulesEditor, VillageSimTools, type VillageOverview } from './village-parent';
 
 type Keywords = Partial<Record<Subject, string>>;
@@ -30,6 +31,9 @@ type Overview = {
   offline: OfflineOverview;
   /** 포켓몬 마을 (요약·규칙) */
   village: VillageOverview;
+  /** 제때 등교 · 가족 대시보드 연결 (2026-11-20) */
+  school: SchoolOverview;
+  family: FamilyOverview;
   /** 볼별 이로치 확률(%)과 기본값, 시뮬레이션에서 100%로 열기 여부 */
   shiny: { chance: Record<string, number>; defaults: Record<string, number>; simAll: boolean; balls: { kind: string; label: string }[] };
   loggedIn: true; grade: string; aiConfigured: boolean; battlePasswordSet: boolean; banks: BankSummary[];
@@ -272,6 +276,7 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <section className="panel parent-section"><StatBoard stats={child.stats} /></section>
         <ActivitySection days={overview.activity} />
         <VillageReport village={overview.village} />
+        <SchoolSection school={overview.school} busy={busy} call={call} reload={reload} />
         {active ? (
           <section className="panel parent-section">
             <h2>공개 중인 문제은행: {active.title}</h2>
@@ -421,11 +426,19 @@ function Dashboard({ overview, busy, error, call, onOpenBank, reload }: {
         <OutingRulesEditor overview={overview.outing} busy={busy} call={call} reload={reload} />
         <OfflineRulesEditor overview={overview.offline} busy={busy} call={call} reload={reload} />
         <VillageRulesEditor village={overview.village} busy={busy} call={call} reload={reload} />
+        <FamilySettings school={overview.school} family={overview.family} busy={busy} call={call} reload={reload} />
         <ShinyChanceEditor overview={overview} busy={busy} call={call} reload={reload} />
         <StrongEditor overview={overview} busy={busy} call={call} reload={reload} />
       </>}
 
-      {low === 'update' && <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />}
+      {low === 'update' && <>
+        <DevMenu part="version" sim={overview.sim} shinyAll={overview.shiny.simAll} busy={busy} call={call} reload={reload} />
+        <section className="panel parent-section">
+          <h2>🎨 그림 출처</h2>
+          <p className="muted">마을 사람(LPC)·땅·물건 그림을 그린 사람과 라이선스 전체 목록이에요.</p>
+          <a className="secondary small" href="/guide/credits.html" target="_blank" rel="noreferrer">그림 출처 열기</a>
+        </section>
+      </>}
 
       {low === 'dev' && <>
         <DevMenu part="sim" sim={overview.sim} shinyAll={overview.shiny.simAll} limitedEvents={overview.limitedEvents} busy={busy} call={call} reload={reload} />
@@ -864,6 +877,7 @@ function DevMenu({ part, sim, shinyAll, limitedEvents = [], busy, call, reload }
         </div>
         <div className="sim-limited"><OfflineSimTools busy={busy} call={call} reload={reload} /></div>
         <div className="sim-limited"><VillageSimTools busy={busy} call={call} reload={reload} /></div>
+        <div className="sim-limited"><SchoolSimTools busy={busy} call={call} reload={reload} /></div>
         <p className="muted">이로치 확인용이에요. 볼을 1개씩 넣고 ‘이로치 100%’를 켜면 볼마다 이로치가 나와요. ‘가진 포켓몬마다 이로치도 +1’을 누르면 기본 모습과 이로치를 둘 다 가진 상태가 되어, 포켓로그 팀 선택 화면에서 따로 보이고 같이 출전할 수 있는지 볼 수 있어요. (시험용 기록에만 적용돼요. 진짜 기록은 그대로예요.)</p>
         {limitedEvents.map(l => (
           <div key={l.id} className="sim-limited">

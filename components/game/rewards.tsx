@@ -9,7 +9,9 @@ import { PokemonImage, TypeBadge } from './common';
 
 export type RewardKind = 'daily' | 'explore' | 'master' | 'exp' | 'event' | 'book' | 'home';
 export type RewardResult = { items: (BoxItem | null)[]; picks: number[]; done: boolean; ballIds: string[]; message: string };
-export type CatchResult = { caught: number; tier: number; shiny?: boolean; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string };
+export type CatchResult = { caught: number; tier: number; shiny?: boolean; duplicate: boolean; bonus?: { type: TypeKey; amount: number }; message: string;
+  /** 제작 볼에서 만날 포켓몬이 없어 열매를 돌려받음 (caught 0) */
+  returned?: { berry: PotionKind; n: number; stone?: number; iron?: number; sparkle?: number } };
 
 const COPY: Record<RewardKind, { title: string; description: string; closed: string; label: string }> = {
   daily: { title: '랜덤상자 3개 중 하나를 골라!', description: '열매, 상처약, 포켓볼 중 하나가 들어 있어.', closed: ASSETS.boxClosed, label: '상자' },
@@ -28,7 +30,7 @@ export function potionEffect(kind: PotionKind) {
   const types = potionTargets(kind);
   return `${types.length === TYPE_KEYS.length ? '모든 속성' : types.map(t => TYPE_INFO[t].label).join('·')} +${POTIONS[kind].amount}`;
 }
-function ItemView({ item }: { item: BoxItem }) {
+export function ItemView({ item }: { item: BoxItem }) {
   if (item.kind === 'potion') return <>
     <img src={ASSETS.potion[item.potion]} alt={POTIONS[item.potion].label} />
     <b>{POTIONS[item.potion].label}</b>
@@ -47,8 +49,10 @@ function ItemView({ item }: { item: BoxItem }) {
 }
 
 /** 3개 중 picks개 고르기 → 다 고르면 나머지도 공개 → 고른 것 중에 볼이 있으면 바로 열 수 있게 안내 */
-export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onClose, onOpenBalls }: {
+export function RewardPicker({ kind, subject, heading, picks, initial, busy, onPick, onClose, onOpenBalls }: {
   kind: RewardKind | null;
+  /** 제목 위 작은 이름표 (훈련 하루 상자: "월요일 ● 훈련") */
+  heading?: string;
   subject?: string;
   /** 고를 수 있는 개수 */
   picks: number;
@@ -81,6 +85,7 @@ export function RewardPicker({ kind, subject, picks, initial, busy, onPick, onCl
   return (
     <Dialog open={!!kind} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent className="reward-dialog">
+        {heading && <span className="day-box-heading">{heading}</span>}
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{done ? '고른 것만 가질 수 있어. 다른 것에는 뭐가 있었는지 볼까?' : copy.description}</DialogDescription>
         <div className="choice-row">
@@ -116,10 +121,12 @@ export function ShinyBurst() {
 }
 
 /** 볼을 눌러 포켓몬을 만납니다. */
+/** 마을 제작대에서 만든 볼 (crafted: 열면 아직 도감에 없는 포켓몬, 방명록 손님 먼저) */
+export type QueuedBall = Ball & { crafted?: boolean };
 export function BallDialog({ ball, busy, onOpen, onClose }: {
-  ball: Ball | null;
+  ball: QueuedBall | null;
   busy: boolean;
-  onOpen: (ball: Ball) => Promise<CatchResult | null>;
+  onOpen: (ball: QueuedBall) => Promise<CatchResult | null>;
   onClose: () => void;
 }) {
   const [result, setResult] = useState<CatchResult | null>(null);
@@ -127,7 +134,12 @@ export function BallDialog({ ball, busy, onOpen, onClose }: {
   return (
     <Dialog open={!!ball || !!result} onOpenChange={open => { if (!open) close(); }}>
       <DialogContent className="reward-dialog">
-        {result ? <>
+        {result?.returned ? <>
+          <DialogTitle>모두 만났어!</DialogTitle>
+          <DialogDescription>{result.message}</DialogDescription>
+          <img src={ASSETS.potion[result.returned.berry]} alt="" className="celebration-img" />
+          <button className="primary" onClick={close}>가방에 다시 넣었어</button>
+        </> : result ? <>
           <DialogTitle>{result.shiny ? '✨ 이로치다! ✨' : result.duplicate ? '또 만났네!' : '새로운 친구를 만났어!'}</DialogTitle>
           <DialogDescription>{result.message}</DialogDescription>
           <div className={result.shiny ? 'shiny-reveal' : undefined}>
@@ -142,8 +154,8 @@ export function BallDialog({ ball, busy, onOpen, onClose }: {
           {result.bonus && <p>이미 있는 친구라서 <TypeBadge type={result.bonus.type} amount={'+' + result.bonus.amount} small /> 보너스!</p>}
           <button className="primary" onClick={close}>{result.shiny ? '이로치 도감에 저장했어!' : '도감에 저장했어!'}</button>
         </> : ball && <>
-          <DialogTitle>{BALLS[ball.kind].label}을 눌러 봐!</DialogTitle>
-          <DialogDescription>어떤 포켓몬이 들어 있을까?</DialogDescription>
+          <DialogTitle>{ball.crafted ? '🔨 내가 만든 ' : ''}{BALLS[ball.kind].label}을 눌러 봐!</DialogTitle>
+          <DialogDescription>{ball.crafted ? '아직 도감에 없는 포켓몬이 들어 있어! 마을에서 만난 포켓몬이 먼저 나와.' : '어떤 포켓몬이 들어 있을까?'}</DialogDescription>
           <button className="ball-open" disabled={busy} onClick={async () => { const r = await onOpen(ball); if (r) setResult(r); }}>
             <img src={ASSETS.ball[ball.kind]} alt={BALLS[ball.kind].label} />
           </button>

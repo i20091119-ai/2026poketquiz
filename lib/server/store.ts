@@ -8,7 +8,10 @@ import { SAMPLE_BANK_TITLE, sampleQuestions } from '../sample-bank.ts';
 import type { LogEntry } from '../activity-log.ts';
 import { cleanOutingRules, OUTING_DEFAULT, type OutingRules } from '../outing.ts';
 import { cleanVillageRules, setVillageRules, VILLAGE_DEFAULT, type VillageRules } from '../village.ts';
+import { cleanDecorCosts, setDecorCosts, type DecorCosts } from '../village-decor.ts';
+import { cleanCraftRules, setCraftRules, type CraftRules } from '../village-craft.ts';
 import { cleanOfflineRules, offlineRulesOf, type OfflineRules } from '../offline.ts';
+import { cleanSchoolRules, schoolRulesOf, type SchoolRules } from '../school.ts';
 import { setStrongOverrides, type StrongOverrides } from '@/lib/pokedex';
 
 /** 기록 이름. family = 아이의 진짜 기록, sim = 보호자 시뮬레이션용 시험 기록 (lib/server/player.ts) */
@@ -420,10 +423,32 @@ export async function saveVillageRules(rules: Partial<VillageRules> | null) {
   if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_rules'").run(); return; }
   await db().prepare("INSERT INTO settings (key, value) VALUES ('village_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
 }
-/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules()) */
+/** 보호자 설정: 마을 꾸미기 물건 재료 수 (settings.village_decor_costs, 바꾼 것만) */
+export async function getDecorCosts(): Promise<DecorCosts> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'village_decor_costs'").first<{ value: string }>();
+  try { return cleanDecorCosts(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveDecorCosts(costs: DecorCosts | null) {
+  const clean = cleanDecorCosts(costs);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_decor_costs'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('village_decor_costs', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 보호자 설정: 열매나무·제작대 숫자 (settings.village_craft_rules, 바꾼 것만) */
+export async function getCraftRules(): Promise<Partial<CraftRules>> {
+  const row = await db().prepare("SELECT value FROM settings WHERE key = 'village_craft_rules'").first<{ value: string }>();
+  try { return cleanCraftRules(row ? JSON.parse(row.value) : null); } catch { return {}; }
+}
+export async function saveCraftRules(rules: Partial<CraftRules> | null) {
+  const clean = cleanCraftRules(rules);
+  if (!Object.keys(clean).length) { await db().prepare("DELETE FROM settings WHERE key = 'village_craft_rules'").run(); return; }
+  await db().prepare("INSERT INTO settings (key, value) VALUES ('village_craft_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(clean)).run();
+}
+/** 요청마다 마을 규칙을 맞춤 (lib/village.ts 의 villageRules(), 꾸미기 재료 수 decorCost(), 열매·제작대 craftRules()) */
 export async function loadVillageRules(): Promise<VillageRules> {
-  const ov = await getVillageRules();
+  const [ov, decor, craft] = await Promise.all([getVillageRules(), getDecorCosts(), getCraftRules()]);
   setVillageRules(ov);
+  setDecorCosts(decor);
+  setCraftRules(craft);
   return { ...VILLAGE_DEFAULT, ...ov };
 }
 
@@ -441,3 +466,23 @@ export async function saveOfflineRules(rules: Partial<OfflineRules> | null) {
 export const offlineRulesNow = async (): Promise<OfflineRules> => offlineRulesOf(await getOfflineRules());
 /** 지금 쓰는 나들이 규칙 (처음 값 + 바꾼 것) */
 export const outingRulesNow = async (): Promise<OutingRules> => ({ ...OUTING_DEFAULT, ...(await getOutingRules()) });
+
+// ---------- 가족 대시보드 · 제때 등교 (2026-11-20) ----------
+/** 제때 등교 규칙 (settings.school_rules, 바꾼 것만) */
+export async function getSchoolRules(): Promise<Partial<SchoolRules>> {
+  try { return cleanSchoolRules(JSON.parse((await getSetting('school_rules')) ?? 'null')); } catch { return {}; }
+}
+export async function saveSchoolRules(rules: Partial<SchoolRules> | null) {
+  const clean = cleanSchoolRules(rules as Record<string, unknown>);
+  await setSetting('school_rules', Object.keys(clean).length ? JSON.stringify(clean) : null);
+}
+export const schoolRulesNow = async (): Promise<SchoolRules> => schoolRulesOf(await getSchoolRules());
+/** 가족 접속 코드: 서명값만 저장 (코드 자체는 만들 때 한 번만 보여 줌) */
+export const getFamilyCodeHash = () => getSetting('family_api_code');
+export const setFamilyCodeHash = (hash: string | null) => setSetting('family_api_code', hash);
+/** 서준이 마을 위치 (아이 화면이 마을 안에서 보냄). 아이 기록과 따로, 마지막 값 하나만 */
+export type VillagePresence = { inside: boolean; x: number; y: number; at: string };
+export async function getVillagePresence(player: PlayerId): Promise<VillagePresence | null> {
+  try { return JSON.parse((await getSetting('village_presence:' + player)) ?? 'null'); } catch { return null; }
+}
+export const setVillagePresence = (player: PlayerId, p: VillagePresence) => setSetting('village_presence:' + player, JSON.stringify(p));
